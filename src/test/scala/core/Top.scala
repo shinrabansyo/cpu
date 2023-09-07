@@ -3,7 +3,7 @@ package core
 import chisel3._
 import chisel3.iotesters._
 
-class TopTest(dut: Adder) extends PeekPokeTester(dut) {
+class TopTest(dut: Alu) extends PeekPokeTester(dut) {
     poke(dut.io.a, 3.U)
     poke(dut.io.b, 5.U)
     step(1)
@@ -15,7 +15,8 @@ class TopTest(dut: Adder) extends PeekPokeTester(dut) {
 }
 
 object TopTest extends App {
-    chisel3.iotesters.Driver(() => new Adder()) { c =>
+    chisel3.iotesters.Driver(() => new Alu()) { c =>
         new TopTest(c)
     }
 }
+
