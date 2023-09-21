@@ -13,7 +13,7 @@ class Alu extends Module {
     val out      = Output(UInt(32.W))
   })
 
-  io.out := MuxCase(0.U(8.W), Seq(
+  io.out := MuxCase(0.U(32.W), Seq(
     (io.command === 1.U(8.W)) -> (io.a + io.b),
   ))
 }
