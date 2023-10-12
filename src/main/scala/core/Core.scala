@@ -2,6 +2,7 @@ package core
 
 import chisel3._
 import chisel3.util._
+import chisel3.util.experimental.loadMemoryFromFile
 
 class Core extends Module {
   /*
@@ -13,6 +14,7 @@ class Core extends Module {
   */
 
   val mem        = Mem(1024 * 6, UInt(8.W))
+  loadMemoryFromFile(mem, "src/main/resources/bootrom.hex")
   val pc         = RegInit(0.U(32.W))
   val regfile    = Mem(32, UInt(32.W))
   
@@ -29,9 +31,8 @@ class Core extends Module {
     (0 until 6).map(i => mem.read(pc + i.U)).reverse
   )
   pc := pc + 6.U
-  
-  // Decode
 
+  // Decode
   val command    = Wire(UInt(8.W))
 
   opcode     := instr( 4,  0)
@@ -42,10 +43,9 @@ class Core extends Module {
   imm        := instr(47, 16)
 
   command := MuxCase(0.U(8.W), Seq(
-    (opcode === 1.U(5.W) && opcode_sub === 1.U(3.W)) -> (1.U(8.W)),
+    (opcode === 1.U(5.W) && opcode_sub === 1.U(3.W)) -> (1.U(8.W)), // add
+    (opcode === 2.U(5.W) && opcode_sub === 1.U(3.W)) -> (1.U(8.W)), // addi
   ))
-  
-
 
   // Execute
   val alu = Module(new Alu)
@@ -68,7 +68,13 @@ class Core extends Module {
   printf(p"regfile(rs1): 0x${Hexadecimal(regfile(rs1))}\n")
   printf(p"regfile(rs2): 0x${Hexadecimal(regfile(rs2))}\n")
   printf(p"imm         : 0x${Hexadecimal(imm)}\n")
+  printf(p"command     : 0x${Hexadecimal(command)}\n")
+  printf(p"alu.io.a    : 0x${Hexadecimal(alu.io.a)}\n")
+  printf(p"alu.io.b    : 0x${Hexadecimal(alu.io.b)}\n")
   printf(p"alu.io.out  : 0x${Hexadecimal(alu.io.out)}\n")
+  for (i <- 0 to 5) {
+    printf(p"regfile($i)  : 0x${Hexadecimal(regfile(i.U))}\n")
+  }
   printf(p"----------------------\n")
   
 }
