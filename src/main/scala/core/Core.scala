@@ -25,6 +25,8 @@ class Core extends Module {
   val rs1        = Wire(UInt(5.W))
   val rs2        = Wire(UInt(5.W))
   val imm        = Wire(UInt(32.W))
+  val imm_r      = Wire(UInt(25.W))
+  val imm_r_sext = Wire(UInt(32.W))
 
   // Fetch
   instr := Cat(
@@ -41,11 +43,14 @@ class Core extends Module {
   rs1        := instr(17, 13)
   rs2        := instr(22, 18)
   imm        := instr(47, 16)
+  imm_r      := instr(47, 23)
+  imm_r_sext := Cat(Fill(7, imm_r(24)), imm_r)
 
   command := MuxCase(0.U(8.W), Seq(
     (opcode === 1.U(5.W) && opcode_sub === 1.U(3.W)) -> (1.U(8.W)), // add
     (opcode === 2.U(5.W) && opcode_sub === 1.U(3.W)) -> (1.U(8.W)), // addi
   ))
+
 
   // Execute
   val alu = Module(new Alu)
