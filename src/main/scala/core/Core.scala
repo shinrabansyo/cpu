@@ -17,10 +17,11 @@ class Core extends Module {
 
   val mem        = Mem(1024 * 6, UInt(8.W))
   loadMemoryFromFile(mem, "src/main/resources/bootrom.hex")
+  val old_pc     = RegInit(0.U(32.W))
   val pc         = RegInit(0.U(32.W))
   val regfile    = Mem(32, UInt(32.W))
   
-  val instr      = Wire(UInt(48.W))
+  val instr      = RegInit(0.U(48.W))
   val opcode     = Wire(UInt(5.W))
   val opcode_sub = Wire(UInt(3.W))
   val rd         = Wire(UInt(5.W))
@@ -32,6 +33,7 @@ class Core extends Module {
   val imm_r_sext = Wire(UInt(32.W))
 
   // Fetch
+  old_pc := pc
   instr := Cat(
     (0 until 6).map(i => mem.read(pc + i.U)).reverse
   )
@@ -78,12 +80,14 @@ class Core extends Module {
     (opcode === 3.U(5.W) && opcode_sub === 0.U(3.W)) -> (regfile(rs2)) 
 
   ))
+  
   regfile(rd)    := MuxCase((alu.io.out), Seq(
-    (opcode === 3.U(5.W) && opcode_sub === 0.U(3.W)) -> (pc + 6.U)
+    (opcode === 3.U(5.W) && opcode_sub === 0.U(3.W)) -> (pc + 6.U),
+    (rd === 0.U) -> (0.U(32.W))
   ))
 
   // Debug output
-  printf(p"pc          : 0x${Hexadecimal(pc)}\n")
+  printf(p"pc          : 0x${Hexadecimal(old_pc)}\n")
   printf(p"instr       : 0x${Hexadecimal(instr)}\n")
   printf(p"opcode      : 0x${Hexadecimal(opcode)}\n")
   printf(p"opcode_sub  : 0x${Hexadecimal(opcode_sub)}\n")
@@ -99,10 +103,11 @@ class Core extends Module {
   printf(p"alu.io.out  : 0x${Hexadecimal(alu.io.out)}\n")
   printf(p"pc+sext(imm): 0x${Hexadecimal(pc+imm_r_sext)}\n")
   printf(p"zero        : 0x${Hexadecimal(alu.io.zero)}\n")
-  for (i <- 0 to 5) {
+  for (i <- 0 to 31) {
     printf(p"regfile($i)  : 0x${Hexadecimal(regfile(i.U))}\n")
   }
   printf(p"----------------------\n")
   
 }
 
+  
