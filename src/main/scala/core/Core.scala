@@ -15,8 +15,11 @@ class Core extends Module {
 
   val alu = Module(new Alu)
 
-  val mem        = Mem(1024 * 6, UInt(8.W))
-  loadMemoryFromFile(mem, "src/main/resources/bootrom.hex")
+  val imem       = Mem(1024 * 6, UInt(8.W))
+  loadMemoryFromFile(imem, "src/main/resources/bootrom.hex")
+  val dmem       = Mem(1024 * 4, UInt(8.W))
+  loadMemoryFromFile(dmem, "src/main/resources/dmem.hex")
+
   val old_pc     = RegInit(0.U(32.W))
   val pc         = RegInit(0.U(32.W))
   val regfile    = Mem(32, UInt(32.W))
@@ -31,11 +34,13 @@ class Core extends Module {
   val imm        = Wire(UInt(32.W))
   val imm_r      = Wire(UInt(25.W))
   val imm_r_sext = Wire(UInt(32.W))
+  
+  val dmem_raw   = Wire(UInt(32.W))
 
   // Fetch
   old_pc := pc
   instr := Cat(
-    (0 until 6).map(i => mem.read(pc + i.U)).reverse
+    (0 until 6).map(i => imem.read(pc + i.U)).reverse
   )
   pc := MuxCase((pc + 6.U), Seq(
     (opcode === 3.U(5.W) && opcode_sub === 0.U(3.W) && alu.io.zero === true.B) -> (pc + imm_r_sext)
@@ -60,6 +65,8 @@ class Core extends Module {
     (opcode === 2.U(5.W) && opcode_sub === 1.U(3.W)) -> (1.U(8.W)), // addi
 
     (opcode === 3.U(5.W) && opcode_sub === 0.U(3.W)) -> (2.U(8.W)), // beq
+
+    (opcode === 4.U(5.W) && opcode_sub === 0.U(3.W)) -> (1.U(8.W)), // lw
   ))
 
 
@@ -69,6 +76,9 @@ class Core extends Module {
   alu.io.a       := MuxCase(regfile(rs1), Seq(
     // addi命令
     (opcode === 2.U(5.W) && opcode_sub === 1.U(3.W)) -> (regfile(rs1_i)),
+
+    // lw命令
+    (opcode === 4.U(5.W) && opcode_sub === 0.U(3.W)) -> (regfile(rs1_i)),
   ))
   alu.io.b       := MuxCase(0.U(32.W), Seq(
   // add命令
@@ -77,13 +87,20 @@ class Core extends Module {
     (opcode === 2.U(5.W) && opcode_sub === 1.U(3.W)) -> (imm),
   
   // beq命令
-    (opcode === 3.U(5.W) && opcode_sub === 0.U(3.W)) -> (regfile(rs2)) 
+    (opcode === 3.U(5.W) && opcode_sub === 0.U(3.W)) -> (regfile(rs2)),
 
+  // lw命令
+    (opcode === 4.U(5.W) && opcode_sub === 0.U(3.W)) -> (imm),
   ))
   
+  dmem_raw := Cat(
+    (0 until 4).map(i => dmem.read(alu.io.out + i.U)).reverse
+  )
+
   regfile(rd)    := MuxCase((alu.io.out), Seq(
-    (opcode === 3.U(5.W) && opcode_sub === 0.U(3.W)) -> (pc + 6.U),
-    (rd === 0.U) -> (0.U(32.W))
+    (rd === 0.U) -> (0.U(32.W)),
+    (opcode === 3.U(5.W) && opcode_sub === 0.U(3.W)) -> (pc + 6.U), // beq
+    (opcode === 4.U(5.W) && opcode_sub === 0.U(3.W)) -> (dmem_raw), // lw
   ))
 
   // Debug output
