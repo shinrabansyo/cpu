@@ -30,7 +30,9 @@ class Core extends Module {
   val rd         = Wire(UInt(5.W))
   val rs1        = Wire(UInt(5.W))
   val rs1_i      = Wire(UInt(5.W))
+  val rs1_s      = Wire(UInt(5.W))
   val rs2        = Wire(UInt(5.W))
+  val rs2_s      = Wire(UInt(5.W))
   val imm        = Wire(UInt(32.W))
   val imm_r      = Wire(UInt(25.W))
   val imm_r_sext = Wire(UInt(32.W))
@@ -54,19 +56,24 @@ class Core extends Module {
   rd         := instr(12,  8)
   rs1        := instr(17, 13)
   rs1_i      := Cat(0.U(2.W), instr(15, 13))
+  rs1_s      := Cat(0.U(2.W), instr(15, 13))
   rs2        := instr(22, 18)
+  rs2_s      := instr(12,  8)
   imm        := instr(47, 16)
   imm_r      := instr(47, 23)
   imm_r_sext := Cat(Fill(7, imm_r(24)), imm_r)
 
   // ALUに発行するコマンド
   command := MuxCase(0.U(8.W), Seq(
+    // opcode_subをそのままaluのコマンドにできそう。
     (opcode === 1.U(5.W) && opcode_sub === 1.U(3.W)) -> (1.U(8.W)), // add
     (opcode === 2.U(5.W) && opcode_sub === 1.U(3.W)) -> (1.U(8.W)), // addi
 
     (opcode === 3.U(5.W) && opcode_sub === 0.U(3.W)) -> (2.U(8.W)), // beq
 
     (opcode === 4.U(5.W) && opcode_sub === 0.U(3.W)) -> (1.U(8.W)), // lw
+
+    (opcode === 5.U(5.W) && opcode_sub === 0.U(3.W)) -> (1.U(8.W)), // sw
   ))
 
 
@@ -79,6 +86,9 @@ class Core extends Module {
 
     // lw命令
     (opcode === 4.U(5.W) && opcode_sub === 0.U(3.W)) -> (regfile(rs1_i)),
+
+    // sw命令
+    (opcode === 5.U(5.W) && opcode_sub === 0.U(3.W)) -> (regfile(rs1_s)),
   ))
   alu.io.b       := MuxCase(0.U(32.W), Seq(
   // add命令
@@ -91,17 +101,32 @@ class Core extends Module {
 
   // lw命令
     (opcode === 4.U(5.W) && opcode_sub === 0.U(3.W)) -> (imm),
+
+  // sw命令
+    (opcode === 5.U(5.W) && opcode_sub === 0.U(3.W)) -> (imm),
   ))
   
   dmem_raw := Cat(
     (0 until 4).map(i => dmem.read(alu.io.out + i.U)).reverse
   )
 
+  when((opcode === 5.U(5.W)) && (opcode_sub === 0.U(3.W))) {
+    for (i <- 0 to 3) {
+      dmem(alu.io.out + i.U) := regfile(rs2_s)(i*8 + 7, i*8)
+    }
+  }
+
   regfile(rd)    := MuxCase((alu.io.out), Seq(
     (rd === 0.U) -> (0.U(32.W)),
     (opcode === 3.U(5.W) && opcode_sub === 0.U(3.W)) -> (pc + 6.U), // beq
     (opcode === 4.U(5.W) && opcode_sub === 0.U(3.W)) -> (dmem_raw), // lw
+    (opcode === 5.U(5.W) && opcode_sub === 0.U(3.W)) -> (regfile(rd)), // sw (regfileは書き換えない)
   ))
+  
+  // # swでregfileを書き込むと以下のようなことが起きる
+  // addi x3, x0, 16
+  // sw x3, 4(x0) # mem[4] = x3(= 16), x3 = 4
+  // sw x3, 8(x0) # mem[8] = x3(=  4)
 
   // Debug output
   printf(p"pc          : 0x${Hexadecimal(old_pc)}\n")
