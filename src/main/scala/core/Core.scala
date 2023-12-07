@@ -148,6 +148,12 @@ class Core extends Module {
   for (i <- 0 to 31) {
     printf(p"regfile($i)  : 0x${Hexadecimal(regfile(i.U))}\n")
   }
+  for (i <- 0 to 7) {
+    printf(p"dmem(${(i*4).U}) : 0x${Hexadecimal(Cat(
+      (0 to 3).map(j => dmem.read((i*4 + j).U))
+              .reverse
+    ))}\n")
+  }
   printf(p"----------------------\n")
   
 }
