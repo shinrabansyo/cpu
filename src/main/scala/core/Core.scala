@@ -23,7 +23,7 @@ class Core extends Module {
   val old_pc     = RegInit(0.U(32.W))
   val pc         = RegInit(0.U(32.W))
   val regfile    = Mem(32, UInt(32.W))
-  
+
   val instr      = RegInit(0.U(48.W))
   val opcode     = Wire(UInt(5.W))
   val opcode_sub = Wire(UInt(3.W))
@@ -36,7 +36,7 @@ class Core extends Module {
   val imm        = Wire(UInt(32.W))
   val imm_r      = Wire(UInt(25.W))
   val imm_r_sext = Wire(UInt(32.W))
-  
+
   val dmem_raw   = Wire(UInt(32.W))
 
   // Fetch
@@ -45,7 +45,12 @@ class Core extends Module {
     (0 until 6).map(i => imem.read(pc + i.U)).reverse
   )
   pc := MuxCase((pc + 6.U), Seq(
-    (opcode === 3.U(5.W) && opcode_sub === 0.U(3.W) && alu.io.zero === true.B) -> (pc + imm_r_sext)
+    /* ----- BUG ----- */
+    (opcode === 3.U(5.W) && opcode_sub === 0.U(3.W) && alu.io.zero === true.B)  -> (pc + imm_r_sext),                                   //beq
+    (opcode === 3.U(5.W) && opcode_sub === 1.U(3.W) && alu.io.zero === false.B) -> (pc + imm_r_sext),                                   //bne
+    (opcode === 3.U(5.W) && opcode_sub === 3.U(3.W) && (alu.io.out(31) === 1.U(1.W) || alu.io.zero === true.B)) -> (pc + imm_r_sext),   //ble
+    (opcode === 3.U(5.W) && opcode_sub === 2.U(3.W) && alu.io.out(31) === 1.U(1.W))  -> (pc + imm_r_sext),                              //blt
+    /* --------------- */
   ))
 
   // Decode
@@ -67,22 +72,30 @@ class Core extends Module {
   command := MuxCase(0.U(8.W), Seq(
     // opcode_subをそのままaluのコマンドにできそう。
     (opcode === 1.U(5.W) && opcode_sub === 1.U(3.W)) -> (1.U(8.W)), // add
+    (opcode === 1.U(5.W) && opcode_sub === 2.U(3.W)) -> (2.U(8.W)), // sub
+
     (opcode === 2.U(5.W) && opcode_sub === 1.U(3.W)) -> (1.U(8.W)), // addi
+    (opcode === 2.U(5.W) && opcode_sub === 2.U(3.W)) -> (2.U(8.W)), // subi
 
     (opcode === 3.U(5.W) && opcode_sub === 0.U(3.W)) -> (2.U(8.W)), // beq
+    (opcode === 3.U(5.W) && opcode_sub === 1.U(3.W)) -> (2.U(8.W)), // bne
+    (opcode === 3.U(5.W) && opcode_sub === 2.U(3.W)) -> (2.U(8.W)), // blt
+    (opcode === 3.U(5.W) && opcode_sub === 3.U(3.W)) -> (2.U(8.W)), // ble
 
     (opcode === 4.U(5.W) && opcode_sub === 0.U(3.W)) -> (1.U(8.W)), // lw
 
     (opcode === 5.U(5.W) && opcode_sub === 0.U(3.W)) -> (1.U(8.W)), // sw
   ))
 
-
   // Execute
-  
   alu.io.command := command
   alu.io.a       := MuxCase(regfile(rs1), Seq(
+    // デフォルトがrs1なのでaddもsubもbranch系統も分岐は要らない
     // addi命令
     (opcode === 2.U(5.W) && opcode_sub === 1.U(3.W)) -> (regfile(rs1_i)),
+
+    // subi命令
+    (opcode === 2.U(5.W) && opcode_sub === 2.U(3.W)) -> (regfile(rs1_i)),
 
     // lw命令
     (opcode === 4.U(5.W) && opcode_sub === 0.U(3.W)) -> (regfile(rs1_i)),
@@ -91,21 +104,32 @@ class Core extends Module {
     (opcode === 5.U(5.W) && opcode_sub === 0.U(3.W)) -> (regfile(rs1_s)),
   ))
   alu.io.b       := MuxCase(0.U(32.W), Seq(
-  // add命令
+    // add命令
     (opcode === 1.U(5.W) && opcode_sub === 1.U(3.W)) -> (regfile(rs2)),
-  // addi命令
-    (opcode === 2.U(5.W) && opcode_sub === 1.U(3.W)) -> (imm),
-  
-  // beq命令
-    (opcode === 3.U(5.W) && opcode_sub === 0.U(3.W)) -> (regfile(rs2)),
+    // sub命令
+    (opcode === 1.U(5.W) && opcode_sub === 2.U(3.W)) -> (regfile(rs2)),
 
-  // lw命令
+    // addi命令
+    (opcode === 2.U(5.W) && opcode_sub === 1.U(3.W)) -> (imm),
+    // subi命令
+    (opcode === 2.U(5.W) && opcode_sub === 2.U(3.W)) -> (imm),
+
+    // beq命令
+    (opcode === 3.U(5.W) && opcode_sub === 0.U(3.W)) -> (regfile(rs2)),
+    // bne命令
+    (opcode === 3.U(5.W) && opcode_sub === 1.U(3.W)) -> (regfile(rs2)),
+    // blt命令
+    (opcode === 3.U(5.W) && opcode_sub === 2.U(3.W)) -> (regfile(rs2)),
+    // ble命令
+    (opcode === 3.U(5.W) && opcode_sub === 3.U(3.W)) -> (regfile(rs2)),
+
+    // lw命令
     (opcode === 4.U(5.W) && opcode_sub === 0.U(3.W)) -> (imm),
 
-  // sw命令
+    // sw命令
     (opcode === 5.U(5.W) && opcode_sub === 0.U(3.W)) -> (imm),
   ))
-  
+
   dmem_raw := Cat(
     (0 until 4).map(i => dmem.read(alu.io.out + i.U)).reverse
   )
@@ -118,11 +142,16 @@ class Core extends Module {
 
   regfile(rd)    := MuxCase((alu.io.out), Seq(
     (rd === 0.U) -> (0.U(32.W)),
-    (opcode === 3.U(5.W) && opcode_sub === 0.U(3.W)) -> (pc + 6.U), // beq
-    (opcode === 4.U(5.W) && opcode_sub === 0.U(3.W)) -> (dmem_raw), // lw
-    (opcode === 5.U(5.W) && opcode_sub === 0.U(3.W)) -> (regfile(rd)), // sw (regfileは書き換えない)
+
+    (opcode === 3.U(5.W) && opcode_sub === 0.U(3.W)) -> (old_pc + 6.U),     // beq
+    (opcode === 3.U(5.W) && opcode_sub === 1.U(3.W)) -> (old_pc + 6.U),     // bne
+    (opcode === 3.U(5.W) && opcode_sub === 2.U(3.W)) -> (old_pc + 6.U),     // blt
+    (opcode === 3.U(5.W) && opcode_sub === 3.U(3.W)) -> (old_pc + 6.U),     // ble
+
+    (opcode === 4.U(5.W) && opcode_sub === 0.U(3.W)) -> (dmem_raw),         // lw
+    (opcode === 5.U(5.W) && opcode_sub === 0.U(3.W)) -> (regfile(rd)),      // sw (regfileは書き換えない)
   ))
-  
+
   // # swでregfileを書き込むと以下のようなことが起きる
   // addi x3, x0, 16
   // sw x3, 4(x0) # mem[4] = x3(= 16), x3 = 4
@@ -155,7 +184,5 @@ class Core extends Module {
     ))}\n")
   }
   printf(p"----------------------\n")
-  
-}
 
-  
+}

@@ -13,7 +13,7 @@ class Alu extends Module {
     val zero     = Output(Bool())
     val out      = Output(UInt(32.W))
   })
-  
+
   io.zero := (io.out === 0.U(32.W))
 
   io.out := MuxCase(0.U(32.W), Seq(
