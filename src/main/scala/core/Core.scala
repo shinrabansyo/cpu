@@ -15,36 +15,38 @@ class Core extends Module {
 
   val alu = Module(new Alu)
 
-  val imem       = Mem(1024 * 6, UInt(8.W))
+  val imem        = Mem(1024 * 6, UInt(8.W))
   loadMemoryFromFile(imem, "src/main/resources/bootrom.hex")
-  val dmem       = Mem(1024 * 4, UInt(8.W))
+  val dmem        = Mem(1024 * 4, UInt(8.W))
   loadMemoryFromFile(dmem, "src/main/resources/dmem.hex")
 
-  val old_pc     = RegInit(0.U(32.W))
-  val pc         = RegInit(0.U(32.W))
-  val regfile    = Mem(32, UInt(32.W))
+  val pc          = RegInit(0.U(32.W))
+  val pc_fetching = RegInit(0.U(32.W))
+  val regfile     = Mem(32, UInt(32.W))
 
-  val instr      = RegInit(0.U(48.W))
-  val opcode     = Wire(UInt(5.W))
-  val opcode_sub = Wire(UInt(3.W))
-  val rd         = Wire(UInt(5.W))
-  val rs1        = Wire(UInt(5.W))
-  val rs1_i      = Wire(UInt(5.W))
-  val rs1_s      = Wire(UInt(5.W))
-  val rs2        = Wire(UInt(5.W))
-  val rs2_s      = Wire(UInt(5.W))
-  val imm        = Wire(UInt(32.W))
-  val imm_r      = Wire(UInt(25.W))
-  val imm_r_sext = Wire(UInt(32.W))
+  val instr       = RegInit(0.U(48.W))
+  val opcode      = Wire(UInt(5.W))
+  val opcode_sub  = Wire(UInt(3.W))
+  val rd          = Wire(UInt(5.W))
+  val rs1         = Wire(UInt(5.W))
+  val rs1_i       = Wire(UInt(5.W))
+  val rs1_s       = Wire(UInt(5.W))
+  val rs2         = Wire(UInt(5.W))
+  val rs2_s       = Wire(UInt(5.W))
+  val imm         = Wire(UInt(32.W))
+  val imm_r       = Wire(UInt(25.W))
+  val imm_r_sext  = Wire(UInt(32.W))
 
-  val dmem_raw   = Wire(UInt(32.W))
+  val dmem_raw    = Wire(UInt(32.W))
 
   // Fetch
-  old_pc := pc
-  instr := Cat(
-    (0 until 6).map(i => imem.read(pc + i.U)).reverse
-  )
-  pc := MuxCase((pc + 6.U), Seq(
+  pc := pc_fetching
+  instr := MuxCase(Cat((0 until 6).map(i => imem.read(pc_fetching + i.U)).reverse), Seq(
+    /*現在実行している命令が branch 系統なら次の命令を nop にする*/
+    (opcode === 3.U(5.W)) -> (0.U(48.W)), // nop
+  ))
+
+  pc_fetching := MuxCase((pc_fetching + 6.U), Seq(
     /* ----- BUG ----- */
     (opcode === 3.U(5.W) && opcode_sub === 0.U(3.W) && alu.io.zero === true.B)  -> (pc + imm_r_sext),                                   //beq
     (opcode === 3.U(5.W) && opcode_sub === 1.U(3.W) && alu.io.zero === false.B) -> (pc + imm_r_sext),                                   //bne
@@ -143,10 +145,10 @@ class Core extends Module {
   regfile(rd)    := MuxCase((alu.io.out), Seq(
     (rd === 0.U) -> (0.U(32.W)),
 
-    (opcode === 3.U(5.W) && opcode_sub === 0.U(3.W)) -> (old_pc + 6.U),     // beq
-    (opcode === 3.U(5.W) && opcode_sub === 1.U(3.W)) -> (old_pc + 6.U),     // bne
-    (opcode === 3.U(5.W) && opcode_sub === 2.U(3.W)) -> (old_pc + 6.U),     // blt
-    (opcode === 3.U(5.W) && opcode_sub === 3.U(3.W)) -> (old_pc + 6.U),     // ble
+    (opcode === 3.U(5.W) && opcode_sub === 0.U(3.W)) -> (pc + 6.U),     // beq
+    (opcode === 3.U(5.W) && opcode_sub === 1.U(3.W)) -> (pc + 6.U),     // bne
+    (opcode === 3.U(5.W) && opcode_sub === 2.U(3.W)) -> (pc + 6.U),     // blt
+    (opcode === 3.U(5.W) && opcode_sub === 3.U(3.W)) -> (pc + 6.U),     // ble
 
     (opcode === 4.U(5.W) && opcode_sub === 0.U(3.W)) -> (dmem_raw),         // lw
     (opcode === 5.U(5.W) && opcode_sub === 0.U(3.W)) -> (regfile(rd)),      // sw (regfileは書き換えない)
@@ -158,7 +160,8 @@ class Core extends Module {
   // sw x3, 8(x0) # mem[8] = x3(=  4)
 
   // Debug output
-  printf(p"pc          : 0x${Hexadecimal(old_pc)}\n")
+  printf(p"pc_fetching : 0x${Hexadecimal(pc_fetching)}\n")
+  printf(p"pc          : 0x${Hexadecimal(pc)}\n")
   printf(p"instr       : 0x${Hexadecimal(instr)}\n")
   printf(p"opcode      : 0x${Hexadecimal(opcode)}\n")
   printf(p"opcode_sub  : 0x${Hexadecimal(opcode_sub)}\n")
