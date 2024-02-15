@@ -85,6 +85,15 @@ class UartRx(clockFrequency: Int, baudRate: Int, rxSyncStages: Int) extends Modu
   }
 
   // RX信号をクロックに同期
+  //    10kHz
+  // 生のrx:   1 1 01 1  1   1   1 1  1 0 0   0  0
+  //         ~~~~~~~~~~~~~~~~~~~~~~~~~~~____________
+  //    cpu:   |  |  |  |  |  |  |  |  |  |  |  |  |
+  //         ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~________________________~~~~~~~~
+  //  sample                              *            *
+  //         ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~________________________~~~~~~~
+  //    10MHz
+  // ↓の信号:  1  1  1  1  1  1  1  1  1  0  0  0  0
   rxRegs(rxSyncStages) := io.rx
   (0 to rxSyncStages - 1).foreach(i => rxRegs(i) := rxRegs(i + 1))
   // 相手は相手自身のクロックに合わせて送信してくるけど、自分側のクロックとそのクロックは
@@ -96,11 +105,11 @@ class UartRx(clockFrequency: Int, baudRate: Int, rxSyncStages: Int) extends Modu
 
   // 受信中じゃない時
   when(!running) {
-    when(!rxRegs(1) && rxRegs(0)) {
+    when(!rxRegs(1) && rxRegs(0)) {  // aの検出をしたとき
       // スタートビット検出(立ち下がり検出)、rxRegs(0)が1(平常電位)、rxRegs(1)がゼロ(start信号)
       rateCounter := (baudDivider * 3 / 2 - 1).U // Wait until the center of LSB.
       bitCounter := (8 + 2 - 1).U
-      running := true.B
+      running := true.B   // 下の処理にcの時移る
     }
   }.otherwise {
     when(rateCounter === 0.U) { // 1ビット周期ごとに処理
@@ -108,7 +117,7 @@ class UartRx(clockFrequency: Int, baudRate: Int, rxSyncStages: Int) extends Modu
       (0 to 8 + 2 - 2).foreach(i => bits(i) := bits(i + 1)) // 1ビット右シフト
       //                  ↑ -2 なのは、                     ↑ ここで配列の要素数を越えないため
       when(bitCounter === 0.U) { // ストップビットまで出⼒し終わったら
-        outValid := true.B
+        outValid := true.B  // データ受信完了→CPUが読み取れる状態になる
         outBits := Cat(bits.slice(1, 8 + 2 - 1).reverse)
         overrun := outValid // 前のデータが処理される前に次のデータの受信完了した
         // 上のoutValid := true.Bと同時に入れられるので、普段はoverrunにはfalseが入るが
