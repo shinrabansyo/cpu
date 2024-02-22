@@ -29,11 +29,11 @@ class UartEchoback(clockFrequency: Int, baudRate: Int, rxSyncStages: Int) extend
 
     var tx = Module(new UartTx(clockFrequency, baudRate))
     var rx = Module(new UartRx(clockFrequency, baudRate, rxSyncStages))
-    
+
     rx.io.rx := tx.io.tx
 
     tx.io.din <> io.din
-    rx.io.out <> io.dout
+    rx.io.dout <> io.dout
     io.overrun := rx.io.overrun
 }
 
@@ -54,7 +54,7 @@ class UartRxTest extends AnyFlatSpec with ChiselScalatestTester {
                     c.clock.step(1)
                 }
                 // 送信データが読み取られたので、送信データを無効化
-                c.io.din.valid.poke(false.B) // 
+                c.io.din.valid.poke(false.B) //
                 // 受信完了まで待つ
                 while(!c.io.dout.valid.peek().litToBoolean) {
                     c.clock.step(1)

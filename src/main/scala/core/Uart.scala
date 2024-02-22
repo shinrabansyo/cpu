@@ -55,9 +55,9 @@ class UartTx(clockFrequency: Int, baudRate: Int) extends Module {
 
 class UartRx(clockFrequency: Int, baudRate: Int, rxSyncStages: Int) extends Module {
   val io = IO(new Bundle{
-    val out = Decoupled(UInt(8.W)) // 受信データを出⼒
-    val rx = Input(Bool())         // UART信号⼊⼒
-    val overrun = Output(Bool())   // UARTデータ取りこぼし発⽣？
+    val dout = Decoupled(UInt(8.W)) // 受信データを出⼒
+    val rx = Input(Bool())          // UART信号⼊⼒
+    val overrun = Output(Bool())    // UARTデータ取りこぼし発⽣？
   })
   val baudDivider = clockFrequency/baudRate               // クロック周波数÷ボー‧レート
   val rateCounter = RegInit(0.U(log2Ceil(baudDivider*3/2).W))
@@ -75,9 +75,9 @@ class UartRx(clockFrequency: Int, baudRate: Int, rxSyncStages: Int) extends Modu
   // 受信データの出⼒信号 (VALID/READYハンドシェーク)
   val outValid = RegInit(false.B)            // UART相手からの受信完了で立つ
   val outBits = Reg(UInt(8.W))    // CPUに送信するデータ
-  val outReady = WireDefault(io.out.ready)   // CPU側から読み取られたら(送信完了で)立つ
-  io.out.valid := outValid
-  io.out.bits := outBits
+  val outReady = WireDefault(io.dout.ready)   // CPU側から読み取られたら(送信完了で)立つ
+  io.dout.valid := outValid
+  io.dout.bits := outBits
 
   // やるべきタスクが終わったら
   when(outValid && outReady) {

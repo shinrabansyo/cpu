@@ -14,6 +14,8 @@ class Core extends Module {
   */
 
   val alu = Module(new Alu)
+  val ioBus = Module(new IOBus)
+  ioBus.io.rx := true.B
 
   val imem        = Mem(1024 * 6, UInt(8.W))
   loadMemoryFromFile(imem, "src/main/resources/bootrom.hex")
@@ -40,19 +42,29 @@ class Core extends Module {
   val dmem_raw    = Wire(UInt(32.W))
 
   // Fetch
-  pc := pc_fetching
+  pc := MuxCase(pc_fetching, Array(
+    // in命令でデータ準備が出来ていない場合は再度 in 命令を実行
+    (opcode === 6.U(5.W) && opcode_sub === 0.U(3.W) && !ioBus.io.din.valid) -> (pc),
+    // out命令で相手が受信完了していなければ再度 out 命令を実行
+    (opcode === 6.U(5.W) && opcode_sub === 1.U(3.W) && !ioBus.io.dout.ready) -> (pc),
+  ))
   instr := MuxCase(Cat((0 until 6).map(i => imem.read(pc_fetching + i.U)).reverse), Seq(
     /*現在実行している命令が branch 系統なら次の命令を nop にする*/
     (opcode === 3.U(5.W)) -> (0.U(48.W)), // nop
+    // in命令でデータ準備が出来ていない場合は再度 in 命令を実行
+    (opcode === 6.U(5.W) && opcode_sub === 0.U(3.W) && !ioBus.io.din.valid) -> (instr),
+    // out命令で相手が受信完了していなければ再度 out 命令を実行
+    (opcode === 6.U(5.W) && opcode_sub === 1.U(3.W) && !ioBus.io.dout.ready) -> (instr),
   ))
 
   pc_fetching := MuxCase((pc_fetching + 6.U), Seq(
-    /* ----- BUG ----- */
     (opcode === 3.U(5.W) && opcode_sub === 0.U(3.W) && alu.io.zero === true.B)  -> (pc + imm_r_sext),                                   //beq
     (opcode === 3.U(5.W) && opcode_sub === 1.U(3.W) && alu.io.zero === false.B) -> (pc + imm_r_sext),                                   //bne
     (opcode === 3.U(5.W) && opcode_sub === 3.U(3.W) && (alu.io.out(31) === 1.U(1.W) || alu.io.zero === true.B)) -> (pc + imm_r_sext),   //ble
     (opcode === 3.U(5.W) && opcode_sub === 2.U(3.W) && alu.io.out(31) === 1.U(1.W))  -> (pc + imm_r_sext),                              //blt
-    /* --------------- */
+
+    (opcode === 6.U(5.W) && opcode_sub === 0.U(3.W) && !ioBus.io.din.valid)  -> (pc_fetching),                                          // in命令でデータ準備が出来ていない場合はストール
+    (opcode === 6.U(5.W) && opcode_sub === 1.U(3.W) && !ioBus.io.dout.ready) -> (pc_fetching),                                          // out命令で相手が受信完了していなければストール
   ))
 
   // Decode
@@ -87,6 +99,9 @@ class Core extends Module {
     (opcode === 4.U(5.W) && opcode_sub === 0.U(3.W)) -> (1.U(8.W)), // lw
 
     (opcode === 5.U(5.W) && opcode_sub === 0.U(3.W)) -> (1.U(8.W)), // sw
+
+    (opcode === 6.U(5.W) && opcode_sub === 0.U(3.W)) -> (1.U(8.W)), // in
+    (opcode === 6.U(5.W) && opcode_sub === 1.U(3.W)) -> (1.U(8.W)), // out
   ))
 
   // Execute
@@ -104,6 +119,11 @@ class Core extends Module {
 
     // sw命令
     (opcode === 5.U(5.W) && opcode_sub === 0.U(3.W)) -> (regfile(rs1_s)),
+
+    // in命令
+    (opcode === 6.U(5.W) && opcode_sub === 0.U(3.W)) -> (regfile(rs1_i)),
+    // out命令
+    (opcode === 6.U(5.W) && opcode_sub === 1.U(3.W)) -> (regfile(rs1_s)),
   ))
   alu.io.b       := MuxCase(0.U(32.W), Seq(
     // add命令
@@ -130,6 +150,11 @@ class Core extends Module {
 
     // sw命令
     (opcode === 5.U(5.W) && opcode_sub === 0.U(3.W)) -> (imm),
+
+    // in命令
+    (opcode === 6.U(5.W) && opcode_sub === 0.U(3.W)) -> (imm),
+    // out命令
+    (opcode === 6.U(5.W) && opcode_sub === 1.U(3.W)) -> (imm),
   ))
 
   dmem_raw := Cat(
@@ -145,14 +170,26 @@ class Core extends Module {
   regfile(rd)    := MuxCase((alu.io.out), Seq(
     (rd === 0.U) -> (0.U(32.W)),
 
-    (opcode === 3.U(5.W) && opcode_sub === 0.U(3.W)) -> (pc + 6.U),     // beq
-    (opcode === 3.U(5.W) && opcode_sub === 1.U(3.W)) -> (pc + 6.U),     // bne
-    (opcode === 3.U(5.W) && opcode_sub === 2.U(3.W)) -> (pc + 6.U),     // blt
-    (opcode === 3.U(5.W) && opcode_sub === 3.U(3.W)) -> (pc + 6.U),     // ble
+    (opcode === 3.U(5.W) && opcode_sub === 0.U(3.W)) -> (pc + 6.U),          // beq
+    (opcode === 3.U(5.W) && opcode_sub === 1.U(3.W)) -> (pc + 6.U),          // bne
+    (opcode === 3.U(5.W) && opcode_sub === 2.U(3.W)) -> (pc + 6.U),          // blt
+    (opcode === 3.U(5.W) && opcode_sub === 3.U(3.W)) -> (pc + 6.U),          // ble
 
-    (opcode === 4.U(5.W) && opcode_sub === 0.U(3.W)) -> (dmem_raw),         // lw
-    (opcode === 5.U(5.W) && opcode_sub === 0.U(3.W)) -> (regfile(rd)),      // sw (regfileは書き換えない)
+    (opcode === 4.U(5.W) && opcode_sub === 0.U(3.W)) -> (dmem_raw),          // lw
+    (opcode === 5.U(5.W) && opcode_sub === 0.U(3.W)) -> (regfile(rd)),       // sw (regfileは書き換えない)
+
+    (opcode === 6.U(5.W) && opcode_sub === 0.U(3.W) &&  ioBus.io.din.valid) -> (ioBus.io.din.bits), // in (読み取りデータが準備できていた場合は書き込み)
+    (opcode === 6.U(5.W) && opcode_sub === 0.U(3.W) && !ioBus.io.din.valid) -> (regfile(rd)),       // in（準備未完了の場合は書き込まない）
+    (opcode === 6.U(5.W) && opcode_sub === 1.U(3.W)) -> (regfile(rd)),                              // out (regfileは書き換えない)
   ))
+
+  // in out デバイスID
+  ioBus.io.devId := alu.io.out
+  // データ受取完了 in 命令 かつ データ準備が出来ていた場合に受取完了フラグを立てる
+  ioBus.io.din.ready := (opcode === 6.U(5.W) && opcode_sub === 0.U(3.W)) && ioBus.io.din.valid
+  // 送信データ準備完了 out 命令であればフラグを立てる
+  ioBus.io.dout.valid := (opcode === 6.U(5.W) && opcode_sub === 1.U(3.W))
+  ioBus.io.dout.bits := regfile(rs2_s)
 
   // # swでregfileを書き込むと以下のようなことが起きる
   // addi x3, x0, 16

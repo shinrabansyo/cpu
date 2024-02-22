@@ -11,8 +11,8 @@ class TopTest extends AnyFlatSpec with ChiselScalatestTester {
         c.reset.poke(true.B)
         c.clock.step(4)
         c.reset.poke(false.B)
-        c.clock.setTimeout(74)
-        c.clock.step(70)
+        c.clock.setTimeout(12274)
+        c.clock.step(12270)
       } }
-    
+
 }
