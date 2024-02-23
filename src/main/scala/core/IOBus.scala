@@ -23,10 +23,10 @@ class IOBus extends Module {
   /////////////////// din ///////////////////
   uartRx.io.rx := io.rx
 
-  io.din.valid := MuxCase(true.B, Array(
+  io.din.valid := MuxCase(true.B, Seq(
     (isUart) -> uartRx.io.dout.valid
   ))
-  io.din.bits := MuxCase(0.U, Array(
+  io.din.bits := MuxCase(0.U, Seq(
     (isUart) -> uartRx.io.dout.bits
   ))
 
@@ -48,7 +48,7 @@ class IOBus extends Module {
     uartTx.io.din.bits := io.dout.bits
   }
 
-  io.dout.ready := MuxCase(true.B, Array(
+  io.dout.ready := MuxCase(true.B, Seq(
     (isUart) -> uartTx.io.din.ready
   ))
   ///////////////////////////////////////////

@@ -5,17 +5,16 @@ import chisel3.util._
 import chisel3.util.experimental.loadMemoryFromFile
 
 class Core extends Module {
-  /*
   val io = IO(new Bundle {
-    val a        = Input(UInt(8.W))
-    val b        = Input(UInt(8.W))
-    val out      = Output(UInt(8.W))
+    val tx = Output(Bool())
+    val rx = Input(Bool())
   })
-  */
 
   val alu = Module(new Alu)
   val ioBus = Module(new IOBus)
-  ioBus.io.rx := true.B
+
+  ioBus.io.rx := io.rx
+  io.tx := ioBus.io.tx
 
   val imem        = Mem(1024 * 6, UInt(8.W))
   loadMemoryFromFile(imem, "src/main/resources/bootrom.hex")
