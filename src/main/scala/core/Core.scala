@@ -56,6 +56,7 @@ class Core extends Module {
     (opcode === 3.U(5.W) && opcode_sub === 1.U(3.W) && alu.io.zero === false.B) -> (pc + imm_r_sext),                                 //bne
     (opcode === 3.U(5.W) && opcode_sub === 3.U(3.W) && (alu.io.out(31) === 1.U(1.W) || alu.io.zero === true.B)) -> (pc + imm_r_sext), //ble
     (opcode === 3.U(5.W) && opcode_sub === 2.U(3.W) && alu.io.out(31) === 1.U(1.W))  -> (pc + imm_r_sext),                            //blt
+    (opcode === 3.U(5.W) && opcode_sub === 4.U(3.W)) -> (alu.io.out),                                                                 //jal
     
     (opcode === 4.U(5.W) && !load_ready) -> (pc),                                                                                     // load命令は同期読み出しのために1サイクル待つ
 
@@ -92,8 +93,10 @@ class Core extends Module {
     (opcode === 3.U(5.W) && opcode_sub === 1.U(3.W)) -> (2.U(8.W)), // bne
     (opcode === 3.U(5.W) && opcode_sub === 2.U(3.W)) -> (2.U(8.W)), // blt
     (opcode === 3.U(5.W) && opcode_sub === 3.U(3.W)) -> (2.U(8.W)), // ble
+    (opcode === 3.U(5.W) && opcode_sub === 4.U(3.W)) -> (1.U(8.W)), // jal
 
     (opcode === 4.U(5.W) && opcode_sub === 0.U(3.W)) -> (1.U(8.W)), // lw
+    (opcode === 4.U(5.W) && opcode_sub === 2.U(3.W)) -> (1.U(8.W)), // lb
 
     (opcode === 5.U(5.W) && opcode_sub === 0.U(3.W)) -> (1.U(8.W)), // sw
 
@@ -113,6 +116,8 @@ class Core extends Module {
 
     // lw命令
     (opcode === 4.U(5.W) && opcode_sub === 0.U(3.W)) -> (regfile(rs1_i)),
+    // lb命令
+    (opcode === 4.U(5.W) && opcode_sub === 2.U(3.W)) -> (regfile(rs1_i)),
 
     // sw命令
     (opcode === 5.U(5.W) && opcode_sub === 0.U(3.W)) -> (regfile(rs1_s)),
@@ -121,6 +126,9 @@ class Core extends Module {
     (opcode === 6.U(5.W) && opcode_sub === 0.U(3.W)) -> (regfile(rs1_i)),
     // out命令
     (opcode === 6.U(5.W) && opcode_sub === 1.U(3.W)) -> (regfile(rs1_s)),
+    
+    // jal命令
+    (opcode === 3.U(5.W) && opcode_sub === 4.U(3.W)) -> (regfile(rs1_i)),
   ))
   alu.io.b       := MuxCase(0.U(32.W), Seq(
     // add命令
@@ -141,9 +149,13 @@ class Core extends Module {
     (opcode === 3.U(5.W) && opcode_sub === 2.U(3.W)) -> (regfile(rs2)),
     // ble命令
     (opcode === 3.U(5.W) && opcode_sub === 3.U(3.W)) -> (regfile(rs2)),
+    // jal命令
+    (opcode === 3.U(5.W) && opcode_sub === 4.U(3.W)) -> (imm),
 
     // lw命令
     (opcode === 4.U(5.W) && opcode_sub === 0.U(3.W)) -> (imm),
+    // lb命令
+    (opcode === 4.U(5.W) && opcode_sub === 2.U(3.W)) -> (imm),
 
     // sw命令
     (opcode === 5.U(5.W) && opcode_sub === 0.U(3.W)) -> (imm),
@@ -177,8 +189,10 @@ class Core extends Module {
     (opcode === 3.U(5.W) && opcode_sub === 1.U(3.W)) -> (pc + 6.U),          // bne
     (opcode === 3.U(5.W) && opcode_sub === 2.U(3.W)) -> (pc + 6.U),          // blt
     (opcode === 3.U(5.W) && opcode_sub === 3.U(3.W)) -> (pc + 6.U),          // ble
+    (opcode === 3.U(5.W) && opcode_sub === 4.U(3.W)) -> (pc + 6.U),          // jal
 
     (opcode === 4.U(5.W) && opcode_sub === 0.U(3.W)) -> (dmem_raw),          // lw
+    (opcode === 4.U(5.W) && opcode_sub === 2.U(3.W)) -> (0xFF.U & dmem_raw), // lb
     (opcode === 5.U(5.W) && opcode_sub === 0.U(3.W)) -> (regfile(rd)),       // sw (regfileは書き換えない)
 
     (opcode === 6.U(5.W) && opcode_sub === 0.U(3.W) &&  ioBus.io.din.valid) -> (ioBus.io.din.bits), // in (読み取りデータが準備できていた場合は書き込み)
@@ -203,6 +217,7 @@ class Core extends Module {
   // sw x3, 8(x0) # mem[8] = x3(=  4)
 
   // Debug output
+  /*
   printf(p"pc_fetching : 0x${Hexadecimal(pc_fetching)}\n")
   printf(p"pc          : 0x${Hexadecimal(pc)}\n")
   printf(p"instr       : 0x${Hexadecimal(instr)}\n")
@@ -230,5 +245,6 @@ class Core extends Module {
     ))}\n")
   }
   printf(p"----------------------\n")
+  */
 
 }
