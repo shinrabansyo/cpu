@@ -13,8 +13,8 @@ class IOBus extends Module {
     val rx      = Input(Bool())
   })
 
-  val uartTx = Module(new UartTx(27000000, 115200))
-  val uartRx = Module(new UartRx(27000000, 115200, 2))
+  val uartTx = Module(new UartTx(20250000, 9600))
+  val uartRx = Module(new UartRx(20250000, 9600, 2))
 
   val isUart = Wire(Bool())
 
