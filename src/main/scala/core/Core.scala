@@ -22,36 +22,38 @@ class Core extends Module {
   val dmem        = SyncReadMem(1024 * 4, UInt(8.W))
   loadMemoryFromFile(dmem, "src/main/resources/dmem.hex")
 
-  val first_time  = RegInit(true.B)
-  val pc          = RegInit(0.U(32.W))
-  val pc_fetching = RegInit(0.U(32.W))
-  val pc_next     = Wire(UInt(32.W))
-  val regfile     = Mem(32, UInt(32.W))
+  val first_time     = RegInit(true.B)
+  val pc             = RegInit(0.U(32.W))
+  val pc_next_plus_6 = RegInit(0.U(32.W))
+  val pc_next        = Wire(UInt(32.W))
+  val regfile        = Mem(32, UInt(32.W))
 
-  val instr       = Wire(UInt(48.W))
-  val opcode      = Wire(UInt(5.W))
-  val opcode_sub  = Wire(UInt(3.W))
-  val rd          = Wire(UInt(5.W))
-  val rs1         = Wire(UInt(5.W))
-  val rs1_i       = Wire(UInt(5.W))
-  val rs1_s       = Wire(UInt(5.W))
-  val rs2         = Wire(UInt(5.W))
-  val rs2_s       = Wire(UInt(5.W))
-  val imm         = Wire(UInt(32.W))
-  val imm_r       = Wire(UInt(25.W))
-  val imm_r_sext  = Wire(UInt(32.W))
+  val instr          = Wire(UInt(48.W))
+  val opcode         = Wire(UInt(5.W))
+  val opcode_sub     = Wire(UInt(3.W))
+  val rd             = Wire(UInt(5.W))
+  val rs1            = Wire(UInt(5.W))
+  val rs1_i          = Wire(UInt(5.W))
+  val rs1_s          = Wire(UInt(5.W))
+  val rs2            = Wire(UInt(5.W))
+  val rs2_s          = Wire(UInt(5.W))
+  val imm            = Wire(UInt(32.W))
+  val imm_r          = Wire(UInt(25.W))
+  val imm_r_sext     = Wire(UInt(32.W))
 
-  val dmem_raw    = Wire(UInt(32.W))
-  val load_ready  = RegInit(false.B)
+  val dmem_raw       = Wire(UInt(32.W))
+  val load_ready     = RegInit(false.B)
 
   // Fetch
   pc := pc_next
   instr := Mux(first_time, 0.U, Cat((0 until 6).map(i => imem.read(pc_next + i.U)).reverse))
   first_time := false.B
 
-  pc_fetching := pc_next + 6.U
+  pc_next_plus_6 := pc_next + 6.U
   
-  pc_next := MuxCase(pc_fetching, Seq(
+  // ↓↓↓ クリティカルパスはここ ↓↓↓↓
+  // 命令読み出し -> pc との加算 -> 次のpcの選択
+  pc_next := MuxCase(pc_next_plus_6, Seq(
     (opcode === 3.U(5.W) && opcode_sub === 0.U(3.W) && alu.io.zero === true.B)  -> (pc + imm_r_sext),                                 //beq
     (opcode === 3.U(5.W) && opcode_sub === 1.U(3.W) && alu.io.zero === false.B) -> (pc + imm_r_sext),                                 //bne
     (opcode === 3.U(5.W) && opcode_sub === 3.U(3.W) && (alu.io.out(31) === 1.U(1.W) || alu.io.zero === true.B)) -> (pc + imm_r_sext), //ble
@@ -218,7 +220,7 @@ class Core extends Module {
 
   // Debug output
   /*
-  printf(p"pc_fetching : 0x${Hexadecimal(pc_fetching)}\n")
+  printf(p"pc_next_plus_6 : 0x${Hexadecimal(pc_next_plus_6)}\n")
   printf(p"pc          : 0x${Hexadecimal(pc)}\n")
   printf(p"instr       : 0x${Hexadecimal(instr)}\n")
   printf(p"opcode      : 0x${Hexadecimal(opcode)}\n")
