@@ -1,8 +1,9 @@
 module BindsTo_0_Core(
-  input   clock,
-  input   reset,
-  output  io_tx,
-  input   io_rx
+  input        clock,
+  input        reset,
+  output       io_tx,
+  input        io_rx,
+  output [5:0] io_led
 );
 
 initial begin
