@@ -7,6 +7,9 @@ class Spi(clockFrequency: Int) extends Module {
   val io = IO(new Bundle {
     val mosi     = Output(Bool())
     val miso     = Input(Bool())
+    val misoBuf  = Output(Bool())                 // DEBUG
+    val posedge  = Output(Bool())                 // DEBUG
+    val negedge  = Output(Bool())                 // DEBUG
     val sclk     = Output(Bool())
     val din      = Flipped(Decoupled(UInt(8.W)))  // 任意のデータを送るとき
     val dout     = Decoupled(UInt(8.W))           // データを読み取るとき
@@ -14,9 +17,9 @@ class Spi(clockFrequency: Int) extends Module {
     val spiMode  = Flipped(Decoupled(UInt(2.W)))  // SPIモード
     // SCLK クロックの速度 = clockFrequency >> (clkshamt+1)
   })
-  
+
   // クロックの分周用信号
-  val sclk = RegInit(0.U(2.W))          // lsb がクロック, 上位ビットに向かって過去のクロックの履歴
+  val sclk = RegInit(false.B)
   val sclkCounter = RegInit(0.U(8.W))
   val clkshamt = RegInit(0.U(3.W))
   val posedge = Wire(Bool())
@@ -24,41 +27,47 @@ class Spi(clockFrequency: Int) extends Module {
 
   // データの送受信用信号
   val shiftReg = RegInit(0.U(8.W))
-  val bitCounter = RegInit(0.U(4.U))
+  val bitCounter = RegInit(0.U(4.W))
   val busy = RegInit(false.B)
   val misoBuf = RegInit(false.B)
-  val inReady = RegInit(false.B)
-  val spiModeReady = RegInit(false.B)
-  val clkshamtReady = RegInit(false.B)
+  val inReady = RegInit(true.B)
+  val spiModeReady = RegInit(true.B)
+  val clkshamtReady = RegInit(true.B)
   val outValid = RegInit(false.B)
   val cpol = RegInit(false.B)        // アイドル状態でのクロックのHIGH/LOW (clock polarity)
   val cpha = RegInit(false.B)        // サンプリングの極性 posedge/negedge (clock phase)
   val mode_1_2 = Wire(Bool())
 
-  posedge  := ~sclk(1) && sclk(0)
-  negedge  := sclk(1) && ~sclk(0)
+  // DEBUG
+  io.misoBuf := misoBuf
+  io.posedge := posedge
+  io.negedge := negedge
+
+  posedge := false.B
+  negedge := false.B
 
   // クロックの分周
-  io.sclk := sclk(0)
+  io.sclk := sclk
   when(busy) {
     when(sclkCounter === 0.U) {
-      sclk := (sclk << 1) | ~sclk(0)
+      sclk := ~sclk
       sclkCounter := (1.U << io.clkshamt.bits) - 1.U
+      posedge := ~sclk
+      negedge := sclk
     } .otherwise {
-      sclk := (sclk << 1) | sclk(0)
       sclkCounter := sclkCounter - 1.U
     }
   }.elsewhen(!(io.spiMode.valid && io.spiMode.ready)) {
-    sclk := Cat(cpol, cpol)
+    sclk := cpol
   }
- 
-  // データの送受信 
+
+  // データの送受信
   // mode 0: cpol = 0, cpha = 0 (データをposedgeでサンプリング / negedgeでシフト)
   // mode 1: cpol = 0, cpha = 1 (データをnegedgeでサンプリング / posedgeでシフト)
   // mode 2: cpol = 1, cpha = 0 (データをnegedgeでサンプリング / posedgeでシフト)
   // mode 3: cpol = 1, cpha = 1 (データをposedgeでサンプリング / negedgeでシフト)
   mode_1_2 := (cpol ^ cpha)
-  
+
   io.din.ready := inReady
   when(io.din.valid && io.din.ready) {
     shiftReg := io.din.bits
@@ -66,19 +75,19 @@ class Spi(clockFrequency: Int) extends Module {
     busy := true.B
     bitCounter := 8.U
   }
-  
+
   io.dout.bits := shiftReg
   io.dout.valid := outValid
   when(io.dout.valid && io.dout.ready) {
     outValid := false.B
   }
-  
+
   io.clkshamt.ready := clkshamtReady
   when(io.clkshamt.valid && io.clkshamt.ready) {
     clkshamtReady := false.B
     clkshamt := io.clkshamt.bits
   }
-  
+
   io.spiMode.ready := spiModeReady
   when(io.spiMode.valid && io.spiMode.ready) {
     cpol := io.spiMode.bits(1)
@@ -88,7 +97,7 @@ class Spi(clockFrequency: Int) extends Module {
   }
 
   io.mosi := shiftReg(7)
-  
+
   when(busy) {
     when(bitCounter === 0.U) {
       busy := false.B
@@ -122,7 +131,7 @@ class Spi(clockFrequency: Int) extends Module {
       }
     }
   }
-  
+
 
 }
 
@@ -151,7 +160,7 @@ SPI  →  マスター側(CPU側)がクロックを出して通信の制御を�
             シフトレジスタの内容を交換
             マスター側とスレイブ側のレジスタを一つに捉えて、半周させる
             ex> M,S ともに8bitずつ持ってるとして、16bitを8bitシフト
-            
+
             master_reg = 10001011
             slave_reg  = 00000000
             for _ 0..8:
@@ -163,8 +172,8 @@ SPI  →  マスター側(CPU側)がクロックを出して通信の制御を�
             -----------------------------
             M 00000001        11111110 S
             ----↓↓↓↓↓↓↓↓↓↓↓↓↓↓↓↓↓↓↓↓↓----
-            M 0000001   
-            MOSI  → 0 →     (Mのレジスタからはみ出た分) 
+            M 0000001
+            MOSI  → 0 →     (Mのレジスタからはみ出た分)
             MISO  ← 1 ←     (Sのレジスタからはみ出た分) // MISO,MOSI で交換
                            1111110 S
             ----↓↓↓↓↓↓↓↓↓↓↓↓↓↓↓↓↓↓↓↓↓----
