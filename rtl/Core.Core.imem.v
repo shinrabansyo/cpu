@@ -3,6 +3,9 @@ module BindsTo_0_Core(
   input        reset,
   output       io_tx,
   input        io_rx,
+  output       io_sclk,
+  output       io_mosi,
+  input        io_miso,
   output [5:0] io_led
 );
 

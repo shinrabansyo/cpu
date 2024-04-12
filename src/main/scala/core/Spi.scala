@@ -5,16 +5,18 @@ import chisel3.util._
 
 class Spi(clockFrequency: Int) extends Module {
   val io = IO(new Bundle {
-    val mosi     = Output(Bool())
-    val miso     = Input(Bool())
+    val mosi      = Output(Bool())
+    val miso      = Input(Bool())
     // val misoBuf  = Output(Bool())                 // DEBUG
     // val posedge  = Output(Bool())                 // DEBUG
     // val negedge  = Output(Bool())                 // DEBUG
-    val sclk     = Output(Bool())
-    val din      = Flipped(Decoupled(UInt(8.W)))  // 任意のデータを送るとき
-    val dout     = Decoupled(UInt(8.W))           // データを読み取るとき
-    val clkshamt = Flipped(Decoupled(UInt(3.W)))  // シフト量(shift amount) + 1
-    val spiMode  = Flipped(Decoupled(UInt(2.W)))  // SPIモード
+    val sclk      = Output(Bool())
+    val din       = Flipped(Decoupled(UInt(8.W)))  // 任意のデータを送るとき
+    val dout      = Decoupled(UInt(8.W))           // データを読み取るとき
+    val clkshamt  = Flipped(Decoupled(UInt(3.W)))  // シフト量(shift amount) + 1
+    val clkshamtO = Output(UInt(3.W))
+    val spiMode   = Flipped(Decoupled(UInt(2.W)))  // SPIモード
+    val spiModeO  = Output(UInt(2.W))
     // SCLK クロックの速度 = clockFrequency >> (clkshamt+1)
   })
 
@@ -43,6 +45,9 @@ class Spi(clockFrequency: Int) extends Module {
   // io.misoBuf := misoBuf
   // io.posedge := posedge
   // io.negedge := negedge
+
+  io.clkshamtO := clkshamt
+  io.spiModeO := Cat(cpol, cpha)
 
   posedge := false.B
   negedge := false.B

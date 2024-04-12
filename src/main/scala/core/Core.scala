@@ -6,9 +6,14 @@ import chisel3.util.experimental.loadMemoryFromFile
 
 class Core extends Module {
   val io = IO(new Bundle {
-    val tx = Output(Bool())
-    val rx = Input(Bool())
-    val led = Output(UInt(6.W))
+    val tx      = Output(Bool())
+    val rx      = Input(Bool())
+
+    val sclk    = Output(Bool())
+    val mosi    = Output(Bool())
+    val miso    = Input(Bool())
+
+    val led     = Output(UInt(6.W))
   })
 
   val alu = Module(new Alu)
@@ -16,6 +21,9 @@ class Core extends Module {
 
   ioBus.io.rx := io.rx
   io.tx := ioBus.io.tx
+  ioBus.io.miso := io.miso
+  io.sclk := ioBus.io.sclk
+  io.mosi := ioBus.io.mosi
 
   val imem        = SyncReadMem(1024 * 6, UInt(8.W))
   loadMemoryFromFile(imem, "src/main/resources/bootrom.hex")
