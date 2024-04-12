@@ -37,12 +37,12 @@ class SpiTest extends AnyFlatSpec with ChiselScalatestTester {
     c.io.clkshamt.bits.poke(1.U)
     c.io.clkshamt.valid.poke(true.B)
 
-    c.io.spiMode.bits.poke(1.U)
+    c.io.spiMode.bits.poke(3.U)
     c.io.spiMode.valid.poke(true.B)
 
     c.clock.step(2)
 
-    c.io.din.bits.poke(0x41.U)
+    c.io.din.bits.poke((0x41 | 0x80).U)
     c.io.din.valid.poke(true.B)
 
     c.clock.step(1)
@@ -51,7 +51,7 @@ class SpiTest extends AnyFlatSpec with ChiselScalatestTester {
     c.io.spiMode.valid.poke(false.B)
     c.io.din.valid.poke(false.B)
 
-    c.clock.step(20)
+    c.clock.step(100)
   } }
 }
 
@@ -61,9 +61,10 @@ class SpiEchoback(clockFrequency: Int) extends Module {
       val sclk     = Output(Bool())
       val mosi     = Output(Bool())
       val miso     = Output(Bool())
-      val misoBuf  = Output(Bool())
-      val posedge  = Output(Bool())
-      val negedge  = Output(Bool())
+      // DEBUG
+      // val misoBuf  = Output(Bool())
+      // val posedge  = Output(Bool())
+      // val negedge  = Output(Bool())
 
       val din      = Flipped(Decoupled(UInt(8.W)))  // 任意のデータを送るとき
       val dout     = Decoupled(UInt(8.W))           // データを読み取るとき
@@ -76,9 +77,10 @@ class SpiEchoback(clockFrequency: Int) extends Module {
     io.sclk := spi.io.sclk
     io.mosi := spi.io.mosi
     io.miso := spi.io.miso
-    io.misoBuf := spi.io.misoBuf
-    io.posedge := spi.io.posedge
-    io.negedge := spi.io.negedge
+    // DEBUG
+    // io.misoBuf := spi.io.misoBuf
+    // io.posedge := spi.io.posedge
+    // io.negedge := spi.io.negedge
 
     spi.io.miso := spi.io.mosi
 

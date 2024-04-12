@@ -7,9 +7,9 @@ class Spi(clockFrequency: Int) extends Module {
   val io = IO(new Bundle {
     val mosi     = Output(Bool())
     val miso     = Input(Bool())
-    val misoBuf  = Output(Bool())                 // DEBUG
-    val posedge  = Output(Bool())                 // DEBUG
-    val negedge  = Output(Bool())                 // DEBUG
+    // val misoBuf  = Output(Bool())                 // DEBUG
+    // val posedge  = Output(Bool())                 // DEBUG
+    // val negedge  = Output(Bool())                 // DEBUG
     val sclk     = Output(Bool())
     val din      = Flipped(Decoupled(UInt(8.W)))  // 任意のデータを送るとき
     val dout     = Decoupled(UInt(8.W))           // データを読み取るとき
@@ -20,7 +20,7 @@ class Spi(clockFrequency: Int) extends Module {
 
   // クロックの分周用信号
   val sclk = RegInit(false.B)
-  val sclkCounter = RegInit(0.U(8.W))
+  val sclkCounter = RegInit(0.U(9.W))
   val clkshamt = RegInit(0.U(3.W))
   val posedge = Wire(Bool())
   val negedge = Wire(Bool())
@@ -37,11 +37,12 @@ class Spi(clockFrequency: Int) extends Module {
   val cpol = RegInit(false.B)        // アイドル状態でのクロックのHIGH/LOW (clock polarity)
   val cpha = RegInit(false.B)        // サンプリングの極性 posedge/negedge (clock phase)
   val mode_1_2 = Wire(Bool())
+  val isFirstSclk = RegInit(true.B)
 
   // DEBUG
-  io.misoBuf := misoBuf
-  io.posedge := posedge
-  io.negedge := negedge
+  // io.misoBuf := misoBuf
+  // io.posedge := posedge
+  // io.negedge := negedge
 
   posedge := false.B
   negedge := false.B
@@ -50,8 +51,9 @@ class Spi(clockFrequency: Int) extends Module {
   io.sclk := sclk
   when(busy) {
     when(sclkCounter === 0.U) {
+      isFirstSclk := false.B
       sclk := ~sclk
-      sclkCounter := (1.U << io.clkshamt.bits) - 1.U
+      sclkCounter := (1.U << clkshamt) - 1.U
       posedge := ~sclk
       negedge := sclk
     } .otherwise {
@@ -74,6 +76,13 @@ class Spi(clockFrequency: Int) extends Module {
     inReady := false.B
     busy := true.B
     bitCounter := 8.U
+
+    // din と clkshamt が同じクロックで設定された場合への対処
+    when(io.clkshamt.valid && io.clkshamt.ready) {
+      sclkCounter := (1.U << (io.clkshamt.bits + 1.U)) - 1.U
+    }.otherwise {
+      sclkCounter := (1.U << (clkshamt + 1.U)) - 1.U
+    }
   }
 
   io.dout.bits := shiftReg
@@ -98,8 +107,10 @@ class Spi(clockFrequency: Int) extends Module {
 
   io.mosi := shiftReg(7)
 
+  // mode 1/3 の最初のエッジはゴミデータを送信
   when(busy) {
     when(bitCounter === 0.U) {
+      isFirstSclk := true.B
       busy := false.B
       outValid := true.B
       inReady := true.B
@@ -109,7 +120,8 @@ class Spi(clockFrequency: Int) extends Module {
       // mode 1/2: posedge でシフト
       // mode 0/3: negedge でシフト
       when(mode_1_2) {
-        when(posedge) {
+        // posedge かつ mode 1 の最初のクロックでない場合
+        when(posedge && !(cpha && isFirstSclk)) {
           // シフト
           shiftReg := (shiftReg << 1) | misoBuf
           bitCounter := bitCounter - 1.U
@@ -119,7 +131,8 @@ class Spi(clockFrequency: Int) extends Module {
           misoBuf := io.miso
         }
       }.otherwise {
-        when(negedge) {
+        // negedge かつ mode 3 の最初のクロックでない場合
+        when(negedge && !(cpol && isFirstSclk)) {
           // シフト
           shiftReg := (shiftReg << 1) | misoBuf
           bitCounter := bitCounter - 1.U
