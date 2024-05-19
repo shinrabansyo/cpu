@@ -57,10 +57,12 @@ class Spi(clockFrequency: Int) extends Module {
   when(busy) {
     when(sclkCounter === 0.U) {
       isFirstSclk := false.B
-      sclk := ~sclk
-      sclkCounter := (1.U << clkshamt) - 1.U
       posedge := ~sclk
       negedge := sclk
+      sclkCounter := (1.U << clkshamt) - 1.U
+      when(!(bitCounter === 1.U && sclk === cpol && cpha)) {
+        sclk := ~sclk
+      }
     } .otherwise {
       sclkCounter := sclkCounter - 1.U
     }

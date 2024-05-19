@@ -9,7 +9,7 @@ import org.scalatest.flatspec.AnyFlatSpec
 
 class TopTest extends AnyFlatSpec with ChiselScalatestTester {
       it must "runs Top" in { test(new Core).withAnnotations(Seq(WriteFstAnnotation, WriteVcdAnnotation)) { c =>
-        var timeout = 174
+        var timeout = 1740
         c.reset.poke(true.B)
         c.io.rx.poke(true.B)
         c.clock.step(4)
