@@ -242,7 +242,6 @@ endmodule
 module UartRx(
   input        clock,
   input        reset,
-  input        io_dout_ready,
   output       io_dout_valid,
   output [7:0] io_dout_bits,
   input        io_rx
@@ -283,11 +282,10 @@ module UartRx(
   reg  running; // @[Uart.scala 73:24]
   reg  outValid; // @[Uart.scala 76:25]
   reg [7:0] outBits; // @[Uart.scala 77:20]
-  wire  _GEN_0 = outValid & io_dout_ready ? 1'h0 : outValid; // @[Uart.scala 83:30 84:14 76:25]
   wire  _GEN_3 = ~rxRegs_1 & rxRegs_0 | running; // @[Uart.scala 108:35 112:15 73:24]
   wire [7:0] _outBits_T = {bits_8,bits_7,bits_6,bits_5,bits_4,bits_3,bits_2,bits_1}; // @[Cat.scala 33:92]
   wire [3:0] _bitCounter_T_1 = bitCounter - 4'h1; // @[Uart.scala 129:34]
-  wire  _GEN_4 = bitCounter == 4'h0 | _GEN_0; // @[Uart.scala 119:32 120:18]
+  wire  _GEN_4 = bitCounter == 4'h0 | outValid; // @[Uart.scala 119:32 120:18]
   wire [11:0] _rateCounter_T_1 = rateCounter - 12'h1; // @[Uart.scala 132:34]
   assign io_dout_valid = outValid; // @[Uart.scala 79:17]
   assign io_dout_bits = outBits; // @[Uart.scala 80:16]
@@ -387,12 +385,10 @@ module UartRx(
     end
     if (reset) begin // @[Uart.scala 76:25]
       outValid <= 1'h0; // @[Uart.scala 76:25]
-    end else if (~running) begin // @[Uart.scala 107:18]
-      outValid <= _GEN_0;
-    end else if (rateCounter == 12'h0) begin // @[Uart.scala 115:31]
-      outValid <= _GEN_4;
-    end else begin
-      outValid <= _GEN_0;
+    end else if (!(~running)) begin // @[Uart.scala 107:18]
+      if (rateCounter == 12'h0) begin // @[Uart.scala 115:31]
+        outValid <= _GEN_4;
+      end
     end
     if (!(~running)) begin // @[Uart.scala 107:18]
       if (rateCounter == 12'h0) begin // @[Uart.scala 115:31]
@@ -489,7 +485,6 @@ module Spi(
   output       io_din_ready,
   input        io_din_valid,
   input  [7:0] io_din_bits,
-  input        io_dout_ready,
   output       io_dout_valid,
   output [7:0] io_dout_bits,
   output       io_clkshamt_ready,
@@ -515,7 +510,6 @@ module Spi(
   reg [31:0] _RAND_10;
   reg [31:0] _RAND_11;
   reg [31:0] _RAND_12;
-  reg [31:0] _RAND_13;
 `endif // RANDOMIZE_REG_INIT
   reg  sclk; // @[Spi.scala 24:21]
   reg [8:0] sclkCounter; // @[Spi.scala 25:28]
@@ -524,154 +518,147 @@ module Spi(
   reg [3:0] bitCounter; // @[Spi.scala 32:27]
   reg  busy; // @[Spi.scala 33:21]
   reg  misoBuf; // @[Spi.scala 34:24]
-  reg  inReady; // @[Spi.scala 35:24]
-  reg  spiModeReady; // @[Spi.scala 36:29]
-  reg  clkshamtReady; // @[Spi.scala 37:30]
-  reg  outValid; // @[Spi.scala 38:25]
-  reg  cpol; // @[Spi.scala 39:21]
-  reg  cpha; // @[Spi.scala 40:21]
-  reg  isFirstSclk; // @[Spi.scala 42:28]
-  wire  _posedge_T = ~sclk; // @[Spi.scala 60:18]
-  wire [7:0] _sclkCounter_T = 8'h1 << clkshamt; // @[Spi.scala 62:27]
-  wire [7:0] _sclkCounter_T_2 = _sclkCounter_T - 8'h1; // @[Spi.scala 62:40]
-  wire  _GEN_0 = ~(bitCounter == 4'h1 & sclk == cpol & cpha) ? _posedge_T : sclk; // @[Spi.scala 63:60 64:14 24:21]
-  wire [8:0] _sclkCounter_T_4 = sclkCounter - 9'h1; // @[Spi.scala 67:34]
-  wire  _GEN_1 = sclkCounter == 9'h0 ? 1'h0 : isFirstSclk; // @[Spi.scala 58:31 59:19 42:28]
-  wire  _GEN_2 = sclkCounter == 9'h0 & ~sclk; // @[Spi.scala 52:11 58:31 60:15]
-  wire  _GEN_3 = sclkCounter == 9'h0 & sclk; // @[Spi.scala 53:11 58:31 61:15]
-  wire  _GEN_5 = sclkCounter == 9'h0 ? _GEN_0 : sclk; // @[Spi.scala 24:21 58:31]
-  wire  _T_6 = io_spiMode_valid & io_spiMode_ready; // @[Spi.scala 69:33]
-  wire  _GEN_6 = ~(io_spiMode_valid & io_spiMode_ready) ? cpol : sclk; // @[Spi.scala 69:55 70:10 24:21]
-  wire  _GEN_7 = busy ? _GEN_1 : isFirstSclk; // @[Spi.scala 57:14 42:28]
-  wire  posedge_ = busy & _GEN_2; // @[Spi.scala 52:11 57:14]
-  wire  negedge_ = busy & _GEN_3; // @[Spi.scala 53:11 57:14]
-  wire  _GEN_11 = busy ? _GEN_5 : _GEN_6; // @[Spi.scala 57:14]
-  wire  mode_1_2 = cpol ^ cpha; // @[Spi.scala 78:21]
-  wire  _T_9 = io_clkshamt_valid & io_clkshamt_ready; // @[Spi.scala 88:28]
-  wire [2:0] _sclkCounter_T_6 = io_clkshamt_bits + 3'h1; // @[Spi.scala 89:48]
-  wire [7:0] _sclkCounter_T_7 = 8'h1 << _sclkCounter_T_6; // @[Spi.scala 89:27]
-  wire [7:0] _sclkCounter_T_9 = _sclkCounter_T_7 - 8'h1; // @[Spi.scala 89:56]
-  wire [2:0] _sclkCounter_T_11 = clkshamt + 3'h1; // @[Spi.scala 91:40]
-  wire [7:0] _sclkCounter_T_12 = 8'h1 << _sclkCounter_T_11; // @[Spi.scala 91:27]
-  wire [7:0] _sclkCounter_T_14 = _sclkCounter_T_12 - 8'h1; // @[Spi.scala 91:48]
-  wire [7:0] _GEN_12 = io_clkshamt_valid & io_clkshamt_ready ? _sclkCounter_T_9 : _sclkCounter_T_14; // @[Spi.scala 88:50 89:19 91:19]
-  wire [7:0] _GEN_13 = io_din_valid & io_din_ready ? io_din_bits : shiftReg; // @[Spi.scala 81:38 82:14 31:25]
-  wire  _GEN_14 = io_din_valid & io_din_ready ? 1'h0 : inReady; // @[Spi.scala 81:38 83:13 35:24]
-  wire  _GEN_15 = io_din_valid & io_din_ready | busy; // @[Spi.scala 81:38 84:10 33:21]
-  wire [3:0] _GEN_16 = io_din_valid & io_din_ready ? 4'h8 : bitCounter; // @[Spi.scala 81:38 85:16 32:27]
-  wire  _GEN_18 = io_dout_valid & io_dout_ready ? 1'h0 : outValid; // @[Spi.scala 97:40 98:14 38:25]
-  wire  _GEN_19 = _T_9 ? 1'h0 : clkshamtReady; // @[Spi.scala 102:48 103:19 37:30]
+  reg  spiModeReady; // @[Spi.scala 35:29]
+  reg  clkshamtReady; // @[Spi.scala 36:30]
+  reg  outValid; // @[Spi.scala 37:25]
+  reg  cpol; // @[Spi.scala 38:21]
+  reg  cpha; // @[Spi.scala 39:21]
+  reg  isFirstSclk; // @[Spi.scala 41:28]
+  wire  _posedge_T = ~sclk; // @[Spi.scala 59:18]
+  wire [7:0] _sclkCounter_T = 8'h1 << clkshamt; // @[Spi.scala 61:27]
+  wire [7:0] _sclkCounter_T_2 = _sclkCounter_T - 8'h1; // @[Spi.scala 61:40]
+  wire  _GEN_0 = ~(bitCounter == 4'h1 & sclk == cpol & cpha) ? _posedge_T : sclk; // @[Spi.scala 62:60 63:14 24:21]
+  wire [8:0] _sclkCounter_T_4 = sclkCounter - 9'h1; // @[Spi.scala 66:34]
+  wire  _GEN_1 = sclkCounter == 9'h0 ? 1'h0 : isFirstSclk; // @[Spi.scala 57:31 58:19 41:28]
+  wire  _GEN_2 = sclkCounter == 9'h0 & ~sclk; // @[Spi.scala 51:11 57:31 59:15]
+  wire  _GEN_3 = sclkCounter == 9'h0 & sclk; // @[Spi.scala 52:11 57:31 60:15]
+  wire  _GEN_5 = sclkCounter == 9'h0 ? _GEN_0 : sclk; // @[Spi.scala 24:21 57:31]
+  wire  _T_6 = io_spiMode_valid & io_spiMode_ready; // @[Spi.scala 68:33]
+  wire  _GEN_6 = ~(io_spiMode_valid & io_spiMode_ready) ? cpol : sclk; // @[Spi.scala 68:55 69:10 24:21]
+  wire  _GEN_7 = busy ? _GEN_1 : isFirstSclk; // @[Spi.scala 56:14 41:28]
+  wire  posedge_ = busy & _GEN_2; // @[Spi.scala 51:11 56:14]
+  wire  negedge_ = busy & _GEN_3; // @[Spi.scala 52:11 56:14]
+  wire  _GEN_11 = busy ? _GEN_5 : _GEN_6; // @[Spi.scala 56:14]
+  wire  mode_1_2 = cpol ^ cpha; // @[Spi.scala 77:21]
+  wire  _io_din_ready_T_1 = bitCounter == 4'h0; // @[Spi.scala 79:54]
+  wire  _T_10 = io_clkshamt_valid & io_clkshamt_ready; // @[Spi.scala 87:28]
+  wire [2:0] _sclkCounter_T_6 = io_clkshamt_bits + 3'h1; // @[Spi.scala 88:48]
+  wire [7:0] _sclkCounter_T_7 = 8'h1 << _sclkCounter_T_6; // @[Spi.scala 88:27]
+  wire [7:0] _sclkCounter_T_9 = _sclkCounter_T_7 - 8'h1; // @[Spi.scala 88:56]
+  wire [2:0] _sclkCounter_T_11 = clkshamt + 3'h1; // @[Spi.scala 90:40]
+  wire [7:0] _sclkCounter_T_12 = 8'h1 << _sclkCounter_T_11; // @[Spi.scala 90:27]
+  wire [7:0] _sclkCounter_T_14 = _sclkCounter_T_12 - 8'h1; // @[Spi.scala 90:48]
+  wire [7:0] _GEN_12 = io_clkshamt_valid & io_clkshamt_ready ? _sclkCounter_T_9 : _sclkCounter_T_14; // @[Spi.scala 87:50 88:19 90:19]
+  wire [7:0] _GEN_13 = io_din_valid & ~busy ? io_din_bits : shiftReg; // @[Spi.scala 81:31 82:14 31:25]
+  wire  _GEN_14 = io_din_valid & ~busy | busy; // @[Spi.scala 81:31 83:10 33:21]
+  wire [3:0] _GEN_15 = io_din_valid & ~busy ? 4'h8 : bitCounter; // @[Spi.scala 81:31 84:16 32:27]
+  wire  _GEN_18 = _T_10 ? 1'h0 : clkshamtReady; // @[Spi.scala 101:48 102:19 36:30]
   wire [1:0] _sclk_T_3 = {io_spiMode_bits[1],io_spiMode_bits[1]}; // @[Cat.scala 33:92]
-  wire  _GEN_23 = _T_6 ? 1'h0 : spiModeReady; // @[Spi.scala 108:46 111:18 36:29]
-  wire [1:0] _GEN_24 = _T_6 ? _sclk_T_3 : {{1'd0}, _GEN_11}; // @[Spi.scala 108:46 112:10]
-  wire [8:0] _shiftReg_T = {shiftReg, 1'h0}; // @[Spi.scala 133:33]
-  wire [8:0] _GEN_52 = {{8'd0}, misoBuf}; // @[Spi.scala 133:39]
-  wire [8:0] _shiftReg_T_1 = _shiftReg_T | _GEN_52; // @[Spi.scala 133:39]
-  wire [3:0] _bitCounter_T_1 = bitCounter - 4'h1; // @[Spi.scala 134:36]
-  wire [8:0] _GEN_25 = posedge_ & ~(cpha & isFirstSclk) ? _shiftReg_T_1 : {{1'd0}, _GEN_13}; // @[Spi.scala 131:49 133:20]
-  wire [3:0] _GEN_26 = posedge_ & ~(cpha & isFirstSclk) ? _bitCounter_T_1 : _GEN_16; // @[Spi.scala 131:49 134:22]
-  wire  _GEN_27 = negedge_ ? io_miso : misoBuf; // @[Spi.scala 136:23 138:19 34:24]
-  wire [8:0] _GEN_28 = negedge_ & ~(cpol & isFirstSclk) ? _shiftReg_T_1 : {{1'd0}, _GEN_13}; // @[Spi.scala 142:49 144:20]
-  wire [3:0] _GEN_29 = negedge_ & ~(cpol & isFirstSclk) ? _bitCounter_T_1 : _GEN_16; // @[Spi.scala 142:49 145:22]
-  wire  _GEN_30 = posedge_ ? io_miso : misoBuf; // @[Spi.scala 147:23 149:19 34:24]
-  wire [8:0] _GEN_31 = mode_1_2 ? _GEN_25 : _GEN_28; // @[Spi.scala 129:22]
-  wire  _GEN_34 = bitCounter == 4'h0 | _GEN_7; // @[Spi.scala 119:30 120:19]
-  wire  _GEN_36 = bitCounter == 4'h0 | _GEN_18; // @[Spi.scala 119:30 122:16]
-  wire  _GEN_37 = bitCounter == 4'h0 | _GEN_14; // @[Spi.scala 119:30 123:15]
-  wire  _GEN_38 = bitCounter == 4'h0 | _GEN_19; // @[Spi.scala 119:30 124:21]
-  wire  _GEN_39 = bitCounter == 4'h0 | _GEN_23; // @[Spi.scala 119:30 125:20]
-  wire [8:0] _GEN_40 = bitCounter == 4'h0 ? {{1'd0}, _GEN_13} : _GEN_31; // @[Spi.scala 119:30]
-  wire  _GEN_43 = busy ? _GEN_34 : _GEN_7; // @[Spi.scala 118:14]
-  wire  _GEN_46 = busy ? _GEN_37 : _GEN_14; // @[Spi.scala 118:14]
-  wire  _GEN_47 = busy ? _GEN_38 : _GEN_19; // @[Spi.scala 118:14]
-  wire  _GEN_48 = busy ? _GEN_39 : _GEN_23; // @[Spi.scala 118:14]
-  wire [8:0] _GEN_49 = busy ? _GEN_40 : {{1'd0}, _GEN_13}; // @[Spi.scala 118:14]
-  wire [1:0] _GEN_54 = reset ? 2'h0 : _GEN_24; // @[Spi.scala 24:{21,21}]
-  wire [8:0] _GEN_55 = reset ? 9'h0 : _GEN_49; // @[Spi.scala 31:{25,25}]
-  assign io_mosi = shiftReg[7]; // @[Spi.scala 115:22]
-  assign io_sclk = sclk; // @[Spi.scala 56:11]
-  assign io_din_ready = inReady; // @[Spi.scala 80:16]
-  assign io_dout_valid = outValid; // @[Spi.scala 96:17]
-  assign io_dout_bits = shiftReg; // @[Spi.scala 95:16]
-  assign io_clkshamt_ready = clkshamtReady; // @[Spi.scala 101:21]
-  assign io_clkshamtO = clkshamt; // @[Spi.scala 49:16]
-  assign io_spiMode_ready = spiModeReady; // @[Spi.scala 107:20]
+  wire  _GEN_22 = _T_6 ? 1'h0 : spiModeReady; // @[Spi.scala 107:46 110:18 35:29]
+  wire [1:0] _GEN_23 = _T_6 ? _sclk_T_3 : {{1'd0}, _GEN_11}; // @[Spi.scala 107:46 111:10]
+  wire [8:0] _shiftReg_T = {shiftReg, 1'h0}; // @[Spi.scala 131:33]
+  wire [8:0] _GEN_49 = {{8'd0}, misoBuf}; // @[Spi.scala 131:39]
+  wire [8:0] _shiftReg_T_1 = _shiftReg_T | _GEN_49; // @[Spi.scala 131:39]
+  wire [3:0] _bitCounter_T_1 = bitCounter - 4'h1; // @[Spi.scala 132:36]
+  wire [8:0] _GEN_24 = posedge_ & ~(cpha & isFirstSclk) ? _shiftReg_T_1 : {{1'd0}, _GEN_13}; // @[Spi.scala 129:49 131:20]
+  wire [3:0] _GEN_25 = posedge_ & ~(cpha & isFirstSclk) ? _bitCounter_T_1 : _GEN_15; // @[Spi.scala 129:49 132:22]
+  wire  _GEN_26 = negedge_ ? io_miso : misoBuf; // @[Spi.scala 134:23 136:19 34:24]
+  wire [8:0] _GEN_27 = negedge_ & ~(cpol & isFirstSclk) ? _shiftReg_T_1 : {{1'd0}, _GEN_13}; // @[Spi.scala 140:49 142:20]
+  wire [3:0] _GEN_28 = negedge_ & ~(cpol & isFirstSclk) ? _bitCounter_T_1 : _GEN_15; // @[Spi.scala 140:49 143:22]
+  wire  _GEN_29 = posedge_ ? io_miso : misoBuf; // @[Spi.scala 145:23 147:19 34:24]
+  wire [8:0] _GEN_30 = mode_1_2 ? _GEN_24 : _GEN_27; // @[Spi.scala 127:22]
+  wire  _GEN_33 = _io_din_ready_T_1 | _GEN_7; // @[Spi.scala 118:30 119:19]
+  wire  _GEN_35 = _io_din_ready_T_1 | outValid; // @[Spi.scala 118:30 121:16]
+  wire  _GEN_36 = _io_din_ready_T_1 | _GEN_18; // @[Spi.scala 118:30 122:21]
+  wire  _GEN_37 = _io_din_ready_T_1 | _GEN_22; // @[Spi.scala 118:30 123:20]
+  wire [8:0] _GEN_38 = _io_din_ready_T_1 ? {{1'd0}, _GEN_13} : _GEN_30; // @[Spi.scala 118:30]
+  wire  _GEN_41 = busy ? _GEN_33 : _GEN_7; // @[Spi.scala 117:14]
+  wire  _GEN_44 = busy ? _GEN_36 : _GEN_18; // @[Spi.scala 117:14]
+  wire  _GEN_45 = busy ? _GEN_37 : _GEN_22; // @[Spi.scala 117:14]
+  wire [8:0] _GEN_46 = busy ? _GEN_38 : {{1'd0}, _GEN_13}; // @[Spi.scala 117:14]
+  wire [1:0] _GEN_51 = reset ? 2'h0 : _GEN_23; // @[Spi.scala 24:{21,21}]
+  wire [8:0] _GEN_52 = reset ? 9'h0 : _GEN_46; // @[Spi.scala 31:{25,25}]
+  assign io_mosi = shiftReg[7]; // @[Spi.scala 114:22]
+  assign io_sclk = sclk; // @[Spi.scala 55:11]
+  assign io_din_ready = io_din_valid & busy & bitCounter == 4'h0; // @[Spi.scala 79:40]
+  assign io_dout_valid = outValid; // @[Spi.scala 95:17]
+  assign io_dout_bits = shiftReg; // @[Spi.scala 94:16]
+  assign io_clkshamt_ready = clkshamtReady; // @[Spi.scala 100:21]
+  assign io_clkshamtO = clkshamt; // @[Spi.scala 48:16]
+  assign io_spiMode_ready = spiModeReady; // @[Spi.scala 106:20]
   assign io_spiModeO = {cpol,cpha}; // @[Cat.scala 33:92]
   always @(posedge clock) begin
-    sclk <= _GEN_54[0]; // @[Spi.scala 24:{21,21}]
+    sclk <= _GEN_51[0]; // @[Spi.scala 24:{21,21}]
     if (reset) begin // @[Spi.scala 25:28]
       sclkCounter <= 9'h0; // @[Spi.scala 25:28]
-    end else if (io_din_valid & io_din_ready) begin // @[Spi.scala 81:38]
+    end else if (io_din_valid & ~busy) begin // @[Spi.scala 81:31]
       sclkCounter <= {{1'd0}, _GEN_12};
-    end else if (busy) begin // @[Spi.scala 57:14]
-      if (sclkCounter == 9'h0) begin // @[Spi.scala 58:31]
-        sclkCounter <= {{1'd0}, _sclkCounter_T_2}; // @[Spi.scala 62:19]
+    end else if (busy) begin // @[Spi.scala 56:14]
+      if (sclkCounter == 9'h0) begin // @[Spi.scala 57:31]
+        sclkCounter <= {{1'd0}, _sclkCounter_T_2}; // @[Spi.scala 61:19]
       end else begin
-        sclkCounter <= _sclkCounter_T_4; // @[Spi.scala 67:19]
+        sclkCounter <= _sclkCounter_T_4; // @[Spi.scala 66:19]
       end
     end
     if (reset) begin // @[Spi.scala 26:25]
       clkshamt <= 3'h0; // @[Spi.scala 26:25]
-    end else if (_T_9) begin // @[Spi.scala 102:48]
-      clkshamt <= io_clkshamt_bits; // @[Spi.scala 104:14]
+    end else if (_T_10) begin // @[Spi.scala 101:48]
+      clkshamt <= io_clkshamt_bits; // @[Spi.scala 103:14]
     end
-    shiftReg <= _GEN_55[7:0]; // @[Spi.scala 31:{25,25}]
+    shiftReg <= _GEN_52[7:0]; // @[Spi.scala 31:{25,25}]
     if (reset) begin // @[Spi.scala 32:27]
       bitCounter <= 4'h0; // @[Spi.scala 32:27]
-    end else if (busy) begin // @[Spi.scala 118:14]
-      if (bitCounter == 4'h0) begin // @[Spi.scala 119:30]
-        bitCounter <= _GEN_16;
-      end else if (mode_1_2) begin // @[Spi.scala 129:22]
-        bitCounter <= _GEN_26;
+    end else if (busy) begin // @[Spi.scala 117:14]
+      if (_io_din_ready_T_1) begin // @[Spi.scala 118:30]
+        bitCounter <= _GEN_15;
+      end else if (mode_1_2) begin // @[Spi.scala 127:22]
+        bitCounter <= _GEN_25;
       end else begin
-        bitCounter <= _GEN_29;
+        bitCounter <= _GEN_28;
       end
     end else begin
-      bitCounter <= _GEN_16;
+      bitCounter <= _GEN_15;
     end
     if (reset) begin // @[Spi.scala 33:21]
       busy <= 1'h0; // @[Spi.scala 33:21]
-    end else if (busy) begin // @[Spi.scala 118:14]
-      if (bitCounter == 4'h0) begin // @[Spi.scala 119:30]
-        busy <= 1'h0; // @[Spi.scala 121:12]
+    end else if (busy) begin // @[Spi.scala 117:14]
+      if (_io_din_ready_T_1) begin // @[Spi.scala 118:30]
+        busy <= 1'h0; // @[Spi.scala 120:12]
       end else begin
-        busy <= _GEN_15;
+        busy <= _GEN_14;
       end
     end else begin
-      busy <= _GEN_15;
+      busy <= _GEN_14;
     end
     if (reset) begin // @[Spi.scala 34:24]
       misoBuf <= 1'h0; // @[Spi.scala 34:24]
-    end else if (busy) begin // @[Spi.scala 118:14]
-      if (!(bitCounter == 4'h0)) begin // @[Spi.scala 119:30]
-        if (mode_1_2) begin // @[Spi.scala 129:22]
-          misoBuf <= _GEN_27;
+    end else if (busy) begin // @[Spi.scala 117:14]
+      if (!(_io_din_ready_T_1)) begin // @[Spi.scala 118:30]
+        if (mode_1_2) begin // @[Spi.scala 127:22]
+          misoBuf <= _GEN_26;
         end else begin
-          misoBuf <= _GEN_30;
+          misoBuf <= _GEN_29;
         end
       end
     end
-    inReady <= reset | _GEN_46; // @[Spi.scala 35:{24,24}]
-    spiModeReady <= reset | _GEN_48; // @[Spi.scala 36:{29,29}]
-    clkshamtReady <= reset | _GEN_47; // @[Spi.scala 37:{30,30}]
-    if (reset) begin // @[Spi.scala 38:25]
-      outValid <= 1'h0; // @[Spi.scala 38:25]
-    end else if (busy) begin // @[Spi.scala 118:14]
-      outValid <= _GEN_36;
-    end else if (io_dout_valid & io_dout_ready) begin // @[Spi.scala 97:40]
-      outValid <= 1'h0; // @[Spi.scala 98:14]
+    spiModeReady <= reset | _GEN_45; // @[Spi.scala 35:{29,29}]
+    clkshamtReady <= reset | _GEN_44; // @[Spi.scala 36:{30,30}]
+    if (reset) begin // @[Spi.scala 37:25]
+      outValid <= 1'h0; // @[Spi.scala 37:25]
+    end else if (busy) begin // @[Spi.scala 117:14]
+      outValid <= _GEN_35;
+    end
+    if (reset) begin // @[Spi.scala 38:21]
+      cpol <= 1'h0; // @[Spi.scala 38:21]
+    end else if (_T_6) begin // @[Spi.scala 107:46]
+      cpol <= io_spiMode_bits[1]; // @[Spi.scala 108:10]
     end
     if (reset) begin // @[Spi.scala 39:21]
-      cpol <= 1'h0; // @[Spi.scala 39:21]
-    end else if (_T_6) begin // @[Spi.scala 108:46]
-      cpol <= io_spiMode_bits[1]; // @[Spi.scala 109:10]
+      cpha <= 1'h0; // @[Spi.scala 39:21]
+    end else if (_T_6) begin // @[Spi.scala 107:46]
+      cpha <= io_spiMode_bits[0]; // @[Spi.scala 109:10]
     end
-    if (reset) begin // @[Spi.scala 40:21]
-      cpha <= 1'h0; // @[Spi.scala 40:21]
-    end else if (_T_6) begin // @[Spi.scala 108:46]
-      cpha <= io_spiMode_bits[0]; // @[Spi.scala 110:10]
-    end
-    isFirstSclk <= reset | _GEN_43; // @[Spi.scala 42:{28,28}]
+    isFirstSclk <= reset | _GEN_41; // @[Spi.scala 41:{28,28}]
   end
 // Register and memory initialization
 `ifdef RANDOMIZE_GARBAGE_ASSIGN
@@ -724,19 +711,17 @@ initial begin
   _RAND_6 = {1{`RANDOM}};
   misoBuf = _RAND_6[0:0];
   _RAND_7 = {1{`RANDOM}};
-  inReady = _RAND_7[0:0];
+  spiModeReady = _RAND_7[0:0];
   _RAND_8 = {1{`RANDOM}};
-  spiModeReady = _RAND_8[0:0];
+  clkshamtReady = _RAND_8[0:0];
   _RAND_9 = {1{`RANDOM}};
-  clkshamtReady = _RAND_9[0:0];
+  outValid = _RAND_9[0:0];
   _RAND_10 = {1{`RANDOM}};
-  outValid = _RAND_10[0:0];
+  cpol = _RAND_10[0:0];
   _RAND_11 = {1{`RANDOM}};
-  cpol = _RAND_11[0:0];
+  cpha = _RAND_11[0:0];
   _RAND_12 = {1{`RANDOM}};
-  cpha = _RAND_12[0:0];
-  _RAND_13 = {1{`RANDOM}};
-  isFirstSclk = _RAND_13[0:0];
+  isFirstSclk = _RAND_12[0:0];
 `endif // RANDOMIZE_REG_INIT
   `endif // RANDOMIZE
 end // initial
@@ -769,7 +754,6 @@ module IOBus(
   wire [7:0] uartTx_io_din_bits; // @[IOBus.scala 20:22]
   wire  uartRx_clock; // @[IOBus.scala 21:22]
   wire  uartRx_reset; // @[IOBus.scala 21:22]
-  wire  uartRx_io_dout_ready; // @[IOBus.scala 21:22]
   wire  uartRx_io_dout_valid; // @[IOBus.scala 21:22]
   wire [7:0] uartRx_io_dout_bits; // @[IOBus.scala 21:22]
   wire  uartRx_io_rx; // @[IOBus.scala 21:22]
@@ -781,7 +765,6 @@ module IOBus(
   wire  spi_io_din_ready; // @[IOBus.scala 22:22]
   wire  spi_io_din_valid; // @[IOBus.scala 22:22]
   wire [7:0] spi_io_din_bits; // @[IOBus.scala 22:22]
-  wire  spi_io_dout_ready; // @[IOBus.scala 22:22]
   wire  spi_io_dout_valid; // @[IOBus.scala 22:22]
   wire [7:0] spi_io_dout_bits; // @[IOBus.scala 22:22]
   wire  spi_io_clkshamt_ready; // @[IOBus.scala 22:22]
@@ -792,32 +775,42 @@ module IOBus(
   wire  spi_io_spiMode_valid; // @[IOBus.scala 22:22]
   wire [1:0] spi_io_spiMode_bits; // @[IOBus.scala 22:22]
   wire [1:0] spi_io_spiModeO; // @[IOBus.scala 22:22]
-  wire  isUart = io_devId == 32'h0; // @[IOBus.scala 29:29]
-  wire  isSpiData = io_devId == 32'h1; // @[IOBus.scala 30:29]
-  wire  isSpiMode = io_devId == 32'h2; // @[IOBus.scala 31:29]
-  wire  isSpiCshamt = io_devId == 32'h3; // @[IOBus.scala 32:29]
+  wire  isUart = io_devId == 32'h0; // @[IOBus.scala 32:29]
+  wire  isSpiData = io_devId == 32'h1; // @[IOBus.scala 33:29]
+  wire  isSpiMode = io_devId == 32'h2; // @[IOBus.scala 34:29]
+  wire  isSpiCshamt = io_devId == 32'h3; // @[IOBus.scala 35:29]
   wire  _io_din_valid_T = isSpiData ? spi_io_dout_valid : 1'h1; // @[Mux.scala 101:16]
+  wire  _io_din_valid_T_1 = isUart ? uartRx_io_dout_valid : _io_din_valid_T; // @[Mux.scala 101:16]
   wire [2:0] _io_din_bits_T = isSpiCshamt ? spi_io_clkshamtO : 3'h0; // @[Mux.scala 101:16]
   wire [2:0] _io_din_bits_T_1 = isSpiMode ? {{1'd0}, spi_io_spiModeO} : _io_din_bits_T; // @[Mux.scala 101:16]
   wire [7:0] _io_din_bits_T_2 = isSpiData ? spi_io_dout_bits : {{5'd0}, _io_din_bits_T_1}; // @[Mux.scala 101:16]
-  wire  _GEN_0 = isSpiData & io_din_ready; // @[IOBus.scala 55:27 56:23 52:24]
-  wire  _GEN_3 = isSpiCshamt & io_dout_valid; // @[IOBus.scala 69:25 85:29 86:27]
-  wire [7:0] _GEN_4 = isSpiCshamt ? io_dout_bits : 8'h0; // @[IOBus.scala 74:25 85:29 87:27]
-  wire  _GEN_5 = isSpiMode & io_dout_valid; // @[IOBus.scala 68:25 82:27 83:26]
-  wire [7:0] _GEN_6 = isSpiMode ? io_dout_bits : 8'h0; // @[IOBus.scala 73:25 82:27 84:26]
-  wire  _GEN_7 = isSpiMode ? 1'h0 : _GEN_3; // @[IOBus.scala 69:25 82:27]
-  wire [7:0] _GEN_8 = isSpiMode ? 8'h0 : _GEN_4; // @[IOBus.scala 74:25 82:27]
-  wire  _GEN_9 = isSpiData & io_dout_valid; // @[IOBus.scala 79:27 80:22 67:25]
-  wire [7:0] _GEN_10 = isSpiData ? io_dout_bits : 8'h0; // @[IOBus.scala 79:27 81:22 72:25]
-  wire  _GEN_11 = isSpiData ? 1'h0 : _GEN_5; // @[IOBus.scala 68:25 79:27]
-  wire [7:0] _GEN_12 = isSpiData ? 8'h0 : _GEN_6; // @[IOBus.scala 73:25 79:27]
-  wire  _GEN_13 = isSpiData ? 1'h0 : _GEN_7; // @[IOBus.scala 69:25 79:27]
-  wire [7:0] _GEN_14 = isSpiData ? 8'h0 : _GEN_8; // @[IOBus.scala 74:25 79:27]
-  wire [7:0] _GEN_20 = isUart ? 8'h0 : _GEN_12; // @[IOBus.scala 76:17 73:25]
-  wire [7:0] _GEN_22 = isUart ? 8'h0 : _GEN_14; // @[IOBus.scala 76:17 74:25]
+  wire [7:0] _io_din_bits_T_3 = isUart ? uartRx_io_dout_bits : _io_din_bits_T_2; // @[Mux.scala 101:16]
+  wire  _GEN_2 = isSpiCshamt & io_dout_valid; // @[IOBus.scala 104:31 105:29 87:25]
+  wire [7:0] _GEN_3 = isSpiCshamt ? io_dout_bits : 8'h0; // @[IOBus.scala 104:31 106:29 92:25]
+  wire  _GEN_4 = isSpiMode & io_dout_valid; // @[IOBus.scala 101:29 102:28 86:25]
+  wire [7:0] _GEN_5 = isSpiMode ? io_dout_bits : 8'h0; // @[IOBus.scala 101:29 103:28 91:25]
+  wire  _GEN_6 = isSpiMode ? 1'h0 : _GEN_2; // @[IOBus.scala 101:29 87:25]
+  wire [7:0] _GEN_7 = isSpiMode ? 8'h0 : _GEN_3; // @[IOBus.scala 101:29 92:25]
+  wire  _GEN_8 = isSpiData & io_dout_valid; // @[IOBus.scala 98:29 99:24 85:25]
+  wire [7:0] _GEN_9 = isSpiData ? io_dout_bits : 8'h0; // @[IOBus.scala 100:24 90:25 98:29]
+  wire  _GEN_10 = isSpiData ? 1'h0 : _GEN_4; // @[IOBus.scala 86:25 98:29]
+  wire [7:0] _GEN_11 = isSpiData ? 8'h0 : _GEN_5; // @[IOBus.scala 91:25 98:29]
+  wire  _GEN_12 = isSpiData ? 1'h0 : _GEN_6; // @[IOBus.scala 87:25 98:29]
+  wire [7:0] _GEN_13 = isSpiData ? 8'h0 : _GEN_7; // @[IOBus.scala 92:25 98:29]
+  wire  _GEN_14 = isUart & io_dout_valid; // @[IOBus.scala 95:19 84:25 96:27]
+  wire [7:0] _GEN_15 = isUart ? io_dout_bits : 8'h0; // @[IOBus.scala 95:19 89:25 97:27]
+  wire  _GEN_16 = isUart ? 1'h0 : _GEN_8; // @[IOBus.scala 95:19 85:25]
+  wire [7:0] _GEN_17 = isUart ? 8'h0 : _GEN_9; // @[IOBus.scala 95:19 90:25]
+  wire  _GEN_18 = isUart ? 1'h0 : _GEN_10; // @[IOBus.scala 95:19 86:25]
+  wire [7:0] _GEN_19 = isUart ? 8'h0 : _GEN_11; // @[IOBus.scala 95:19 91:25]
+  wire  _GEN_20 = isUart ? 1'h0 : _GEN_12; // @[IOBus.scala 95:19 87:25]
+  wire [7:0] _GEN_21 = isUart ? 8'h0 : _GEN_13; // @[IOBus.scala 95:19 92:25]
   wire  _io_dout_ready_T = isSpiCshamt ? spi_io_clkshamt_ready : 1'h1; // @[Mux.scala 101:16]
   wire  _io_dout_ready_T_1 = isSpiMode ? spi_io_spiMode_ready : _io_dout_ready_T; // @[Mux.scala 101:16]
   wire  _io_dout_ready_T_2 = isSpiData ? spi_io_din_ready : _io_dout_ready_T_1; // @[Mux.scala 101:16]
+  wire  _io_dout_ready_T_3 = isUart ? uartTx_io_din_ready : _io_dout_ready_T_2; // @[Mux.scala 101:16]
+  wire [7:0] _GEN_27 = io_dout_valid ? _GEN_19 : 8'h0; // @[IOBus.scala 94:21 91:25]
+  wire [7:0] _GEN_29 = io_dout_valid ? _GEN_21 : 8'h0; // @[IOBus.scala 94:21 92:25]
   UartTx uartTx ( // @[IOBus.scala 20:22]
     .clock(uartTx_clock),
     .reset(uartTx_reset),
@@ -829,7 +822,6 @@ module IOBus(
   UartRx uartRx ( // @[IOBus.scala 21:22]
     .clock(uartRx_clock),
     .reset(uartRx_reset),
-    .io_dout_ready(uartRx_io_dout_ready),
     .io_dout_valid(uartRx_io_dout_valid),
     .io_dout_bits(uartRx_io_dout_bits),
     .io_rx(uartRx_io_rx)
@@ -843,7 +835,6 @@ module IOBus(
     .io_din_ready(spi_io_din_ready),
     .io_din_valid(spi_io_din_valid),
     .io_din_bits(spi_io_din_bits),
-    .io_dout_ready(spi_io_dout_ready),
     .io_dout_valid(spi_io_dout_valid),
     .io_dout_bits(spi_io_dout_bits),
     .io_clkshamt_ready(spi_io_clkshamt_ready),
@@ -855,30 +846,28 @@ module IOBus(
     .io_spiMode_bits(spi_io_spiMode_bits),
     .io_spiModeO(spi_io_spiModeO)
   );
-  assign io_din_valid = isUart ? uartRx_io_dout_valid : _io_din_valid_T; // @[Mux.scala 101:16]
-  assign io_din_bits = isUart ? uartRx_io_dout_bits : _io_din_bits_T_2; // @[Mux.scala 101:16]
-  assign io_dout_ready = isUart ? uartTx_io_din_ready : _io_dout_ready_T_2; // @[Mux.scala 101:16]
-  assign io_tx = uartTx_io_tx; // @[IOBus.scala 62:11]
-  assign io_sclk = spi_io_sclk; // @[IOBus.scala 63:11]
-  assign io_mosi = spi_io_mosi; // @[IOBus.scala 64:11]
+  assign io_din_valid = io_din_ready & _io_din_valid_T_1; // @[IOBus.scala 48:20 50:18 67:18]
+  assign io_din_bits = io_din_ready ? _io_din_bits_T_3 : 8'h0; // @[IOBus.scala 48:20 54:17 68:17]
+  assign io_dout_ready = io_dout_valid & _io_dout_ready_T_3; // @[IOBus.scala 109:19 116:19 94:21]
+  assign io_tx = uartTx_io_tx; // @[IOBus.scala 80:11]
+  assign io_sclk = spi_io_sclk; // @[IOBus.scala 81:11]
+  assign io_mosi = spi_io_mosi; // @[IOBus.scala 82:11]
   assign uartTx_clock = clock;
   assign uartTx_reset = reset;
-  assign uartTx_io_din_valid = isUart & io_dout_valid; // @[IOBus.scala 76:17 66:25 77:25]
-  assign uartTx_io_din_bits = isUart ? io_dout_bits : 8'h0; // @[IOBus.scala 76:17 71:25 78:25]
+  assign uartTx_io_din_valid = io_dout_valid & _GEN_14; // @[IOBus.scala 94:21 84:25]
+  assign uartTx_io_din_bits = io_dout_valid ? _GEN_15 : 8'h0; // @[IOBus.scala 94:21 89:25]
   assign uartRx_clock = clock;
   assign uartRx_reset = reset;
-  assign uartRx_io_dout_ready = isUart & io_din_ready; // @[IOBus.scala 53:17 51:24 54:26]
-  assign uartRx_io_rx = io_rx; // @[IOBus.scala 35:16]
+  assign uartRx_io_rx = io_rx; // @[IOBus.scala 45:16]
   assign spi_clock = clock;
   assign spi_reset = reset;
-  assign spi_io_miso = io_miso; // @[IOBus.scala 36:16]
-  assign spi_io_din_valid = isUart ? 1'h0 : _GEN_9; // @[IOBus.scala 76:17 67:25]
-  assign spi_io_din_bits = isUart ? 8'h0 : _GEN_10; // @[IOBus.scala 76:17 72:25]
-  assign spi_io_dout_ready = isUart ? 1'h0 : _GEN_0; // @[IOBus.scala 53:17 52:24]
-  assign spi_io_clkshamt_valid = isUart ? 1'h0 : _GEN_13; // @[IOBus.scala 76:17 69:25]
-  assign spi_io_clkshamt_bits = _GEN_22[2:0];
-  assign spi_io_spiMode_valid = isUart ? 1'h0 : _GEN_11; // @[IOBus.scala 76:17 68:25]
-  assign spi_io_spiMode_bits = _GEN_20[1:0];
+  assign spi_io_miso = io_miso; // @[IOBus.scala 46:16]
+  assign spi_io_din_valid = io_dout_valid & _GEN_16; // @[IOBus.scala 94:21 85:25]
+  assign spi_io_din_bits = io_dout_valid ? _GEN_17 : 8'h0; // @[IOBus.scala 94:21 90:25]
+  assign spi_io_clkshamt_valid = io_dout_valid & _GEN_20; // @[IOBus.scala 94:21 87:25]
+  assign spi_io_clkshamt_bits = _GEN_29[2:0];
+  assign spi_io_spiMode_valid = io_dout_valid & _GEN_18; // @[IOBus.scala 94:21 86:25]
+  assign spi_io_spiMode_bits = _GEN_27[1:0];
 endmodule
 module Core(
   input        clock,
@@ -1387,7 +1376,7 @@ module Core(
   assign ioBus_clock = clock;
   assign ioBus_reset = reset;
   assign ioBus_io_devId = alu_io_out; // @[Core.scala 214:18]
-  assign ioBus_io_din_ready = _pc_next_T_40 & ioBus_io_din_valid; // @[Core.scala 216:74]
+  assign ioBus_io_din_ready = _pc_next_T_38 & _pc_next_T_1; // @[Core.scala 216:46]
   assign ioBus_io_dout_valid = _pc_next_T_38 & _pc_next_T_8; // @[Core.scala 218:47]
   assign ioBus_io_dout_bits = regfile_ioBus_io_dout_bits_MPORT_data[7:0]; // @[Core.scala 219:22]
   assign ioBus_io_rx = io_rx; // @[Core.scala 22:15]

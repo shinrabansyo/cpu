@@ -32,7 +32,6 @@ class Spi(clockFrequency: Int) extends Module {
   val bitCounter = RegInit(0.U(4.W))
   val busy = RegInit(false.B)
   val misoBuf = RegInit(false.B)
-  val inReady = RegInit(true.B)
   val spiModeReady = RegInit(true.B)
   val clkshamtReady = RegInit(true.B)
   val outValid = RegInit(false.B)
@@ -77,10 +76,10 @@ class Spi(clockFrequency: Int) extends Module {
   // mode 3: cpol = 1, cpha = 1 (データをposedgeでサンプリング / negedgeでシフト)
   mode_1_2 := (cpol ^ cpha)
 
-  io.din.ready := inReady
-  when(io.din.valid && io.din.ready) {
+  io.din.ready := io.din.valid && busy && bitCounter === 0.U
+
+  when(io.din.valid && !busy) {
     shiftReg := io.din.bits
-    inReady := false.B
     busy := true.B
     bitCounter := 8.U
 
@@ -120,7 +119,6 @@ class Spi(clockFrequency: Int) extends Module {
       isFirstSclk := true.B
       busy := false.B
       outValid := true.B
-      inReady := true.B
       clkshamtReady := true.B
       spiModeReady := true.B
     } .otherwise {

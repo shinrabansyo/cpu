@@ -212,8 +212,8 @@ class Core extends Module {
 
   // in out デバイスID
   ioBus.io.devId := alu.io.out
-  // データ受取完了 in 命令 かつ データ準備が出来ていた場合に受取完了フラグを立てる
-  ioBus.io.din.ready := (opcode === 6.U(5.W) && opcode_sub === 0.U(3.W)) && ioBus.io.din.valid
+  // データ受取準備完了 in 命令であれば受取準備完了フラグを立てる
+  ioBus.io.din.ready := (opcode === 6.U(5.W) && opcode_sub === 0.U(3.W))
   // 送信データ準備完了 out 命令であればフラグを立てる
   ioBus.io.dout.valid := (opcode === 6.U(5.W) && opcode_sub === 1.U(3.W))
   ioBus.io.dout.bits := regfile(rs2_s)
