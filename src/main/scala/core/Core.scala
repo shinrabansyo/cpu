@@ -12,8 +12,7 @@ class Core extends Module {
     val sclk    = Output(Bool())
     val mosi    = Output(Bool())
     val miso    = Input(Bool())
-
-    val led     = Output(UInt(6.W))
+    val gpio    = Output(UInt(8.W))                    // 暫定
   })
 
   val alu = Module(new Alu)
@@ -24,6 +23,7 @@ class Core extends Module {
   ioBus.io.miso := io.miso
   io.sclk := ioBus.io.sclk
   io.mosi := ioBus.io.mosi
+  io.gpio := ioBus.io.gpio
 
   val imem        = SyncReadMem(1024 * 6, UInt(8.W))
   loadMemoryFromFile(imem, "src/main/resources/bootrom.hex")
@@ -217,9 +217,6 @@ class Core extends Module {
   // 送信データ準備完了 out 命令であればフラグを立てる
   ioBus.io.dout.valid := (opcode === 6.U(5.W) && opcode_sub === 1.U(3.W))
   ioBus.io.dout.bits := regfile(rs2_s)
-
-  // r1 レジスタの下位6ビットをLEDに接続
-  io.led := regfile(1.U(5.W))(5, 0)
 
   // # swでregfileを書き込むと以下のようなことが起きる
   // addi x3, x0, 16

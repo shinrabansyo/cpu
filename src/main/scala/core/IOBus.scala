@@ -15,24 +15,30 @@ class IOBus extends Module {
     val sclk    = Output(Bool())
     val mosi    = Output(Bool())
     val miso    = Input(Bool())
+
+    val gpio    = Output(UInt(8.W))                    // 暫定
   })
 
   val uartTx = Module(new UartTx(20250000, 9600))
   val uartRx = Module(new UartRx(20250000, 9600, 2))
   val spi    = Module(new Spi(20250000))
+  val gpio   = Module(new GeneralPurposeOutput())       // 暫定
 
   val isUart       = Wire(Bool())
   val isSpiData    = Wire(Bool())
   val isSpiMode    = Wire(Bool())
   val isSpiCshamt  = Wire(Bool())
-  
+  val isGpio       = Wire(Bool())
+
   val isOutInstr   = Wire(Bool())
   val isInInstr    = Wire(Bool())
+
 
   isUart       := (io.devId === 0.U)
   isSpiData    := (io.devId === 1.U)
   isSpiMode    := (io.devId === 2.U)
   isSpiCshamt  := (io.devId === 3.U)
+  isGpio       := (io.devId === 4.U)
   
   ///////////// in / out instr //////////////
   
@@ -80,16 +86,19 @@ class IOBus extends Module {
   io.tx   := uartTx.io.tx
   io.sclk := spi.io.sclk
   io.mosi := spi.io.mosi
+  io.gpio := gpio.io.pinOut
 
   uartTx.io.din.valid   := false.B
   spi.io.din.valid      := false.B
   spi.io.spiMode.valid  := false.B
   spi.io.clkshamt.valid := false.B
+  gpio.io.din.valid     := false.B
 
   uartTx.io.din.bits    := 0.U
   spi.io.din.bits       := 0.U
   spi.io.spiMode.bits   := 0.U
   spi.io.clkshamt.bits  := 0.U
+  gpio.io.din.bits      := 0.U
 
   when (isOutInstr) {
     when (isUart) {
@@ -104,6 +113,9 @@ class IOBus extends Module {
     } .elsewhen (isSpiCshamt) {
       spi.io.clkshamt.valid := io.dout.valid
       spi.io.clkshamt.bits  := io.dout.bits
+    } .elsewhen (isGpio) {
+      gpio.io.din.valid     := io.dout.valid
+      gpio.io.din.bits      := io.dout.bits
     }
 
     io.dout.ready := MuxCase(true.B, Seq(
@@ -111,6 +123,7 @@ class IOBus extends Module {
       (isSpiData)   -> spi.io.din.ready,
       (isSpiMode)   -> spi.io.spiMode.ready,
       (isSpiCshamt) -> spi.io.clkshamt.ready,
+      (isGpio)      -> gpio.io.din.ready, 
     ))
   } .otherwise {
     io.dout.ready := false.B

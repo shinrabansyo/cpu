@@ -318,109 +318,137 @@ circuit Core :
             misoBuf <= io.miso @[Spi.scala 147:19]
 
 
+  module GeneralPurposeOutput :
+    input clock : Clock
+    input reset : Reset
+    output io : { flip din : { flip ready : UInt<1>, valid : UInt<1>, bits : UInt<8>}, pinOut : UInt<8>}
+
+    reg pinOutReg : UInt<8>, clock with :
+      reset => (reset, UInt<8>("h0")) @[Gpio.scala 14:26]
+    io.pinOut <= pinOutReg @[Gpio.scala 16:13]
+    io.din.ready <= UInt<1>("h1") @[Gpio.scala 17:16]
+    when io.din.valid : @[Gpio.scala 19:23]
+      pinOutReg <= io.din.bits @[Gpio.scala 20:15]
+
+
   module IOBus :
     input clock : Clock
     input reset : Reset
-    output io : { flip devId : UInt<32>, din : { flip ready : UInt<1>, valid : UInt<1>, bits : UInt<8>}, flip dout : { flip ready : UInt<1>, valid : UInt<1>, bits : UInt<8>}, tx : UInt<1>, flip rx : UInt<1>, sclk : UInt<1>, mosi : UInt<1>, flip miso : UInt<1>}
+    output io : { flip devId : UInt<32>, din : { flip ready : UInt<1>, valid : UInt<1>, bits : UInt<8>}, flip dout : { flip ready : UInt<1>, valid : UInt<1>, bits : UInt<8>}, tx : UInt<1>, flip rx : UInt<1>, sclk : UInt<1>, mosi : UInt<1>, flip miso : UInt<1>, gpio : UInt<8>}
 
-    inst uartTx of UartTx @[IOBus.scala 20:22]
+    inst uartTx of UartTx @[IOBus.scala 22:22]
     uartTx.clock <= clock
     uartTx.reset <= reset
-    inst uartRx of UartRx @[IOBus.scala 21:22]
+    inst uartRx of UartRx @[IOBus.scala 23:22]
     uartRx.clock <= clock
     uartRx.reset <= reset
-    inst spi of Spi @[IOBus.scala 22:22]
+    inst spi of Spi @[IOBus.scala 24:22]
     spi.clock <= clock
     spi.reset <= reset
-    wire isUart : UInt<1> @[IOBus.scala 24:26]
-    wire isSpiData : UInt<1> @[IOBus.scala 25:26]
-    wire isSpiMode : UInt<1> @[IOBus.scala 26:26]
-    wire isSpiCshamt : UInt<1> @[IOBus.scala 27:26]
-    wire isOutInstr : UInt<1> @[IOBus.scala 29:26]
-    wire isInInstr : UInt<1> @[IOBus.scala 30:26]
-    node _isUart_T = eq(io.devId, UInt<1>("h0")) @[IOBus.scala 32:29]
-    isUart <= _isUart_T @[IOBus.scala 32:16]
-    node _isSpiData_T = eq(io.devId, UInt<1>("h1")) @[IOBus.scala 33:29]
-    isSpiData <= _isSpiData_T @[IOBus.scala 33:16]
-    node _isSpiMode_T = eq(io.devId, UInt<2>("h2")) @[IOBus.scala 34:29]
-    isSpiMode <= _isSpiMode_T @[IOBus.scala 34:16]
-    node _isSpiCshamt_T = eq(io.devId, UInt<2>("h3")) @[IOBus.scala 35:29]
-    isSpiCshamt <= _isSpiCshamt_T @[IOBus.scala 35:16]
-    isOutInstr <= io.dout.valid @[IOBus.scala 39:14]
-    isInInstr <= io.din.ready @[IOBus.scala 40:14]
-    uartRx.io.rx <= io.rx @[IOBus.scala 45:16]
-    spi.io.miso <= io.miso @[IOBus.scala 46:16]
-    when isInInstr : @[IOBus.scala 48:20]
+    inst gpio of GeneralPurposeOutput @[IOBus.scala 25:22]
+    gpio.clock <= clock
+    gpio.reset <= reset
+    wire isUart : UInt<1> @[IOBus.scala 27:26]
+    wire isSpiData : UInt<1> @[IOBus.scala 28:26]
+    wire isSpiMode : UInt<1> @[IOBus.scala 29:26]
+    wire isSpiCshamt : UInt<1> @[IOBus.scala 30:26]
+    wire isGpio : UInt<1> @[IOBus.scala 31:26]
+    wire isOutInstr : UInt<1> @[IOBus.scala 33:26]
+    wire isInInstr : UInt<1> @[IOBus.scala 34:26]
+    node _isUart_T = eq(io.devId, UInt<1>("h0")) @[IOBus.scala 37:29]
+    isUart <= _isUart_T @[IOBus.scala 37:16]
+    node _isSpiData_T = eq(io.devId, UInt<1>("h1")) @[IOBus.scala 38:29]
+    isSpiData <= _isSpiData_T @[IOBus.scala 38:16]
+    node _isSpiMode_T = eq(io.devId, UInt<2>("h2")) @[IOBus.scala 39:29]
+    isSpiMode <= _isSpiMode_T @[IOBus.scala 39:16]
+    node _isSpiCshamt_T = eq(io.devId, UInt<2>("h3")) @[IOBus.scala 40:29]
+    isSpiCshamt <= _isSpiCshamt_T @[IOBus.scala 40:16]
+    node _isGpio_T = eq(io.devId, UInt<3>("h4")) @[IOBus.scala 41:29]
+    isGpio <= _isGpio_T @[IOBus.scala 41:16]
+    isOutInstr <= io.dout.valid @[IOBus.scala 45:14]
+    isInInstr <= io.din.ready @[IOBus.scala 46:14]
+    uartRx.io.rx <= io.rx @[IOBus.scala 51:16]
+    spi.io.miso <= io.miso @[IOBus.scala 52:16]
+    when isInInstr : @[IOBus.scala 54:20]
       node _io_din_valid_T = mux(isSpiData, spi.io.dout.valid, UInt<1>("h1")) @[Mux.scala 101:16]
       node _io_din_valid_T_1 = mux(isUart, uartRx.io.dout.valid, _io_din_valid_T) @[Mux.scala 101:16]
-      io.din.valid <= _io_din_valid_T_1 @[IOBus.scala 50:18]
+      io.din.valid <= _io_din_valid_T_1 @[IOBus.scala 56:18]
       node _io_din_bits_T = mux(isSpiCshamt, spi.io.clkshamtO, UInt<1>("h0")) @[Mux.scala 101:16]
       node _io_din_bits_T_1 = mux(isSpiMode, spi.io.spiModeO, _io_din_bits_T) @[Mux.scala 101:16]
       node _io_din_bits_T_2 = mux(isSpiData, spi.io.dout.bits, _io_din_bits_T_1) @[Mux.scala 101:16]
       node _io_din_bits_T_3 = mux(isUart, uartRx.io.dout.bits, _io_din_bits_T_2) @[Mux.scala 101:16]
-      io.din.bits <= _io_din_bits_T_3 @[IOBus.scala 54:17]
-      when isUart : @[IOBus.scala 61:19]
-        uartRx.io.dout.ready <= io.din.ready @[IOBus.scala 62:28]
+      io.din.bits <= _io_din_bits_T_3 @[IOBus.scala 60:17]
+      when isUart : @[IOBus.scala 67:19]
+        uartRx.io.dout.ready <= io.din.ready @[IOBus.scala 68:28]
       else :
-        when isSpiData : @[IOBus.scala 63:29]
-          spi.io.dout.ready <= io.din.ready @[IOBus.scala 64:25]
+        when isSpiData : @[IOBus.scala 69:29]
+          spi.io.dout.ready <= io.din.ready @[IOBus.scala 70:25]
     else :
-      io.din.valid <= UInt<1>("h0") @[IOBus.scala 67:18]
-      io.din.bits <= UInt<1>("h0") @[IOBus.scala 68:17]
-    uartRx.io.dout.ready <= UInt<1>("h0") @[IOBus.scala 73:24]
-    spi.io.dout.ready <= UInt<1>("h0") @[IOBus.scala 74:24]
-    io.tx <= uartTx.io.tx @[IOBus.scala 80:11]
-    io.sclk <= spi.io.sclk @[IOBus.scala 81:11]
-    io.mosi <= spi.io.mosi @[IOBus.scala 82:11]
-    uartTx.io.din.valid <= UInt<1>("h0") @[IOBus.scala 84:25]
-    spi.io.din.valid <= UInt<1>("h0") @[IOBus.scala 85:25]
-    spi.io.spiMode.valid <= UInt<1>("h0") @[IOBus.scala 86:25]
-    spi.io.clkshamt.valid <= UInt<1>("h0") @[IOBus.scala 87:25]
-    uartTx.io.din.bits <= UInt<1>("h0") @[IOBus.scala 89:25]
-    spi.io.din.bits <= UInt<1>("h0") @[IOBus.scala 90:25]
-    spi.io.spiMode.bits <= UInt<1>("h0") @[IOBus.scala 91:25]
-    spi.io.clkshamt.bits <= UInt<1>("h0") @[IOBus.scala 92:25]
-    when isOutInstr : @[IOBus.scala 94:21]
-      when isUart : @[IOBus.scala 95:19]
-        uartTx.io.din.valid <= io.dout.valid @[IOBus.scala 96:27]
-        uartTx.io.din.bits <= io.dout.bits @[IOBus.scala 97:27]
+      io.din.valid <= UInt<1>("h0") @[IOBus.scala 73:18]
+      io.din.bits <= UInt<1>("h0") @[IOBus.scala 74:17]
+    uartRx.io.dout.ready <= UInt<1>("h0") @[IOBus.scala 79:24]
+    spi.io.dout.ready <= UInt<1>("h0") @[IOBus.scala 80:24]
+    io.tx <= uartTx.io.tx @[IOBus.scala 86:11]
+    io.sclk <= spi.io.sclk @[IOBus.scala 87:11]
+    io.mosi <= spi.io.mosi @[IOBus.scala 88:11]
+    io.gpio <= gpio.io.pinOut @[IOBus.scala 89:11]
+    uartTx.io.din.valid <= UInt<1>("h0") @[IOBus.scala 91:25]
+    spi.io.din.valid <= UInt<1>("h0") @[IOBus.scala 92:25]
+    spi.io.spiMode.valid <= UInt<1>("h0") @[IOBus.scala 93:25]
+    spi.io.clkshamt.valid <= UInt<1>("h0") @[IOBus.scala 94:25]
+    gpio.io.din.valid <= UInt<1>("h0") @[IOBus.scala 95:25]
+    uartTx.io.din.bits <= UInt<1>("h0") @[IOBus.scala 97:25]
+    spi.io.din.bits <= UInt<1>("h0") @[IOBus.scala 98:25]
+    spi.io.spiMode.bits <= UInt<1>("h0") @[IOBus.scala 99:25]
+    spi.io.clkshamt.bits <= UInt<1>("h0") @[IOBus.scala 100:25]
+    gpio.io.din.bits <= UInt<1>("h0") @[IOBus.scala 101:25]
+    when isOutInstr : @[IOBus.scala 103:21]
+      when isUart : @[IOBus.scala 104:19]
+        uartTx.io.din.valid <= io.dout.valid @[IOBus.scala 105:27]
+        uartTx.io.din.bits <= io.dout.bits @[IOBus.scala 106:27]
       else :
-        when isSpiData : @[IOBus.scala 98:29]
-          spi.io.din.valid <= io.dout.valid @[IOBus.scala 99:24]
-          spi.io.din.bits <= io.dout.bits @[IOBus.scala 100:24]
+        when isSpiData : @[IOBus.scala 107:29]
+          spi.io.din.valid <= io.dout.valid @[IOBus.scala 108:24]
+          spi.io.din.bits <= io.dout.bits @[IOBus.scala 109:24]
         else :
-          when isSpiMode : @[IOBus.scala 101:29]
-            spi.io.spiMode.valid <= io.dout.valid @[IOBus.scala 102:28]
-            spi.io.spiMode.bits <= io.dout.bits @[IOBus.scala 103:28]
+          when isSpiMode : @[IOBus.scala 110:29]
+            spi.io.spiMode.valid <= io.dout.valid @[IOBus.scala 111:28]
+            spi.io.spiMode.bits <= io.dout.bits @[IOBus.scala 112:28]
           else :
-            when isSpiCshamt : @[IOBus.scala 104:31]
-              spi.io.clkshamt.valid <= io.dout.valid @[IOBus.scala 105:29]
-              spi.io.clkshamt.bits <= io.dout.bits @[IOBus.scala 106:29]
-      node _io_dout_ready_T = mux(isSpiCshamt, spi.io.clkshamt.ready, UInt<1>("h1")) @[Mux.scala 101:16]
-      node _io_dout_ready_T_1 = mux(isSpiMode, spi.io.spiMode.ready, _io_dout_ready_T) @[Mux.scala 101:16]
-      node _io_dout_ready_T_2 = mux(isSpiData, spi.io.din.ready, _io_dout_ready_T_1) @[Mux.scala 101:16]
-      node _io_dout_ready_T_3 = mux(isUart, uartTx.io.din.ready, _io_dout_ready_T_2) @[Mux.scala 101:16]
-      io.dout.ready <= _io_dout_ready_T_3 @[IOBus.scala 109:19]
+            when isSpiCshamt : @[IOBus.scala 113:31]
+              spi.io.clkshamt.valid <= io.dout.valid @[IOBus.scala 114:29]
+              spi.io.clkshamt.bits <= io.dout.bits @[IOBus.scala 115:29]
+            else :
+              when isGpio : @[IOBus.scala 116:26]
+                gpio.io.din.valid <= io.dout.valid @[IOBus.scala 117:29]
+                gpio.io.din.bits <= io.dout.bits @[IOBus.scala 118:29]
+      node _io_dout_ready_T = mux(isGpio, gpio.io.din.ready, UInt<1>("h1")) @[Mux.scala 101:16]
+      node _io_dout_ready_T_1 = mux(isSpiCshamt, spi.io.clkshamt.ready, _io_dout_ready_T) @[Mux.scala 101:16]
+      node _io_dout_ready_T_2 = mux(isSpiMode, spi.io.spiMode.ready, _io_dout_ready_T_1) @[Mux.scala 101:16]
+      node _io_dout_ready_T_3 = mux(isSpiData, spi.io.din.ready, _io_dout_ready_T_2) @[Mux.scala 101:16]
+      node _io_dout_ready_T_4 = mux(isUart, uartTx.io.din.ready, _io_dout_ready_T_3) @[Mux.scala 101:16]
+      io.dout.ready <= _io_dout_ready_T_4 @[IOBus.scala 121:19]
     else :
-      io.dout.ready <= UInt<1>("h0") @[IOBus.scala 116:19]
+      io.dout.ready <= UInt<1>("h0") @[IOBus.scala 129:19]
 
 
   module Core :
     input clock : Clock
     input reset : UInt<1>
-    output io : { tx : UInt<1>, flip rx : UInt<1>, sclk : UInt<1>, mosi : UInt<1>, flip miso : UInt<1>, led : UInt<6>}
+    output io : { tx : UInt<1>, flip rx : UInt<1>, sclk : UInt<1>, mosi : UInt<1>, flip miso : UInt<1>, gpio : UInt<8>}
 
-    inst alu of Alu @[Core.scala 19:19]
+    inst alu of Alu @[Core.scala 18:19]
     alu.clock <= clock
     alu.reset <= reset
-    inst ioBus of IOBus @[Core.scala 20:21]
+    inst ioBus of IOBus @[Core.scala 19:21]
     ioBus.clock <= clock
     ioBus.reset <= reset
-    ioBus.io.rx <= io.rx @[Core.scala 22:15]
-    io.tx <= ioBus.io.tx @[Core.scala 23:9]
-    ioBus.io.miso <= io.miso @[Core.scala 24:17]
-    io.sclk <= ioBus.io.sclk @[Core.scala 25:11]
-    io.mosi <= ioBus.io.mosi @[Core.scala 26:11]
+    ioBus.io.rx <= io.rx @[Core.scala 21:15]
+    io.tx <= ioBus.io.tx @[Core.scala 22:9]
+    ioBus.io.miso <= io.miso @[Core.scala 23:17]
+    io.sclk <= ioBus.io.sclk @[Core.scala 24:11]
+    io.mosi <= ioBus.io.mosi @[Core.scala 25:11]
+    io.gpio <= ioBus.io.gpio @[Core.scala 26:11]
     smem imem : UInt<8> [6144] @[Core.scala 28:32]
     smem dmem : UInt<8> [4096] @[Core.scala 30:32]
     reg first_time : UInt<1>, clock with :
@@ -914,7 +942,4 @@ circuit Core :
     ioBus.io.dout.valid <= _ioBus_io_dout_valid_T_2 @[Core.scala 218:23]
     infer mport ioBus_io_dout_bits_MPORT = regfile[rs2_s], clock @[Core.scala 219:32]
     ioBus.io.dout.bits <= ioBus_io_dout_bits_MPORT @[Core.scala 219:22]
-    infer mport io_led_MPORT = regfile[UInt<5>("h1")], clock @[Core.scala 222:20]
-    node _io_led_T = bits(io_led_MPORT, 5, 0) @[Core.scala 222:30]
-    io.led <= _io_led_T @[Core.scala 222:10]
 

@@ -25,12 +25,12 @@
     "class":"firrtl.transforms.BlackBoxInlineAnno",
     "target":"Core.Core",
     "name":"Core.Core.imem.v",
-    "text":"module BindsTo_0_Core(\n  input        clock,\n  input        reset,\n  output       io_tx,\n  input        io_rx,\n  output       io_sclk,\n  output       io_mosi,\n  input        io_miso,\n  output [5:0] io_led\n);\n\ninitial begin\n  $readmemh(\"src/main/resources/bootrom.hex\", Core.imem);\nend\n                      endmodule\n\nbind Core BindsTo_0_Core BindsTo_0_Core_Inst(.*);"
+    "text":"module BindsTo_0_Core(\n  input        clock,\n  input        reset,\n  output       io_tx,\n  input        io_rx,\n  output       io_sclk,\n  output       io_mosi,\n  input        io_miso,\n  output [7:0] io_gpio\n);\n\ninitial begin\n  $readmemh(\"src/main/resources/bootrom.hex\", Core.imem);\nend\n                      endmodule\n\nbind Core BindsTo_0_Core BindsTo_0_Core_Inst(.*);"
   },
   {
     "class":"firrtl.transforms.BlackBoxInlineAnno",
     "target":"Core.Core",
     "name":"Core.Core.dmem.v",
-    "text":"module BindsTo_1_Core(\n  input        clock,\n  input        reset,\n  output       io_tx,\n  input        io_rx,\n  output       io_sclk,\n  output       io_mosi,\n  input        io_miso,\n  output [5:0] io_led\n);\n\ninitial begin\n  $readmemh(\"src/main/resources/dmem.hex\", Core.dmem);\nend\n                      endmodule\n\nbind Core BindsTo_1_Core BindsTo_1_Core_Inst(.*);"
+    "text":"module BindsTo_1_Core(\n  input        clock,\n  input        reset,\n  output       io_tx,\n  input        io_rx,\n  output       io_sclk,\n  output       io_mosi,\n  input        io_miso,\n  output [7:0] io_gpio\n);\n\ninitial begin\n  $readmemh(\"src/main/resources/dmem.hex\", Core.dmem);\nend\n                      endmodule\n\nbind Core BindsTo_1_Core BindsTo_1_Core_Inst(.*);"
   }
 ]

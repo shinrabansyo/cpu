@@ -37,7 +37,7 @@ class SpiTest extends AnyFlatSpec with ChiselScalatestTester {
     c.io.clkshamt.bits.poke(1.U)
     c.io.clkshamt.valid.poke(true.B)
 
-    c.io.spiMode.bits.poke(3.U)
+    c.io.spiMode.bits.poke(2.U)
     c.io.spiMode.valid.poke(true.B)
 
     c.clock.step(2)

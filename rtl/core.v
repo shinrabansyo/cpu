@@ -730,6 +730,71 @@ end // initial
 `endif
 `endif // SYNTHESIS
 endmodule
+module GeneralPurposeOutput(
+  input        clock,
+  input        reset,
+  input        io_din_valid,
+  input  [7:0] io_din_bits,
+  output [7:0] io_pinOut
+);
+`ifdef RANDOMIZE_REG_INIT
+  reg [31:0] _RAND_0;
+`endif // RANDOMIZE_REG_INIT
+  reg [7:0] pinOutReg; // @[Gpio.scala 14:26]
+  assign io_pinOut = pinOutReg; // @[Gpio.scala 16:13]
+  always @(posedge clock) begin
+    if (reset) begin // @[Gpio.scala 14:26]
+      pinOutReg <= 8'h0; // @[Gpio.scala 14:26]
+    end else if (io_din_valid) begin // @[Gpio.scala 19:23]
+      pinOutReg <= io_din_bits; // @[Gpio.scala 20:15]
+    end
+  end
+// Register and memory initialization
+`ifdef RANDOMIZE_GARBAGE_ASSIGN
+`define RANDOMIZE
+`endif
+`ifdef RANDOMIZE_INVALID_ASSIGN
+`define RANDOMIZE
+`endif
+`ifdef RANDOMIZE_REG_INIT
+`define RANDOMIZE
+`endif
+`ifdef RANDOMIZE_MEM_INIT
+`define RANDOMIZE
+`endif
+`ifndef RANDOM
+`define RANDOM $random
+`endif
+`ifdef RANDOMIZE_MEM_INIT
+  integer initvar;
+`endif
+`ifndef SYNTHESIS
+`ifdef FIRRTL_BEFORE_INITIAL
+`FIRRTL_BEFORE_INITIAL
+`endif
+initial begin
+  `ifdef RANDOMIZE
+    `ifdef INIT_RANDOM
+      `INIT_RANDOM
+    `endif
+    `ifndef VERILATOR
+      `ifdef RANDOMIZE_DELAY
+        #`RANDOMIZE_DELAY begin end
+      `else
+        #0.002 begin end
+      `endif
+    `endif
+`ifdef RANDOMIZE_REG_INIT
+  _RAND_0 = {1{`RANDOM}};
+  pinOutReg = _RAND_0[7:0];
+`endif // RANDOMIZE_REG_INIT
+  `endif // RANDOMIZE
+end // initial
+`ifdef FIRRTL_AFTER_INITIAL
+`FIRRTL_AFTER_INITIAL
+`endif
+`endif // SYNTHESIS
+endmodule
 module IOBus(
   input         clock,
   input         reset,
@@ -744,74 +809,91 @@ module IOBus(
   input         io_rx,
   output        io_sclk,
   output        io_mosi,
-  input         io_miso
+  input         io_miso,
+  output [7:0]  io_gpio
 );
-  wire  uartTx_clock; // @[IOBus.scala 20:22]
-  wire  uartTx_reset; // @[IOBus.scala 20:22]
-  wire  uartTx_io_tx; // @[IOBus.scala 20:22]
-  wire  uartTx_io_din_ready; // @[IOBus.scala 20:22]
-  wire  uartTx_io_din_valid; // @[IOBus.scala 20:22]
-  wire [7:0] uartTx_io_din_bits; // @[IOBus.scala 20:22]
-  wire  uartRx_clock; // @[IOBus.scala 21:22]
-  wire  uartRx_reset; // @[IOBus.scala 21:22]
-  wire  uartRx_io_dout_valid; // @[IOBus.scala 21:22]
-  wire [7:0] uartRx_io_dout_bits; // @[IOBus.scala 21:22]
-  wire  uartRx_io_rx; // @[IOBus.scala 21:22]
-  wire  spi_clock; // @[IOBus.scala 22:22]
-  wire  spi_reset; // @[IOBus.scala 22:22]
-  wire  spi_io_mosi; // @[IOBus.scala 22:22]
-  wire  spi_io_miso; // @[IOBus.scala 22:22]
-  wire  spi_io_sclk; // @[IOBus.scala 22:22]
-  wire  spi_io_din_ready; // @[IOBus.scala 22:22]
-  wire  spi_io_din_valid; // @[IOBus.scala 22:22]
-  wire [7:0] spi_io_din_bits; // @[IOBus.scala 22:22]
-  wire  spi_io_dout_valid; // @[IOBus.scala 22:22]
-  wire [7:0] spi_io_dout_bits; // @[IOBus.scala 22:22]
-  wire  spi_io_clkshamt_ready; // @[IOBus.scala 22:22]
-  wire  spi_io_clkshamt_valid; // @[IOBus.scala 22:22]
-  wire [2:0] spi_io_clkshamt_bits; // @[IOBus.scala 22:22]
-  wire [2:0] spi_io_clkshamtO; // @[IOBus.scala 22:22]
-  wire  spi_io_spiMode_ready; // @[IOBus.scala 22:22]
-  wire  spi_io_spiMode_valid; // @[IOBus.scala 22:22]
-  wire [1:0] spi_io_spiMode_bits; // @[IOBus.scala 22:22]
-  wire [1:0] spi_io_spiModeO; // @[IOBus.scala 22:22]
-  wire  isUart = io_devId == 32'h0; // @[IOBus.scala 32:29]
-  wire  isSpiData = io_devId == 32'h1; // @[IOBus.scala 33:29]
-  wire  isSpiMode = io_devId == 32'h2; // @[IOBus.scala 34:29]
-  wire  isSpiCshamt = io_devId == 32'h3; // @[IOBus.scala 35:29]
+  wire  uartTx_clock; // @[IOBus.scala 22:22]
+  wire  uartTx_reset; // @[IOBus.scala 22:22]
+  wire  uartTx_io_tx; // @[IOBus.scala 22:22]
+  wire  uartTx_io_din_ready; // @[IOBus.scala 22:22]
+  wire  uartTx_io_din_valid; // @[IOBus.scala 22:22]
+  wire [7:0] uartTx_io_din_bits; // @[IOBus.scala 22:22]
+  wire  uartRx_clock; // @[IOBus.scala 23:22]
+  wire  uartRx_reset; // @[IOBus.scala 23:22]
+  wire  uartRx_io_dout_valid; // @[IOBus.scala 23:22]
+  wire [7:0] uartRx_io_dout_bits; // @[IOBus.scala 23:22]
+  wire  uartRx_io_rx; // @[IOBus.scala 23:22]
+  wire  spi_clock; // @[IOBus.scala 24:22]
+  wire  spi_reset; // @[IOBus.scala 24:22]
+  wire  spi_io_mosi; // @[IOBus.scala 24:22]
+  wire  spi_io_miso; // @[IOBus.scala 24:22]
+  wire  spi_io_sclk; // @[IOBus.scala 24:22]
+  wire  spi_io_din_ready; // @[IOBus.scala 24:22]
+  wire  spi_io_din_valid; // @[IOBus.scala 24:22]
+  wire [7:0] spi_io_din_bits; // @[IOBus.scala 24:22]
+  wire  spi_io_dout_valid; // @[IOBus.scala 24:22]
+  wire [7:0] spi_io_dout_bits; // @[IOBus.scala 24:22]
+  wire  spi_io_clkshamt_ready; // @[IOBus.scala 24:22]
+  wire  spi_io_clkshamt_valid; // @[IOBus.scala 24:22]
+  wire [2:0] spi_io_clkshamt_bits; // @[IOBus.scala 24:22]
+  wire [2:0] spi_io_clkshamtO; // @[IOBus.scala 24:22]
+  wire  spi_io_spiMode_ready; // @[IOBus.scala 24:22]
+  wire  spi_io_spiMode_valid; // @[IOBus.scala 24:22]
+  wire [1:0] spi_io_spiMode_bits; // @[IOBus.scala 24:22]
+  wire [1:0] spi_io_spiModeO; // @[IOBus.scala 24:22]
+  wire  gpio_clock; // @[IOBus.scala 25:22]
+  wire  gpio_reset; // @[IOBus.scala 25:22]
+  wire  gpio_io_din_valid; // @[IOBus.scala 25:22]
+  wire [7:0] gpio_io_din_bits; // @[IOBus.scala 25:22]
+  wire [7:0] gpio_io_pinOut; // @[IOBus.scala 25:22]
+  wire  isUart = io_devId == 32'h0; // @[IOBus.scala 37:29]
+  wire  isSpiData = io_devId == 32'h1; // @[IOBus.scala 38:29]
+  wire  isSpiMode = io_devId == 32'h2; // @[IOBus.scala 39:29]
+  wire  isSpiCshamt = io_devId == 32'h3; // @[IOBus.scala 40:29]
+  wire  isGpio = io_devId == 32'h4; // @[IOBus.scala 41:29]
   wire  _io_din_valid_T = isSpiData ? spi_io_dout_valid : 1'h1; // @[Mux.scala 101:16]
   wire  _io_din_valid_T_1 = isUart ? uartRx_io_dout_valid : _io_din_valid_T; // @[Mux.scala 101:16]
   wire [2:0] _io_din_bits_T = isSpiCshamt ? spi_io_clkshamtO : 3'h0; // @[Mux.scala 101:16]
   wire [2:0] _io_din_bits_T_1 = isSpiMode ? {{1'd0}, spi_io_spiModeO} : _io_din_bits_T; // @[Mux.scala 101:16]
   wire [7:0] _io_din_bits_T_2 = isSpiData ? spi_io_dout_bits : {{5'd0}, _io_din_bits_T_1}; // @[Mux.scala 101:16]
   wire [7:0] _io_din_bits_T_3 = isUart ? uartRx_io_dout_bits : _io_din_bits_T_2; // @[Mux.scala 101:16]
-  wire  _GEN_2 = isSpiCshamt & io_dout_valid; // @[IOBus.scala 104:31 105:29 87:25]
-  wire [7:0] _GEN_3 = isSpiCshamt ? io_dout_bits : 8'h0; // @[IOBus.scala 104:31 106:29 92:25]
-  wire  _GEN_4 = isSpiMode & io_dout_valid; // @[IOBus.scala 101:29 102:28 86:25]
-  wire [7:0] _GEN_5 = isSpiMode ? io_dout_bits : 8'h0; // @[IOBus.scala 101:29 103:28 91:25]
-  wire  _GEN_6 = isSpiMode ? 1'h0 : _GEN_2; // @[IOBus.scala 101:29 87:25]
-  wire [7:0] _GEN_7 = isSpiMode ? 8'h0 : _GEN_3; // @[IOBus.scala 101:29 92:25]
-  wire  _GEN_8 = isSpiData & io_dout_valid; // @[IOBus.scala 98:29 99:24 85:25]
-  wire [7:0] _GEN_9 = isSpiData ? io_dout_bits : 8'h0; // @[IOBus.scala 100:24 90:25 98:29]
-  wire  _GEN_10 = isSpiData ? 1'h0 : _GEN_4; // @[IOBus.scala 86:25 98:29]
-  wire [7:0] _GEN_11 = isSpiData ? 8'h0 : _GEN_5; // @[IOBus.scala 91:25 98:29]
-  wire  _GEN_12 = isSpiData ? 1'h0 : _GEN_6; // @[IOBus.scala 87:25 98:29]
-  wire [7:0] _GEN_13 = isSpiData ? 8'h0 : _GEN_7; // @[IOBus.scala 92:25 98:29]
-  wire  _GEN_14 = isUart & io_dout_valid; // @[IOBus.scala 95:19 84:25 96:27]
-  wire [7:0] _GEN_15 = isUart ? io_dout_bits : 8'h0; // @[IOBus.scala 95:19 89:25 97:27]
-  wire  _GEN_16 = isUart ? 1'h0 : _GEN_8; // @[IOBus.scala 95:19 85:25]
-  wire [7:0] _GEN_17 = isUart ? 8'h0 : _GEN_9; // @[IOBus.scala 95:19 90:25]
-  wire  _GEN_18 = isUart ? 1'h0 : _GEN_10; // @[IOBus.scala 95:19 86:25]
-  wire [7:0] _GEN_19 = isUart ? 8'h0 : _GEN_11; // @[IOBus.scala 95:19 91:25]
-  wire  _GEN_20 = isUart ? 1'h0 : _GEN_12; // @[IOBus.scala 95:19 87:25]
-  wire [7:0] _GEN_21 = isUart ? 8'h0 : _GEN_13; // @[IOBus.scala 95:19 92:25]
-  wire  _io_dout_ready_T = isSpiCshamt ? spi_io_clkshamt_ready : 1'h1; // @[Mux.scala 101:16]
-  wire  _io_dout_ready_T_1 = isSpiMode ? spi_io_spiMode_ready : _io_dout_ready_T; // @[Mux.scala 101:16]
-  wire  _io_dout_ready_T_2 = isSpiData ? spi_io_din_ready : _io_dout_ready_T_1; // @[Mux.scala 101:16]
-  wire  _io_dout_ready_T_3 = isUart ? uartTx_io_din_ready : _io_dout_ready_T_2; // @[Mux.scala 101:16]
-  wire [7:0] _GEN_27 = io_dout_valid ? _GEN_19 : 8'h0; // @[IOBus.scala 94:21 91:25]
-  wire [7:0] _GEN_29 = io_dout_valid ? _GEN_21 : 8'h0; // @[IOBus.scala 94:21 92:25]
-  UartTx uartTx ( // @[IOBus.scala 20:22]
+  wire  _GEN_2 = isGpio & io_dout_valid; // @[IOBus.scala 116:26 117:29 95:25]
+  wire [7:0] _GEN_3 = isGpio ? io_dout_bits : 8'h0; // @[IOBus.scala 101:25 116:26 118:29]
+  wire  _GEN_4 = isSpiCshamt & io_dout_valid; // @[IOBus.scala 113:31 114:29 94:25]
+  wire [7:0] _GEN_5 = isSpiCshamt ? io_dout_bits : 8'h0; // @[IOBus.scala 100:25 113:31 115:29]
+  wire  _GEN_6 = isSpiCshamt ? 1'h0 : _GEN_2; // @[IOBus.scala 113:31 95:25]
+  wire [7:0] _GEN_7 = isSpiCshamt ? 8'h0 : _GEN_3; // @[IOBus.scala 101:25 113:31]
+  wire  _GEN_8 = isSpiMode & io_dout_valid; // @[IOBus.scala 110:29 111:28 93:25]
+  wire [7:0] _GEN_9 = isSpiMode ? io_dout_bits : 8'h0; // @[IOBus.scala 110:29 112:28 99:25]
+  wire  _GEN_10 = isSpiMode ? 1'h0 : _GEN_4; // @[IOBus.scala 110:29 94:25]
+  wire [7:0] _GEN_11 = isSpiMode ? 8'h0 : _GEN_5; // @[IOBus.scala 100:25 110:29]
+  wire  _GEN_12 = isSpiMode ? 1'h0 : _GEN_6; // @[IOBus.scala 110:29 95:25]
+  wire [7:0] _GEN_13 = isSpiMode ? 8'h0 : _GEN_7; // @[IOBus.scala 101:25 110:29]
+  wire  _GEN_14 = isSpiData & io_dout_valid; // @[IOBus.scala 107:29 108:24 92:25]
+  wire [7:0] _GEN_15 = isSpiData ? io_dout_bits : 8'h0; // @[IOBus.scala 107:29 109:24 98:25]
+  wire  _GEN_16 = isSpiData ? 1'h0 : _GEN_8; // @[IOBus.scala 107:29 93:25]
+  wire [7:0] _GEN_17 = isSpiData ? 8'h0 : _GEN_9; // @[IOBus.scala 107:29 99:25]
+  wire  _GEN_18 = isSpiData ? 1'h0 : _GEN_10; // @[IOBus.scala 107:29 94:25]
+  wire [7:0] _GEN_19 = isSpiData ? 8'h0 : _GEN_11; // @[IOBus.scala 100:25 107:29]
+  wire  _GEN_20 = isSpiData ? 1'h0 : _GEN_12; // @[IOBus.scala 107:29 95:25]
+  wire [7:0] _GEN_21 = isSpiData ? 8'h0 : _GEN_13; // @[IOBus.scala 101:25 107:29]
+  wire  _GEN_22 = isUart & io_dout_valid; // @[IOBus.scala 104:19 105:27 91:25]
+  wire [7:0] _GEN_23 = isUart ? io_dout_bits : 8'h0; // @[IOBus.scala 104:19 106:27 97:25]
+  wire  _GEN_24 = isUart ? 1'h0 : _GEN_14; // @[IOBus.scala 104:19 92:25]
+  wire [7:0] _GEN_25 = isUart ? 8'h0 : _GEN_15; // @[IOBus.scala 104:19 98:25]
+  wire  _GEN_26 = isUart ? 1'h0 : _GEN_16; // @[IOBus.scala 104:19 93:25]
+  wire [7:0] _GEN_27 = isUart ? 8'h0 : _GEN_17; // @[IOBus.scala 104:19 99:25]
+  wire  _GEN_28 = isUart ? 1'h0 : _GEN_18; // @[IOBus.scala 104:19 94:25]
+  wire [7:0] _GEN_29 = isUart ? 8'h0 : _GEN_19; // @[IOBus.scala 104:19 100:25]
+  wire  _GEN_30 = isUart ? 1'h0 : _GEN_20; // @[IOBus.scala 104:19 95:25]
+  wire [7:0] _GEN_31 = isUart ? 8'h0 : _GEN_21; // @[IOBus.scala 104:19 101:25]
+  wire  _io_dout_ready_T_1 = isSpiCshamt ? spi_io_clkshamt_ready : 1'h1; // @[Mux.scala 101:16]
+  wire  _io_dout_ready_T_2 = isSpiMode ? spi_io_spiMode_ready : _io_dout_ready_T_1; // @[Mux.scala 101:16]
+  wire  _io_dout_ready_T_3 = isSpiData ? spi_io_din_ready : _io_dout_ready_T_2; // @[Mux.scala 101:16]
+  wire  _io_dout_ready_T_4 = isUart ? uartTx_io_din_ready : _io_dout_ready_T_3; // @[Mux.scala 101:16]
+  wire [7:0] _GEN_37 = io_dout_valid ? _GEN_27 : 8'h0; // @[IOBus.scala 103:21 99:25]
+  wire [7:0] _GEN_39 = io_dout_valid ? _GEN_29 : 8'h0; // @[IOBus.scala 103:21 100:25]
+  UartTx uartTx ( // @[IOBus.scala 22:22]
     .clock(uartTx_clock),
     .reset(uartTx_reset),
     .io_tx(uartTx_io_tx),
@@ -819,14 +901,14 @@ module IOBus(
     .io_din_valid(uartTx_io_din_valid),
     .io_din_bits(uartTx_io_din_bits)
   );
-  UartRx uartRx ( // @[IOBus.scala 21:22]
+  UartRx uartRx ( // @[IOBus.scala 23:22]
     .clock(uartRx_clock),
     .reset(uartRx_reset),
     .io_dout_valid(uartRx_io_dout_valid),
     .io_dout_bits(uartRx_io_dout_bits),
     .io_rx(uartRx_io_rx)
   );
-  Spi spi ( // @[IOBus.scala 22:22]
+  Spi spi ( // @[IOBus.scala 24:22]
     .clock(spi_clock),
     .reset(spi_reset),
     .io_mosi(spi_io_mosi),
@@ -846,28 +928,40 @@ module IOBus(
     .io_spiMode_bits(spi_io_spiMode_bits),
     .io_spiModeO(spi_io_spiModeO)
   );
-  assign io_din_valid = io_din_ready & _io_din_valid_T_1; // @[IOBus.scala 48:20 50:18 67:18]
-  assign io_din_bits = io_din_ready ? _io_din_bits_T_3 : 8'h0; // @[IOBus.scala 48:20 54:17 68:17]
-  assign io_dout_ready = io_dout_valid & _io_dout_ready_T_3; // @[IOBus.scala 109:19 116:19 94:21]
-  assign io_tx = uartTx_io_tx; // @[IOBus.scala 80:11]
-  assign io_sclk = spi_io_sclk; // @[IOBus.scala 81:11]
-  assign io_mosi = spi_io_mosi; // @[IOBus.scala 82:11]
+  GeneralPurposeOutput gpio ( // @[IOBus.scala 25:22]
+    .clock(gpio_clock),
+    .reset(gpio_reset),
+    .io_din_valid(gpio_io_din_valid),
+    .io_din_bits(gpio_io_din_bits),
+    .io_pinOut(gpio_io_pinOut)
+  );
+  assign io_din_valid = io_din_ready & _io_din_valid_T_1; // @[IOBus.scala 54:20 56:18 73:18]
+  assign io_din_bits = io_din_ready ? _io_din_bits_T_3 : 8'h0; // @[IOBus.scala 54:20 60:17 74:17]
+  assign io_dout_ready = io_dout_valid & _io_dout_ready_T_4; // @[IOBus.scala 103:21 121:19 129:19]
+  assign io_tx = uartTx_io_tx; // @[IOBus.scala 86:11]
+  assign io_sclk = spi_io_sclk; // @[IOBus.scala 87:11]
+  assign io_mosi = spi_io_mosi; // @[IOBus.scala 88:11]
+  assign io_gpio = gpio_io_pinOut; // @[IOBus.scala 89:11]
   assign uartTx_clock = clock;
   assign uartTx_reset = reset;
-  assign uartTx_io_din_valid = io_dout_valid & _GEN_14; // @[IOBus.scala 94:21 84:25]
-  assign uartTx_io_din_bits = io_dout_valid ? _GEN_15 : 8'h0; // @[IOBus.scala 94:21 89:25]
+  assign uartTx_io_din_valid = io_dout_valid & _GEN_22; // @[IOBus.scala 103:21 91:25]
+  assign uartTx_io_din_bits = io_dout_valid ? _GEN_23 : 8'h0; // @[IOBus.scala 103:21 97:25]
   assign uartRx_clock = clock;
   assign uartRx_reset = reset;
-  assign uartRx_io_rx = io_rx; // @[IOBus.scala 45:16]
+  assign uartRx_io_rx = io_rx; // @[IOBus.scala 51:16]
   assign spi_clock = clock;
   assign spi_reset = reset;
-  assign spi_io_miso = io_miso; // @[IOBus.scala 46:16]
-  assign spi_io_din_valid = io_dout_valid & _GEN_16; // @[IOBus.scala 94:21 85:25]
-  assign spi_io_din_bits = io_dout_valid ? _GEN_17 : 8'h0; // @[IOBus.scala 94:21 90:25]
-  assign spi_io_clkshamt_valid = io_dout_valid & _GEN_20; // @[IOBus.scala 94:21 87:25]
-  assign spi_io_clkshamt_bits = _GEN_29[2:0];
-  assign spi_io_spiMode_valid = io_dout_valid & _GEN_18; // @[IOBus.scala 94:21 86:25]
-  assign spi_io_spiMode_bits = _GEN_27[1:0];
+  assign spi_io_miso = io_miso; // @[IOBus.scala 52:16]
+  assign spi_io_din_valid = io_dout_valid & _GEN_24; // @[IOBus.scala 103:21 92:25]
+  assign spi_io_din_bits = io_dout_valid ? _GEN_25 : 8'h0; // @[IOBus.scala 103:21 98:25]
+  assign spi_io_clkshamt_valid = io_dout_valid & _GEN_28; // @[IOBus.scala 103:21 94:25]
+  assign spi_io_clkshamt_bits = _GEN_39[2:0];
+  assign spi_io_spiMode_valid = io_dout_valid & _GEN_26; // @[IOBus.scala 103:21 93:25]
+  assign spi_io_spiMode_bits = _GEN_37[1:0];
+  assign gpio_clock = clock;
+  assign gpio_reset = reset;
+  assign gpio_io_din_valid = io_dout_valid & _GEN_30; // @[IOBus.scala 103:21 95:25]
+  assign gpio_io_din_bits = io_dout_valid ? _GEN_31 : 8'h0; // @[IOBus.scala 103:21 101:25]
 endmodule
 module Core(
   input        clock,
@@ -877,7 +971,7 @@ module Core(
   output       io_sclk,
   output       io_mosi,
   input        io_miso,
-  output [5:0] io_led
+  output [7:0] io_gpio
 );
 `ifdef RANDOMIZE_GARBAGE_ASSIGN
   reg [31:0] _RAND_1;
@@ -918,25 +1012,26 @@ module Core(
   reg [31:0] _RAND_31;
   reg [31:0] _RAND_32;
 `endif // RANDOMIZE_REG_INIT
-  wire [7:0] alu_io_command; // @[Core.scala 19:19]
-  wire [31:0] alu_io_a; // @[Core.scala 19:19]
-  wire [31:0] alu_io_b; // @[Core.scala 19:19]
-  wire  alu_io_zero; // @[Core.scala 19:19]
-  wire [31:0] alu_io_out; // @[Core.scala 19:19]
-  wire  ioBus_clock; // @[Core.scala 20:21]
-  wire  ioBus_reset; // @[Core.scala 20:21]
-  wire [31:0] ioBus_io_devId; // @[Core.scala 20:21]
-  wire  ioBus_io_din_ready; // @[Core.scala 20:21]
-  wire  ioBus_io_din_valid; // @[Core.scala 20:21]
-  wire [7:0] ioBus_io_din_bits; // @[Core.scala 20:21]
-  wire  ioBus_io_dout_ready; // @[Core.scala 20:21]
-  wire  ioBus_io_dout_valid; // @[Core.scala 20:21]
-  wire [7:0] ioBus_io_dout_bits; // @[Core.scala 20:21]
-  wire  ioBus_io_tx; // @[Core.scala 20:21]
-  wire  ioBus_io_rx; // @[Core.scala 20:21]
-  wire  ioBus_io_sclk; // @[Core.scala 20:21]
-  wire  ioBus_io_mosi; // @[Core.scala 20:21]
-  wire  ioBus_io_miso; // @[Core.scala 20:21]
+  wire [7:0] alu_io_command; // @[Core.scala 18:19]
+  wire [31:0] alu_io_a; // @[Core.scala 18:19]
+  wire [31:0] alu_io_b; // @[Core.scala 18:19]
+  wire  alu_io_zero; // @[Core.scala 18:19]
+  wire [31:0] alu_io_out; // @[Core.scala 18:19]
+  wire  ioBus_clock; // @[Core.scala 19:21]
+  wire  ioBus_reset; // @[Core.scala 19:21]
+  wire [31:0] ioBus_io_devId; // @[Core.scala 19:21]
+  wire  ioBus_io_din_ready; // @[Core.scala 19:21]
+  wire  ioBus_io_din_valid; // @[Core.scala 19:21]
+  wire [7:0] ioBus_io_din_bits; // @[Core.scala 19:21]
+  wire  ioBus_io_dout_ready; // @[Core.scala 19:21]
+  wire  ioBus_io_dout_valid; // @[Core.scala 19:21]
+  wire [7:0] ioBus_io_dout_bits; // @[Core.scala 19:21]
+  wire  ioBus_io_tx; // @[Core.scala 19:21]
+  wire  ioBus_io_rx; // @[Core.scala 19:21]
+  wire  ioBus_io_sclk; // @[Core.scala 19:21]
+  wire  ioBus_io_mosi; // @[Core.scala 19:21]
+  wire  ioBus_io_miso; // @[Core.scala 19:21]
+  wire [7:0] ioBus_io_gpio; // @[Core.scala 19:21]
   reg [7:0] imem [0:6143]; // @[Core.scala 28:32]
   wire  imem_instr_MPORT_en; // @[Core.scala 28:32]
   wire [12:0] imem_instr_MPORT_addr; // @[Core.scala 28:32]
@@ -1075,9 +1170,6 @@ module Core(
   wire  regfile_ioBus_io_dout_bits_MPORT_en; // @[Core.scala 37:27]
   wire [4:0] regfile_ioBus_io_dout_bits_MPORT_addr; // @[Core.scala 37:27]
   wire [31:0] regfile_ioBus_io_dout_bits_MPORT_data; // @[Core.scala 37:27]
-  wire  regfile_io_led_MPORT_en; // @[Core.scala 37:27]
-  wire [4:0] regfile_io_led_MPORT_addr; // @[Core.scala 37:27]
-  wire [31:0] regfile_io_led_MPORT_data; // @[Core.scala 37:27]
   wire [31:0] regfile_MPORT_8_data; // @[Core.scala 37:27]
   wire [4:0] regfile_MPORT_8_addr; // @[Core.scala 37:27]
   wire  regfile_MPORT_8_mask; // @[Core.scala 37:27]
@@ -1197,14 +1289,14 @@ module Core(
   wire [31:0] _T_78 = _pc_next_T_26 ? _T_27 : _T_77; // @[Mux.scala 101:16]
   wire [31:0] _T_79 = _pc_next_T_9 ? _T_27 : _T_78; // @[Mux.scala 101:16]
   wire [31:0] _T_80 = _pc_next_T_2 ? _T_27 : _T_79; // @[Mux.scala 101:16]
-  Alu alu ( // @[Core.scala 19:19]
+  Alu alu ( // @[Core.scala 18:19]
     .io_command(alu_io_command),
     .io_a(alu_io_a),
     .io_b(alu_io_b),
     .io_zero(alu_io_zero),
     .io_out(alu_io_out)
   );
-  IOBus ioBus ( // @[Core.scala 20:21]
+  IOBus ioBus ( // @[Core.scala 19:21]
     .clock(ioBus_clock),
     .reset(ioBus_reset),
     .io_devId(ioBus_io_devId),
@@ -1218,7 +1310,8 @@ module Core(
     .io_rx(ioBus_io_rx),
     .io_sclk(ioBus_io_sclk),
     .io_mosi(ioBus_io_mosi),
-    .io_miso(ioBus_io_miso)
+    .io_miso(ioBus_io_miso),
+    .io_gpio(ioBus_io_gpio)
   );
   assign imem_instr_MPORT_en = imem_instr_MPORT_en_pipe_0;
   assign imem_instr_MPORT_addr = imem_instr_MPORT_addr_pipe_0;
@@ -1359,17 +1452,14 @@ module Core(
   assign regfile_ioBus_io_dout_bits_MPORT_en = 1'h1;
   assign regfile_ioBus_io_dout_bits_MPORT_addr = instr[12:8];
   assign regfile_ioBus_io_dout_bits_MPORT_data = regfile[regfile_ioBus_io_dout_bits_MPORT_addr]; // @[Core.scala 37:27]
-  assign regfile_io_led_MPORT_en = 1'h1;
-  assign regfile_io_led_MPORT_addr = 5'h1;
-  assign regfile_io_led_MPORT_data = regfile[regfile_io_led_MPORT_addr]; // @[Core.scala 37:27]
   assign regfile_MPORT_8_data = _T_22 ? 32'h0 : _T_80;
   assign regfile_MPORT_8_addr = instr[12:8];
   assign regfile_MPORT_8_mask = 1'h1;
   assign regfile_MPORT_8_en = 1'h1;
-  assign io_tx = ioBus_io_tx; // @[Core.scala 23:9]
-  assign io_sclk = ioBus_io_sclk; // @[Core.scala 25:11]
-  assign io_mosi = ioBus_io_mosi; // @[Core.scala 26:11]
-  assign io_led = regfile_io_led_MPORT_data[5:0]; // @[Core.scala 222:30]
+  assign io_tx = ioBus_io_tx; // @[Core.scala 22:9]
+  assign io_sclk = ioBus_io_sclk; // @[Core.scala 24:11]
+  assign io_mosi = ioBus_io_mosi; // @[Core.scala 25:11]
+  assign io_gpio = ioBus_io_gpio; // @[Core.scala 26:11]
   assign alu_io_command = _command_T_2 ? 8'h1 : _command_T_54; // @[Mux.scala 101:16]
   assign alu_io_a = _command_T_8 ? regfile_alu_io_a_MPORT_1_data : _alu_io_a_T_30; // @[Mux.scala 101:16]
   assign alu_io_b = _command_T_2 ? regfile_alu_io_b_MPORT_data : _alu_io_b_T_54; // @[Mux.scala 101:16]
@@ -1379,8 +1469,8 @@ module Core(
   assign ioBus_io_din_ready = _pc_next_T_38 & _pc_next_T_1; // @[Core.scala 216:46]
   assign ioBus_io_dout_valid = _pc_next_T_38 & _pc_next_T_8; // @[Core.scala 218:47]
   assign ioBus_io_dout_bits = regfile_ioBus_io_dout_bits_MPORT_data[7:0]; // @[Core.scala 219:22]
-  assign ioBus_io_rx = io_rx; // @[Core.scala 22:15]
-  assign ioBus_io_miso = io_miso; // @[Core.scala 24:17]
+  assign ioBus_io_rx = io_rx; // @[Core.scala 21:15]
+  assign ioBus_io_miso = io_miso; // @[Core.scala 23:17]
   always @(posedge clock) begin
     imem_instr_MPORT_en_pipe_0 <= 1'h1;
     if (1'h1) begin
