@@ -46,8 +46,8 @@ class Core extends Module {
   val rs2            = Wire(UInt(5.W))
   val rs2_s          = Wire(UInt(5.W))
   val imm            = Wire(UInt(32.W))
-  val imm_r          = Wire(UInt(25.W))
-  val imm_r_sext     = Wire(UInt(32.W))
+  val imm_b          = Wire(UInt(25.W))
+  val imm_b_sext     = Wire(UInt(32.W))
 
   val dmem_raw       = Wire(UInt(32.W))
   val load_ready     = RegInit(false.B)
@@ -62,10 +62,10 @@ class Core extends Module {
   // ↓↓↓ クリティカルパスはここ ↓↓↓↓
   // 命令読み出し -> pc との加算 -> 次のpcの選択
   pc_next := MuxCase(pc_next_plus_6, Seq(
-    (opcode === 3.U(5.W) && opcode_sub === 0.U(3.W) && alu.io.zero === true.B)  -> (pc + imm_r_sext),                                 //beq
-    (opcode === 3.U(5.W) && opcode_sub === 1.U(3.W) && alu.io.zero === false.B) -> (pc + imm_r_sext),                                 //bne
-    (opcode === 3.U(5.W) && opcode_sub === 3.U(3.W) && (alu.io.out(31) === 1.U(1.W) || alu.io.zero === true.B)) -> (pc + imm_r_sext), //ble
-    (opcode === 3.U(5.W) && opcode_sub === 2.U(3.W) && alu.io.out(31) === 1.U(1.W))  -> (pc + imm_r_sext),                            //blt
+    (opcode === 3.U(5.W) && opcode_sub === 0.U(3.W) && alu.io.zero === true.B)  -> (pc + imm_b_sext),                                 //beq
+    (opcode === 3.U(5.W) && opcode_sub === 1.U(3.W) && alu.io.zero === false.B) -> (pc + imm_b_sext),                                 //bne
+    (opcode === 3.U(5.W) && opcode_sub === 3.U(3.W) && (alu.io.out(31) === 1.U(1.W) || alu.io.zero === true.B)) -> (pc + imm_b_sext), //ble
+    (opcode === 3.U(5.W) && opcode_sub === 2.U(3.W) && alu.io.out(31) === 1.U(1.W))  -> (pc + imm_b_sext),                            //blt
     (opcode === 3.U(5.W) && opcode_sub === 4.U(3.W)) -> (alu.io.out),                                                                 //jal
     
     (opcode === 4.U(5.W) && !load_ready) -> (pc),                                                                                     // load命令は同期読み出しのために1サイクル待つ
@@ -87,8 +87,8 @@ class Core extends Module {
   rs2        := instr(22, 18)
   rs2_s      := instr(12,  8)
   imm        := instr(47, 16)
-  imm_r      := instr(47, 23)
-  imm_r_sext := Cat(Fill(7, imm_r(24)), imm_r)
+  imm_b      := instr(47, 23)
+  imm_b_sext := Cat(Fill(7, imm_b(24)), imm_b)
 
   // ALUに発行するコマンド
   command := MuxCase(0.U(8.W), Seq(
@@ -235,12 +235,12 @@ class Core extends Module {
   printf(p"regfile(rs1): 0x${Hexadecimal(regfile(rs1))}\n")
   printf(p"regfile(rs2): 0x${Hexadecimal(regfile(rs2))}\n")
   printf(p"imm         : 0x${Hexadecimal(imm)}\n")
-  printf(p"imm_r_sext  : 0x${Hexadecimal(imm_r_sext)}\n")
+  printf(p"imm_b_sext  : 0x${Hexadecimal(imm_b_sext)}\n")
   printf(p"command     : 0x${Hexadecimal(command)}\n")
   printf(p"alu.io.a    : 0x${Hexadecimal(alu.io.a)}\n")
   printf(p"alu.io.b    : 0x${Hexadecimal(alu.io.b)}\n")
   printf(p"alu.io.out  : 0x${Hexadecimal(alu.io.out)}\n")
-  printf(p"pc+sext(imm): 0x${Hexadecimal(pc+imm_r_sext)}\n")
+  printf(p"pc+sext(imm): 0x${Hexadecimal(pc+imm_b_sext)}\n")
   printf(p"zero        : 0x${Hexadecimal(alu.io.zero)}\n")
   for (i <- 0 to 31) {
     printf(p"regfile($i)  : 0x${Hexadecimal(regfile(i.U))}\n")
