@@ -1,3 +1,7 @@
+// Data None
+
+===
+
 // Gpio:Init
 addi r1 = r0, 0
 out r0[4] = r1
@@ -29,5 +33,5 @@ out r0[4] = r1
 
 // Loop
 addi r2 = r2, 1
-beq r0, (r2, r3) -> setup
-beq r0, (r0, r0) -> loop
+beq r0, (r2, r3) -> @setup
+beq r0, (r0, r0) -> @loop
