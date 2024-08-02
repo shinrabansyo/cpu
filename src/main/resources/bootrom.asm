@@ -1,4 +1,14 @@
 // Data None
+// byte1 0x41, 0x42, 0x43, 0x44, 0x45, 0x46
+// byte2 0x0102, 0x0304
+// byte4 0xdeadbeef
+// byte6 0xc0ffee
+byte1 1, 2, 3, 4, 5
+byte2 11, 12, 13, 14, 15
+byte4 21, 22, 23, 24, 25
+byte6 31, 32, 33, 34, 35
+char 'g', 'h'
+string "hello", "world"
 
 ===
 
