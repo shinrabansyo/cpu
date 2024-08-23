@@ -10,7 +10,7 @@ module BindsTo_1_Core(
 );
 
 initial begin
-  $readmemh("src/main/resources/dmem.hex", Core.dmem);
+  $readmemh("src/main/resources/tmp_data.hex", Core.dmem);
 end
                       endmodule
 

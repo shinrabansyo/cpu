@@ -10,7 +10,7 @@ module BindsTo_0_Core(
 );
 
 initial begin
-  $readmemh("src/main/resources/bootrom.hex", Core.imem);
+  $readmemh("src/main/resources/tmp_inst.hex", Core.imem);
 end
                       endmodule
 

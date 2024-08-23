@@ -26,9 +26,9 @@ class Core extends Module {
   io.gpio := ioBus.io.gpio
 
   val imem        = SyncReadMem(1024 * 6, UInt(8.W))
-  loadMemoryFromFile(imem, "src/main/resources/bootrom.hex")
+  loadMemoryFromFile(imem, "src/main/resources/tmp_inst.hex")
   val dmem        = SyncReadMem(1024 * 4, UInt(8.W))
-  loadMemoryFromFile(dmem, "src/main/resources/dmem.hex")
+  loadMemoryFromFile(dmem, "src/main/resources/tmp_data.hex")
 
   val first_time     = RegInit(true.B)
   val pc             = RegInit(0.U(32.W))
