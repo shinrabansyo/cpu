@@ -11,63 +11,63 @@
 // string "hello", "world"
 
 $str
-string "abc"
+string "cba"
 
 ===
 
 @func_main
 
-// Call:init
-addi r4 = r0, @func_init
-jal r5, r4[0] 
+    // Call:init
+    addi r4 = r0, @func_init        // 0x00
+    jal r5, r4[0]                   // 0x06
 
-// Loop:Setup
-@setup
-addi r2 = r0, $str
+    // Loop:Setup
+    @setup
+    addi r2 = r0, $str              // 0x0c
 
-// Call:send_spi
-@call
-addi r4 = r0, @func_spi_send
-jal r5, r4[0] 
+    // Call:send_spi
+    @call
+    addi r4 = r0, @func_spi_send    // 0x12
+    jal r5, r4[0]                   // 0x18
 
-// Increment
-addi r2 = r2, 1
+    // Increment
+    addi r2 = r2, 1                 // 0x1e
 
-// Check
-lb r3 = r2[0]
-beq r0, (r3, r0) -> @call
-beq r0, (r0, r0) -> @setup
+    // Check
+    lb r3 = r2[0]                   // 0x24
+    bne r0, (r3, r0) -> @call       // 0x2a if r3 != 0 : jmp -> call
+    beq r0, (r0, r0) -> @setup      // 0x30 else       : jmp -> setup
 
 @func_init
 
-// Gpio:Init
-addi r1 = r0, 0
-out r0[4] = r1
+    // Gpio:Init
+    addi r1 = r0, 0                 // 0x36
+    out r0[4] = r1                  // 0x3c
+  
+    // Spi:Mode
+    addi r1 = r0, 3                 // 0x42
+    out r0[2] = r1                  // 0x48
 
-// Spi:Mode
-addi r1 = r0, 3
-out r0[2] = r1
+    // Spi:Clockshamt 
+    addi r1 = r0, 4                 // 0x4e
+    out r0[3] = r1                  // 0x54
 
-// Spi:Clockshamt
-addi r1 = r0, 4
-out r0[3] = r1
-
-// Return
-jal r0, r5[0]
+    // Return
+    jal r0, r5[0]                   // 0x5a
 
 @func_spi_send
 
-// Spi:CS
-addi r1 = r0, 1
-out r0[4] = r1
+    // Spi:CS
+    addi r1 = r0, 1                 // 0x60
+    out r0[4] = r1                  // 0x66
 
-// Spi:Send
-lb r3 = r2[0]
-out r0[1] = r3
+    // Spi:Send
+    lb r3 = r2[0]                   // 0x6c
+    out r0[1] = r3                  // 0x72
 
-// Spi:CS
-addi r1 = r0, 0
-out r0[4] = r1
+    // Spi:CS
+    addi r1 = r0, 0                 // 0x78
+    out r0[4] = r1                  // 0x7c
 
-// Return
-jal r0, r5[0]
+    // Return
+    jal r0, r5[0]                   // 0x84
