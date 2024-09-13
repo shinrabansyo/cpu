@@ -11,63 +11,68 @@
 // string "hello", "world"
 
 $str
-string "cba"
+string "abc"
 
 ===
 
+// void main(void)
 @func_main
 
     // Call:init
-    addi r4 = r0, @func_init        // 0x00
-    jal r5, r4[0]                   // 0x06
+    addi r4 = r0, @func_init
+    jal r1, r4[0]                   // func_init()
 
     // Loop:Setup
     @setup
-    addi r2 = r0, $str              // 0x0c
+    addi r5 = r0, $str              // r5 = $str
 
     // Call:send_spi
     @call
-    addi r4 = r0, @func_spi_send    // 0x12
-    jal r5, r4[0]                   // 0x18
+    add r10 = r5, r0
+    addi r4 = r0, @func_spi_send
+    jal r1, r4[0]                   // func_spi_send(r5)
 
     // Increment
-    addi r2 = r2, 1                 // 0x1e
+    addi r5 = r5, 1                 // r5++
 
     // Check
-    lb r3 = r2[0]                   // 0x24
-    bne r0, (r3, r0) -> @call       // 0x2a if r3 != 0 : jmp -> call
-    beq r0, (r0, r0) -> @setup      // 0x30 else       : jmp -> setup
+    lb r6 = r5[0]
+    bne r0, (r6, r0) -> @call       // if *r5 != 0 : jmp -> call
+    beq r0, (r0, r0) -> @setup      // else        : jmp -> setup
 
+// void init(void)
 @func_init
 
     // Gpio:Init
-    addi r1 = r0, 0                 // 0x36
-    out r0[4] = r1                  // 0x3c
+    addi r4 = r0, 0
+    out r0[4] = r4                  // CS = 0
   
     // Spi:Mode
-    addi r1 = r0, 3                 // 0x42
-    out r0[2] = r1                  // 0x48
+    addi r4 = r0, 3
+    out r0[2] = r4                  // Mode = 3
 
     // Spi:Clockshamt 
-    addi r1 = r0, 4                 // 0x4e
-    out r0[3] = r1                  // 0x54
+    addi r4 = r0, 4
+    out r0[3] = r4                  // Clockshamt = 4
 
     // Return
-    jal r0, r5[0]                   // 0x5a
+    jal r0, r1[0]                   // return
 
+// void spi_send(char *c)
 @func_spi_send
 
     // Spi:CS
-    addi r1 = r0, 1                 // 0x60
-    out r0[4] = r1                  // 0x66
+    addi r4 = r0, 1
+    out r0[4] = r4                  // CS = 1
 
     // Spi:Send
-    lb r3 = r2[0]                   // 0x6c
-    out r0[1] = r3                  // 0x72
+    add r4 = r0, r10
+    lb r4 = r4[0]
+    out r0[1] = r4                  // Send = args[0]
 
     // Spi:CS
-    addi r1 = r0, 0                 // 0x78
-    out r0[4] = r1                  // 0x7c
+    addi r4 = r0, 0
+    out r0[4] = r4                  // CS = 0
 
     // Return
-    jal r0, r5[0]                   // 0x84
+    jal r0, r1[0]                   // return
