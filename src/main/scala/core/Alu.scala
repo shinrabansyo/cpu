@@ -19,5 +19,11 @@ class Alu extends Module {
   io.out := MuxCase(0.U(32.W), Seq(
     (io.command === 1.U(8.W)) -> (io.a + io.b),
     (io.command === 2.U(8.W)) -> (io.a - io.b),
+    (io.command === 3.U(8.W)) -> (io.a & io.b),         // and
+    (io.command === 4.U(8.W)) -> (io.a | io.b),         // or
+    (io.command === 5.U(8.W)) -> (io.a ^ io.b),         // xor
+    (io.command === 6.U(8.W)) -> (io.a >> io.b),        // 右論理シフト
+    (io.command === 7.U(8.W)) -> (io.a.asSInt >> io.b), // 右算術シフト
+    (io.command === 8.U(8.W)) -> (io.a << io.b),        // 左論理シフト
   ))
 }
