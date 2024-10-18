@@ -18,61 +18,33 @@ string "abc"
 // void main(void)
 @func_main
 
-    // Call:init
-    addi r4 = r0, @func_init
-    jal r1, r4[0]                   // func_init()
+    @loop_func_main
 
-    // Loop:Setup
-    @setup
-    addi r5 = r0, $str              // r5 = $str
+        // Call:init
+        beq r1, (r0, r0) -> @func_get_freq
 
-    // Call:send_spi
-    @call
-    add r10 = r5, r0
-    addi r4 = r0, @func_spi_send
-    jal r1, r4[0]                   // func_spi_send(r5)
+        // Loop
+        beq r0, (r0, r0) -> @loop_func_main
 
-    // Increment
-    addi r5 = r5, 1                 // r5++
 
-    // Check
-    lb r6 = r5[0]
-    bne r0, (r6, r0) -> @call       // if *r5 != 0 : jmp -> call
-    beq r0, (r0, r0) -> @setup      // else        : jmp -> setup
+// uint_32 get_count(void)
+@func_get_count
 
-// void init(void)
-@func_init
-
-    // Gpio:Init
-    addi r4 = r0, 0
-    out r0[4] = r4                  // CS = 0
-  
-    // Spi:Mode
-    addi r4 = r0, 3
-    out r0[2] = r4                  // Mode = 3
-
-    // Spi:Clockshamt 
-    addi r4 = r0, 4
-    out r0[3] = r4                  // Clockshamt = 4
+    // In:Device(0x1000)
+    addi r4 = r0, 0x1000
+    in r5 = r4[0]
 
     // Return
-    jal r0, r1[0]                   // return
+    add r10 = r0, r5
+    jal r0, r1[0]
 
-// void spi_send(char *c)
-@func_spi_send
 
-    // Spi:CS
-    addi r4 = r0, 1
-    out r0[4] = r4                  // CS = 1
-
-    // Spi:Send
-    add r4 = r0, r10
-    lb r4 = r4[0]
-    out r0[1] = r4                  // Send = args[0]
-
-    // Spi:CS
-    addi r4 = r0, 0
-    out r0[4] = r4                  // CS = 0
+// uint32 get_freq(void)
+@func_get_freq
+// In:Device(0x1002)
+    addi r4 = r0, 0x1002
+    in r5 = r4[0]
 
     // Return
-    jal r0, r1[0]                   // return
+    add r10 = r0, r5
+    jal r0, r1[0]

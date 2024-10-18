@@ -6,8 +6,8 @@ import chisel3.util._
 class IOBus extends Module {
   val io = IO(new Bundle {
     val devId   = Input(UInt(32.W))
-    val din     = Decoupled(UInt(8.W))
-    val dout    = Flipped(Decoupled(UInt(8.W)))
+    val din     = Decoupled(UInt(32.W))
+    val dout    = Flipped(Decoupled(UInt(32.W)))
 
     val tx      = Output(Bool())
     val rx      = Input(Bool())
@@ -16,29 +16,37 @@ class IOBus extends Module {
     val mosi    = Output(Bool())
     val miso    = Input(Bool())
 
-    val gpio    = Output(UInt(8.W))                    // 暫定
+    val gpio    = Output(UInt(8.W))                     // 暫定
   })
 
-  val uartTx = Module(new UartTx(20250000, 9600))
-  val uartRx = Module(new UartRx(20250000, 9600, 2))
-  val spi    = Module(new Spi(20250000))
-  val gpio   = Module(new GeneralPurposeOutput())       // 暫定
+  val CLOCK_FREQ = 20250000
+
+  val uartTx  = Module(new UartTx(CLOCK_FREQ, 9600))
+  val uartRx  = Module(new UartRx(CLOCK_FREQ, 9600, 2))
+  val spi     = Module(new Spi(CLOCK_FREQ))
+  val gpio    = Module(new GeneralPurposeOutput())       // 暫定
+  val counter = Module(new ClkCounter(CLOCK_FREQ))
 
   val isUart       = Wire(Bool())
   val isSpiData    = Wire(Bool())
   val isSpiMode    = Wire(Bool())
   val isSpiCshamt  = Wire(Bool())
   val isGpio       = Wire(Bool())
+  val isClkCountL  = Wire(Bool())
+  val isClkCountU  = Wire(Bool())
+  val isClkFreq    = Wire(Bool()) 
 
   val isOutInstr   = Wire(Bool())
   val isInInstr    = Wire(Bool())
 
-
-  isUart       := (io.devId === 0.U)
-  isSpiData    := (io.devId === 1.U)
-  isSpiMode    := (io.devId === 2.U)
-  isSpiCshamt  := (io.devId === 3.U)
-  isGpio       := (io.devId === 4.U)
+  isUart       := (io.devId === 0x0000.U)
+  isSpiData    := (io.devId === 0x0001.U)
+  isSpiMode    := (io.devId === 0x0002.U)
+  isSpiCshamt  := (io.devId === 0x0003.U)
+  isGpio       := (io.devId === 0x0004.U)
+  isClkCountL  := (io.devId === 0x1000.U)
+  isClkCountU  := (io.devId === 0x1001.U)
+  isClkFreq    := (io.devId === 0x1002.U)
   
   ///////////// in / out instr //////////////
   
@@ -57,11 +65,15 @@ class IOBus extends Module {
       (isUart)      -> uartRx.io.dout.valid,
       (isSpiData)   -> spi.io.dout.valid,
     ))
+    // ※ 8bit 幅の値は 32bit 幅に拡張する
     io.din.bits := MuxCase(0.U, Seq(
       (isUart)    -> uartRx.io.dout.bits,
       (isSpiData) -> spi.io.dout.bits,
       (isSpiMode)   -> spi.io.spiModeO,
       (isSpiCshamt) -> spi.io.clkshamtO,
+      (isClkCountL) -> counter.io.clkCount(31, 0),
+      (isClkCountU) -> counter.io.clkCount(63, 32),
+      (isClkFreq)   -> counter.io.clkFreq,
     ))
 
     when (isUart) {
