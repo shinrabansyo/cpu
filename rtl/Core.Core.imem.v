@@ -6,7 +6,7 @@ module BindsTo_0_Core(
   output       io_sclk,
   output       io_mosi,
   input        io_miso,
-  output [7:0] io_gpio
+  output [7:0] io_gpout
 );
 
 initial begin
