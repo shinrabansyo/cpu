@@ -12,7 +12,7 @@ class Core extends Module {
     val sclk    = Output(Bool())
     val mosi    = Output(Bool())
     val miso    = Input(Bool())
-    val gpio    = Output(UInt(8.W))                    // 暫定
+    val gpout   = Output(UInt(8.W))                    // 暫定
   })
 
   val alu = Module(new Alu)
@@ -23,7 +23,7 @@ class Core extends Module {
   ioBus.io.miso := io.miso
   io.sclk := ioBus.io.sclk
   io.mosi := ioBus.io.mosi
-  io.gpio := ioBus.io.gpio
+  io.gpout := ioBus.io.gpout
 
   val imem        = SyncReadMem(1024 * 6, UInt(8.W))
   loadMemoryFromFile(imem, "src/main/resources/tmp_inst.hex")
