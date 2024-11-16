@@ -35,6 +35,8 @@ class IOBus extends Module {
   val isClkCountL  = Wire(Bool())
   val isClkCountU  = Wire(Bool())
   val isClkFreq    = Wire(Bool()) 
+  val isMsCountL   = Wire(Bool())
+  val isMsCountU   = Wire(Bool())
 
   val isOutInstr   = Wire(Bool())
   val isInInstr    = Wire(Bool())
@@ -47,6 +49,8 @@ class IOBus extends Module {
   isClkCountL  := (io.devId === 0x1000.U)
   isClkCountU  := (io.devId === 0x1001.U)
   isClkFreq    := (io.devId === 0x1002.U)
+  isMsCountL   := (io.devId === 0x1003.U)
+  isMsCountU   := (io.devId === 0x1004.U)
   
   ///////////// in / out instr //////////////
   
@@ -75,7 +79,8 @@ class IOBus extends Module {
       (isClkCountL) -> counter.io.clkCount(31, 0),
       (isClkCountU) -> counter.io.clkCount(63, 32),
       (isClkFreq)   -> counter.io.clkFreq,
-      
+      (isMsCountL)  -> counter.io.msCount(31, 0),
+      (isMsCountU)  -> counter.io.msCount(63, 32),
     ))
 
     when (isUart) {
