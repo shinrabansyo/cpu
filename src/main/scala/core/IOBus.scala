@@ -19,7 +19,8 @@ class IOBus extends Module {
     val gpout   = Output(UInt(8.W))                     // 暫定
   })
 
-  val CLOCK_FREQ = 20250000
+  // val CLOCK_FREQ = 20250000  // 20.25Mhz
+  val CLOCK_FREQ = 15000000  // 15Mhz
 
   val uartTx  = Module(new UartTx(CLOCK_FREQ, 9600))
   val uartRx  = Module(new UartRx(CLOCK_FREQ, 9600, 2))

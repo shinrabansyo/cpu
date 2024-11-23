@@ -43,7 +43,8 @@ class Core extends Module {
   val pc             = RegInit(0.U(32.W))
   val pc_next_plus_6 = RegInit(0.U(32.W))
   val pc_next        = Wire(UInt(32.W))
-  val regfile        = Mem(32, UInt(32.W))
+  val regfile        = RegInit(VecInit(Seq.tabulate(32) {i => 0.U(32.W)}))
+  // val regfile        = Mem(32, UInt(32.W))
 
   val instr          = Wire(UInt(48.W))
   val opcode         = Wire(UInt(5.W))
