@@ -34,9 +34,9 @@ class Core() extends Module {
 
   // メモリモジュール作成（命令 / データ）
   val imem        = SyncReadMem(1024 * 6, UInt(8.W))
-  loadMemoryFromFileInline(imem, "src/main/resources/tmp_inst.hex")
+  loadMemoryFromFileInline(imem, "./program/tmp_inst.hex")
   val dmem        = SyncReadMem(1024 * 4, UInt(8.W))
-  loadMemoryFromFileInline(dmem, "src/main/resources/tmp_data.hex")
+  loadMemoryFromFileInline(dmem, "./program/tmp_data.hex")
 
   // レジスタやワイヤの宣言
   val first_time     = RegInit(true.B)
@@ -68,7 +68,7 @@ class Core() extends Module {
   first_time := false.B
 
   pc_next_plus_6 := pc_next + 6.U
-  
+
   // ↓↓↓ クリティカルパスはここ ↓↓↓↓
   // 命令読み出し -> pc との加算 -> 次のpcの選択
   pc_next := MuxCase(pc_next_plus_6, Seq(
@@ -77,7 +77,7 @@ class Core() extends Module {
     (opcode === 3.U(5.W) && opcode_sub === 3.U(3.W) && (alu.io.out(31) === 1.U(1.W) || alu.io.zero === true.B)) -> (pc + imm_b_sext), // ble
     (opcode === 3.U(5.W) && opcode_sub === 2.U(3.W) && alu.io.out(31) === 1.U(1.W))  -> (pc + imm_b_sext),                            // blt
     (opcode === 3.U(5.W) && opcode_sub === 4.U(3.W)) -> (alu.io.out),                                                                 // jal
-    
+
     (opcode === 4.U(5.W) && !load_ready) -> (pc),                                                                                     // load命令は同期読み出しのために1サイクル待つ
 
     (opcode === 6.U(5.W) && opcode_sub === 0.U(3.W) && !ioBus.io.din.valid)  -> (pc),                                                 // in命令でデータ準備が出来ていない場合はストール
@@ -166,7 +166,7 @@ class Core() extends Module {
     (opcode === 6.U(5.W)) -> (imm),                                       // in, out
     (opcode === 7.U(5.W)) -> (regfile(rs2)),                              // and, or, xor, srl, sra, sll
     (opcode === 8.U(5.W)) -> (imm),                                       // andi, ori, xori, srli, srai, slli
-  )) 
+  ))
 
   // Memory部（データメモリ読み書き）
   // 書き
@@ -185,11 +185,11 @@ class Core() extends Module {
   // 読み
   dmem_read_data := Cat(
     (0 until 4).map(i => dmem.read(alu.io.out + i.U)).reverse
-  ) 
+  )
 
   // ※load 命令は同期読み出しのために1サイクル待つ
   load_ready := false.B
-  when((opcode === 4.U(5.W)) && !load_ready) {  
+  when((opcode === 4.U(5.W)) && !load_ready) {
     load_ready := true.B
   }
 

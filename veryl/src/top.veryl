@@ -1,0 +1,37 @@
+embed (inline) sv{{{
+    module top();
+        logic clock;
+        logic reset;
+        logic io_tx;
+        logic io_rx;
+        logic io_sclk;
+        logic io_mosi;
+        logic io_miso;
+        logic [7:0] io_gpout;
+
+        Core core(.*);
+
+        initial begin
+            $dumpfile("wave.vcd");
+            $dumpvars(0);
+
+            clock = 0;
+            reset = 1;
+            io_rx = 0;
+            io_miso = 0;
+
+            @(posedge clock);
+            @(posedge clock);
+            @(posedge clock);
+            reset = 0;
+
+            #1000000;
+            $finish;
+        end
+
+        always #(5) begin
+            clock <= ~clock;
+        end
+
+    endmodule
+}}}
