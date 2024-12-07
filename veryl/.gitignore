@@ -1,0 +1,4 @@
+dependencies/
+target/
+*.f
+*.sv

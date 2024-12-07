@@ -1,0 +1,5 @@
+module Core {
+    initial {
+        $display("Hello, world!");
+    }
+}

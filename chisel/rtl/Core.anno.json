@@ -1,7 +1,7 @@
 [
   {
-    "class":"firrtl.EmitCircuitAnnotation",
-    "emitter":"firrtl.VerilogEmitter"
+    "class":"firrtl.EmitAllModulesAnnotation",
+    "emitter":"firrtl.SystemVerilogEmitter"
   },
   {
     "class":"firrtl.transforms.BlackBoxTargetDirAnno",
