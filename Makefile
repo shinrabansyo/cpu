@@ -10,4 +10,8 @@ verilog_chisel:
 verilog_veryl:
 	cd veryl && veryl build
 
-.PHONY: verilog verilog_chisel verilog_veryl
+test: verilog
+	verilator -threads `nproc` -j `nproc` --binary target/*.sv
+	obj_dir/VAlu
+
+.PHONY: verilog verilog_chisel verilog_veryl test
