@@ -3,9 +3,12 @@ name: Continuous Integration
 on: [push, pull_request]
 
 jobs:
-  ci:
-    name: ci
+  chisel-ci:
+    name: chisel-ci
     runs-on: ubuntu-latest
+    defaults:
+      run:
+        working-directory: chisel
     steps:
       - name: Checkout
         uses: actions/checkout@v2
