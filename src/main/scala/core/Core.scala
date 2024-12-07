@@ -2,9 +2,9 @@ package core
 
 import chisel3._
 import chisel3.util._
-import chisel3.util.experimental.loadMemoryFromFile
+import chisel3.util.experimental.loadMemoryFromFileInline
 
-class Core extends Module {
+class Core() extends Module {
   val io = IO(new Bundle {
     // UART
     val tx      = Output(Bool())
@@ -34,17 +34,17 @@ class Core extends Module {
 
   // メモリモジュール作成（命令 / データ）
   val imem        = SyncReadMem(1024 * 6, UInt(8.W))
-  loadMemoryFromFile(imem, "src/main/resources/tmp_inst.hex")
+  loadMemoryFromFileInline(imem, "src/main/resources/tmp_inst.hex")
   val dmem        = SyncReadMem(1024 * 4, UInt(8.W))
-  loadMemoryFromFile(dmem, "src/main/resources/tmp_data.hex")
+  loadMemoryFromFileInline(dmem, "src/main/resources/tmp_data.hex")
 
   // レジスタやワイヤの宣言
   val first_time     = RegInit(true.B)
   val pc             = RegInit(0.U(32.W))
   val pc_next_plus_6 = RegInit(0.U(32.W))
   val pc_next        = Wire(UInt(32.W))
-  val regfile        = RegInit(VecInit(Seq.tabulate(32) {i => 0.U(32.W)}))
-  // val regfile        = Mem(32, UInt(32.W))
+  // val regfile        = RegInit(VecInit(Seq.tabulate(32) {i => 0.U(32.W)}))
+  val regfile        = Mem(32, UInt(32.W))
 
   val instr          = Wire(UInt(48.W))
   val opcode         = Wire(UInt(5.W))

@@ -21,7 +21,7 @@ class TopTest extends AnyFlatSpec with ChiselScalatestTester {
           c.clock.step(1)
         }
       } }
-      (new ChiselStage).emitVerilog(new Core, Array(
+      (new ChiselStage).emitVerilog(new Core(), Array(
         "-o", "core.v",
         "--target-dir", "rtl/",
       ))
