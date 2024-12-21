@@ -1,0 +1,19 @@
+interface Decoupled #(
+    param Width: u32 = 32,
+) {
+    var valid: logic<1>    ;
+    var ready: logic<1>    ;
+    var bits : logic<Width>;
+
+    modport sender {
+        valid: output,
+        ready: input ,
+        bits : output,
+    }
+
+    modport receiver {
+        valid: input ,
+        ready: output,
+        bits : input ,
+    }
+}

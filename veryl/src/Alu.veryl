@@ -1,0 +1,23 @@
+module Alu (
+    i_command: input  logic<8> ,
+    i_a      : input  logic<32>,
+    i_b      : input  logic<32>,
+    o_zero   : output logic<1> ,
+    o_out    : output logic<32>,
+) {
+    // ゼロフラグ
+    assign o_zero = (o_out == 32'b0);
+
+    // 計算
+    assign o_out = case i_command {
+        8'h1   : i_a + i_b,
+        8'h2   : i_a - i_b,
+        8'h3   : i_a & i_b,
+        8'h4   : i_a | i_b,
+        8'h5   : i_a ^ i_b,
+        8'h6   : i_a >> i_b[4:0],
+        8'h6   : i_a >>> i_b[4:0],
+        8'h8   : i_a << i_b[4:0],
+        default: 32'b0,
+    };
+}

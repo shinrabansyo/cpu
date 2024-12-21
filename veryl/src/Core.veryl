@@ -1,0 +1,243 @@
+// module 宣言
+// io宣言
+module Core (
+    // クロック・リセット
+    i_clk: input clock,
+    i_rst: input reset,
+
+    // UART
+    o_tx: output logic<1>,
+    i_rx: input  logic<1>,
+
+    // SPI
+    o_sclk: output logic<1>,
+    o_mosi: output logic<1>,
+    i_miso: input  logic<1>,
+
+    // GPIO
+    o_gpout: output logic<8>,
+) {
+    // ワイヤ・インタフェース宣言
+    // IOBus
+    var i_dev_id: logic<32>;
+
+    inst if_io_bus_din : Decoupled;
+    inst if_io_bus_dout: Decoupled;
+
+    // ALU
+    var w_command: logic<8> ;
+    var w_a      : logic<32>;
+    var w_b      : logic<32>;
+    var w_zero   : logic<1> ;
+    var w_out    : logic<32>;
+
+    // IOBus
+
+    inst io_bus: IOBus (
+        i_clk                   ,
+        i_rst                   ,
+        i_dev_id                ,
+        if_din  : if_io_bus_din ,
+        if_dout : if_io_bus_dout,
+        o_tx                    ,
+        i_rx                    ,
+        o_sclk                  ,
+        o_mosi                  ,
+        i_miso                  ,
+        o_gpout                 ,
+    );
+
+    // メモリ
+    var m_regfile: logic<32> [32]      ;
+    var m_inst   : logic<8>  [6 * 1024];
+    var m_data   : logic<8>  [4 * 1024];
+
+    initial {
+        $readmemh("./program/tmp_inst.hex", m_inst);
+        $readmemh("./program/tmp_data.hex", m_data);
+    }
+
+    // 命令フェッチ
+    var r_pc: logic<32>;
+
+    let w_instr_raw: logic<48> = m_inst[r_pc];
+
+    always_ff (i_clk, i_rst) {
+        if_reset {
+            r_pc = 32'h0;
+        } else {
+            r_pc += 32'h6;
+        }
+    }
+
+    // 命令デコード
+    struct Instructure {
+        opcode    : logic<5> ,
+        opcode_sub: logic<3> ,
+        rd        : logic<5> ,
+        rs1       : logic<5> ,
+        rs1_i     : logic<5> ,
+        rs1_s     : logic<5> ,
+        rs2       : logic<5> ,
+        rs2_s     : logic<5> ,
+        imm       : logic<32>,
+        imm_b     : logic<32>,
+        imm_b_sext: logic<32>,
+    }
+
+    var w_instr: Instructure;
+
+    assign w_instr.opcode     = w_instr_raw[4:0];
+    assign w_instr.opcode_sub = w_instr_raw[7:5];
+    assign w_instr.rd         = w_instr_raw[12:8];
+    assign w_instr.rs1        = w_instr_raw[17:13];
+    assign w_instr.rs1_i      = {2'b0, w_instr_raw[15:13]};
+    assign w_instr.rs1_s      = {2'b0, w_instr_raw[15:13]};
+    assign w_instr.rs2        = w_instr_raw[22:18];
+    assign w_instr.rs2_s      = w_instr_raw[12:8];
+    assign w_instr.imm        = w_instr_raw[47:16];
+    assign w_instr.imm_b      = w_instr_raw[47:23];
+    assign w_instr.imm_b_sext = {w_instr_raw[24] repeat 7, w_instr_raw[23:0]};
+
+    // 命令実行
+    const NOP : logic<8> = (8'h0 << 5) | 8'h0;
+    const ADD : logic<8> = (8'h1 << 5) | 8'h1;
+    const SUB : logic<8> = (8'h2 << 5) | 8'h1;
+    const ADDI: logic<8> = (8'h1 << 5) | 8'h2;
+    const SUBI: logic<8> = (8'h2 << 5) | 8'h2;
+    const BEQ : logic<8> = (8'h0 << 5) | 8'h3;
+    const BNE : logic<8> = (8'h1 << 5) | 8'h3;
+    const BLT : logic<8> = (8'h2 << 5) | 8'h3;
+    const BLE : logic<8> = (8'h3 << 5) | 8'h3;
+    const JAL : logic<8> = (8'h4 << 5) | 8'h3;
+    const LW  : logic<8> = (8'h0 << 5) | 8'h4;
+    const LH  : logic<8> = (8'h1 << 5) | 8'h4;
+    const LB  : logic<8> = (8'h2 << 5) | 8'h4;
+    const LHU : logic<8> = (8'h3 << 5) | 8'h4;
+    const LBU : logic<8> = (8'h4 << 5) | 8'h4;
+    const SW  : logic<8> = (8'h0 << 5) | 8'h5;
+    const SH  : logic<8> = (8'h1 << 5) | 8'h5;
+    const SB  : logic<8> = (8'h2 << 5) | 8'h5;
+    const IN  : logic<8> = (8'h0 << 5) | 8'h6;
+    const OUT : logic<8> = (8'h1 << 5) | 8'h6;
+    const AND : logic<8> = (8'h0 << 5) | 8'h7;
+    const OR  : logic<8> = (8'h1 << 5) | 8'h7;
+    const XOR : logic<8> = (8'h2 << 5) | 8'h7;
+    const SRL : logic<8> = (8'h3 << 5) | 8'h7;
+    const SRA : logic<8> = (8'h4 << 5) | 8'h7;
+    const SLL : logic<8> = (8'h5 << 5) | 8'h7;
+    const ANDI: logic<8> = (8'h0 << 5) | 8'h8;
+    const ORI : logic<8> = (8'h1 << 5) | 8'h8;
+    const XORI: logic<8> = (8'h2 << 5) | 8'h8;
+    const SRLI: logic<8> = (8'h3 << 5) | 8'h8;
+    const SRAI: logic<8> = (8'h4 << 5) | 8'h8;
+    const SLLI: logic<8> = (8'h5 << 5) | 8'h8;
+
+    enum InstKind: logic<3> {
+        R = 3'h0,
+        I = 3'h1,
+        B = 3'h2,
+        S = 3'h3,
+        Nop = 3'h7,
+    }
+
+    let inst_kind: InstKind = case w_instr.opcode {
+        1      : InstKind::R,
+        2      : InstKind::I,
+        3      : case {w_instr.opcode_sub, w_instr.opcode} {
+            0..=3  : InstKind::B, // Branch 系
+            4      : InstKind::I, // Jump 系
+            default: InstKind::Nop,
+        },
+        4      : InstKind::I,
+        5      : InstKind::S,
+        6      : case {w_instr.opcode_sub, w_instr.opcode} {
+            0      : InstKind::I, // in
+            1      : InstKind::S, // out
+            default: InstKind::Nop,
+        },
+        7      : InstKind::R,
+        8      : InstKind::I,
+        default: InstKind::Nop,
+    };
+
+    assign w_command = case {w_instr.opcode_sub, w_instr.opcode} {
+        ADD    : 8'h1,
+        SUB    : 8'h2,
+        ADDI   : 8'h1,
+        SUBI   : 8'h2,
+        BEQ    : 8'h2,
+        BNE    : 8'h2,
+        BLT    : 8'h2,
+        BLE    : 8'h2,
+        JAL    : 8'h1,
+        LW     : 8'h1,
+        LH     : 8'h1,
+        LB     : 8'h1,
+        LHU    : 8'h1,
+        LBU    : 8'h1,
+        SW     : 8'h1,
+        SH     : 8'h1,
+        SB     : 8'h1,
+        IN     : 8'h1,
+        OUT    : 8'h1,
+        AND    : 8'h3,
+        OR     : 8'h4,
+        XOR    : 8'h5,
+        SRL    : 8'h6,
+        SRA    : 8'h7,
+        SLL    : 8'h8,
+        ANDI   : 8'h3,
+        ORI    : 8'h4,
+        XORI   : 8'h5,
+        SRLI   : 8'h6,
+        SRAI   : 8'h7,
+        SLLI   : 8'h8,
+        default: 8'h0,
+    };
+    assign w_a = case inst_kind {
+        InstKind::R: m_regfile[w_instr.rs1],
+        InstKind::I: m_regfile[w_instr.rs1_i],
+        InstKind::B: m_regfile[w_instr.rs1],
+        InstKind::S: m_regfile[w_instr.rs1_s],
+        default    : 0,
+    };
+    assign w_b = case inst_kind {
+        InstKind::R: m_regfile[w_instr.rs2],
+        InstKind::I: w_instr.imm,
+        InstKind::B: m_regfile[w_instr.rs2],
+        InstKind::S: w_instr.imm,
+        default    : 0,
+    };
+
+    inst alu: Alu (
+        i_command: w_command,
+        i_a      : w_a      ,
+        i_b      : w_b      ,
+        o_zero   : w_zero   ,
+        o_out    : w_out    ,
+    );
+
+    // TODO: メモリ読み書き
+
+    // レジスタアクセス (TODO: ロード系がまだ)
+    always_ff (i_clk, i_rst) {
+        if_reset {
+            for i: u32 in 0..32 {
+                m_regfile[i] = 32'h0;
+            }
+        } else {
+            m_regfile[w_instr.rd] = case {w_instr.opcode_sub, w_instr.opcode} {
+                BEQ, BNE, BLT, BLE, JAL: r_pc + 6,
+                SW, SH, SB             : m_regfile[w_instr.rd],
+                IN                     : if if_io_bus_dout.valid {
+                    if_io_bus_dout.bits
+                } else {
+                    m_regfile[w_instr.rd]
+                },
+                OUT    : m_regfile[w_instr.rd],
+                default: 0,
+            };
+        }
+    }
+}

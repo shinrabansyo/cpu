@@ -1,0 +1,60 @@
+module IOBus #(
+    const ClockFrequency: u32 = 15_000_000, // default 15Mhz
+    const UartBaudRate  : u32 = 115200    , // default 115200bps
+) (
+    // クロック・リセット
+    i_clk: input clock,
+    i_rst: input reset,
+
+    // デバイス制御
+    i_dev_id: input   logic              <32>,
+    if_din  : modport Decoupled::receiver    ,
+    if_dout : modport Decoupled::sender      ,
+
+    // UART
+    o_tx: output logic<1>,
+    i_rx: input  logic<1>,
+
+    // SPI
+    o_sclk: output logic<1>,
+    o_mosi: output logic<1>,
+    i_miso: input  logic<1>,
+
+    // GPIO
+    o_gpout: output logic<8>,
+) {
+    // UART
+    inst if_uart: Decoupled;
+
+    assign if_uart.bits = if_din.bits;
+
+    inst uart: UartTx #(
+        ClockFrequency              ,
+        BaudRate      : UartBaudRate,
+    ) (
+        i_clk          ,
+        i_rst          ,
+        o_tx           ,
+        if_din: if_uart,
+    );
+
+    // GPIO
+    inst if_gpout: Decoupled;
+
+    assign if_gpout.bits = if_din.bits;
+
+    inst gpout: GeneralPurposeOutput (
+        i_clk            ,
+        i_rst            ,
+        if_din : if_gpout,
+        o_gpout          ,
+    );
+
+    // デバイス選択
+    let is_uart : logic<1> = (i_dev_id == 32'h0000);
+    let is_gpout: logic<1> = (i_dev_id == 32'h0004);
+
+    // デバイス選択 (出力)
+    assign if_uart.valid  = is_uart & if_din.valid;
+    assign if_gpout.valid = is_gpout & if_din.valid;
+}
