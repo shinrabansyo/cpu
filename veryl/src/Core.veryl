@@ -32,7 +32,6 @@ module Core (
     var w_out    : logic<32>;
 
     // IOBus
-
     inst io_bus: IOBus (
         i_clk                   ,
         i_rst                   ,
@@ -57,8 +56,9 @@ module Core (
         $readmemh("./program/tmp_data.hex", m_data);
     }
 
-    // 命令フェッチ
-    var r_pc: logic<32>;
+    // 命令フェッチ (TODO: 分岐系)
+    var r_load_ready: logic<1> ;
+    var r_pc        : logic<32>;
 
     let w_instr_raw: logic<48> = m_inst[r_pc];
 
@@ -66,7 +66,20 @@ module Core (
         if_reset {
             r_pc = 32'h0;
         } else {
-            r_pc += 32'h6;
+            r_pc = case {w_instr.opcode_sub, w_instr.opcode} {
+                // BEQ, BNE, BLT, BLE: if w_zero {
+                //     r_pc + w_instr.imm_b_sext
+                // } else {
+                //     r_pc
+                // },
+                // JAL    : r_pc + w_instr.imm,
+                LW, LH, LB, LHU, LBU: if r_load_ready {
+                    r_pc + 32'h6
+                } else {
+                    r_pc
+                },
+                default: r_pc + 32'h6,
+            };
         }
     }
 
@@ -218,9 +231,40 @@ module Core (
         o_out    : w_out    ,
     );
 
-    // TODO: メモリ読み書き
+    // メモリ読み書き
+    always_ff (i_clk, i_rst) {
+        if_reset {
+            // store
+            // NOP
 
-    // レジスタアクセス (TODO: ロード系がまだ)
+            // load
+            r_load_ready = 0;
+        } else {
+            // Store
+            case {w_instr.opcode_sub, w_instr.opcode} {
+                SW: {
+                        m_data[w_out]     = m_regfile[w_instr.rs2_s][0+:8];
+                        m_data[w_out + 1] = m_regfile[w_instr.rs2_s][8+:8];
+                        m_data[w_out + 2] = m_regfile[w_instr.rs2_s][16+:8];
+                        m_data[w_out + 3] = m_regfile[w_instr.rs2_s][24+:8];
+                    }
+                SH: {
+                        m_data[w_out]     = m_regfile[w_instr.rs2_s][0+:8];
+                        m_data[w_out + 1] = m_regfile[w_instr.rs2_s][8+:8];
+                    }
+                SB: {
+                        m_data[w_out] = m_regfile[w_instr.rs2_s][0+:8];
+                    }
+            }
+
+            // Load
+            // 同期読み出しのために１サイクル待つ
+            r_load_ready = (w_instr.opcode == 8'h4) & !r_load_ready;
+        }
+    }
+    let w_mem_read: logic<32> = {m_data[w_out + 3], m_data[w_out + 2], m_data[w_out + 1], m_data[w_out]};
+
+    // レジスタアクセス
     always_ff (i_clk, i_rst) {
         if_reset {
             for i: u32 in 0..32 {
@@ -229,6 +273,11 @@ module Core (
         } else {
             m_regfile[w_instr.rd] = case {w_instr.opcode_sub, w_instr.opcode} {
                 BEQ, BNE, BLT, BLE, JAL: r_pc + 6,
+                LW                     : w_mem_read,
+                LH                     : {16'b0, w_mem_read[0+:16]},
+                LHU                    : {w_mem_read[15] repeat 16, w_mem_read[0+:16]},
+                LB                     : {24'b0, w_mem_read[0+:8]},
+                LBU                    : {w_mem_read[7] repeat 24, w_mem_read[0+:8]},
                 SW, SH, SB             : m_regfile[w_instr.rd],
                 IN                     : if if_io_bus_dout.valid {
                     if_io_bus_dout.bits
