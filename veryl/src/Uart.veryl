@@ -1,6 +1,6 @@
 module UartTx #(
-    const ClockFrequency: u32 = 15_000_000, // default 15 MHz
-    const BaudRate      : u32 = 115200    , // default 115200 bps
+    param ClockFrequency: u32 = 15_000_000, // default 15 MHz
+    param BaudRate      : u32 = 115200    , // default 115200 bps
 ) (
     i_clk: input clock,
     i_rst: input reset,
@@ -8,11 +8,11 @@ module UartTx #(
     o_tx  : output  logic              <1>,
     if_din: modport Decoupled::receiver   ,
 ) {
-    const BAUD_DIVIDER: u32 = ClockFrequency / BaudRate;
+    const BAUD_DIVIDER: u32 = (ClockFrequency / BaudRate) - 1;
 
-    var r_rate_counter: logic<$clog2(BAUD_DIVIDER)>;
-    var r_bit_counter : logic<$clog2(8 + 2)>       ;
-    var r_bits        : logic<8 + 2>               ;
+    var r_rate_counter: logic<$clog2(BAUD_DIVIDER + 1)>;
+    var r_bit_counter : logic<$clog2(8 + 2)>           ;
+    var r_bits        : logic<8 + 2>                   ;
 
     assign o_tx         = r_bit_counter == 0 || r_bits[0];
     let w_ready     : logic<1> = r_bit_counter == 0;
@@ -27,13 +27,13 @@ module UartTx #(
             if (w_ready && if_din.valid) {
                 r_bits         = {1'b1, if_din.bits, 1'b0};
                 r_rate_counter = 8 + 2;
-                r_bit_counter  = BAUD_DIVIDER - 1;
+                r_bit_counter  = BAUD_DIVIDER[3:0];
             }
             if r_bit_counter >: 0 {
                 if (r_rate_counter == 0) {
-                    r_bits[0:7]    =  r_bits[1:8];
+                    r_bits[7:0]    =  r_bits[8:1];
                     r_bit_counter  -= 1;
-                    r_rate_counter =  BAUD_DIVIDER - 1;
+                    r_rate_counter =  BAUD_DIVIDER[7:0];
                 } else {
                     r_rate_counter -= 1;
                 }

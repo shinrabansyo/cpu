@@ -1,6 +1,6 @@
 module IOBus #(
-    const ClockFrequency: u32 = 15_000_000, // default 15Mhz
-    const UartBaudRate  : u32 = 115200    , // default 115200bps
+    param ClockFrequency: u32 = 15_000_000, // default 15Mhz
+    param UartBaudRate  : u32 = 115200    , // default 115200bps
 ) (
     // クロック・リセット
     i_clk: input clock,
@@ -24,9 +24,9 @@ module IOBus #(
     o_gpout: output logic<8>,
 ) {
     // UART
-    inst if_uart: Decoupled;
+    inst if_uart: Decoupled #(Width: 8,);
 
-    assign if_uart.bits = if_din.bits;
+    assign if_uart.bits = if_din.bits[7:0];
 
     inst uart: UartTx #(
         ClockFrequency              ,
@@ -39,9 +39,9 @@ module IOBus #(
     );
 
     // GPIO
-    inst if_gpout: Decoupled;
+    inst if_gpout: Decoupled #(Width: 8,);
 
-    assign if_gpout.bits = if_din.bits;
+    assign if_gpout.bits = if_din.bits[7:0];
 
     inst gpout: GeneralPurposeOutput (
         i_clk            ,

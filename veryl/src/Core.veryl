@@ -21,8 +21,8 @@ module Core (
     // IOBus
     var i_dev_id: logic<32>;
 
-    inst if_io_bus_din : Decoupled;
-    inst if_io_bus_dout: Decoupled;
+    inst if_io_bus_din : Decoupled #(Width: 32,);
+    inst if_io_bus_dout: Decoupled #(Width: 32,);
 
     // ALU
     var w_command: logic<8> ;
@@ -52,15 +52,15 @@ module Core (
     var m_data   : logic<8>  [4 * 1024];
 
     initial {
-        $readmemh("./program/tmp_inst.hex", m_inst);
-        $readmemh("./program/tmp_data.hex", m_data);
+        $readmemh("./test/tmp_inst.hex", m_inst);
+        $readmemh("./test/tmp_data.hex", m_data);
     }
 
     // 命令フェッチ (TODO: 分岐系)
     var r_load_ready: logic<1> ;
     var r_pc        : logic<32>;
 
-    let w_instr_raw: logic<48> = m_inst[r_pc];
+    let w_instr_raw: logic<48> = {m_inst[r_pc + 5], m_inst[r_pc + 4], m_inst[r_pc + 3], m_inst[r_pc + 2], m_inst[r_pc + 1], m_inst[r_pc]};
 
     always_ff (i_clk, i_rst) {
         if_reset {
@@ -94,7 +94,7 @@ module Core (
         rs2       : logic<5> ,
         rs2_s     : logic<5> ,
         imm       : logic<32>,
-        imm_b     : logic<32>,
+        imm_b     : logic<25>,
         imm_b_sext: logic<32>,
     }
 
@@ -110,7 +110,7 @@ module Core (
     assign w_instr.rs2_s      = w_instr_raw[12:8];
     assign w_instr.imm        = w_instr_raw[47:16];
     assign w_instr.imm_b      = w_instr_raw[47:23];
-    assign w_instr.imm_b_sext = {w_instr_raw[24] repeat 7, w_instr_raw[23:0]};
+    assign w_instr.imm_b_sext = {w_instr_raw[24] repeat 8, w_instr_raw[23:0]};
 
     // 命令実行
     const NOP : logic<8> = (8'h0 << 5) | 8'h0;
@@ -155,9 +155,10 @@ module Core (
     }
 
     let inst_kind: InstKind = case w_instr.opcode {
-        1      : InstKind::R,
-        2      : InstKind::I,
-        3      : case {w_instr.opcode_sub, w_instr.opcode} {
+        1: InstKind::R,
+        2: InstKind::I,
+        3: case {w_instr.opcode_sub, w_instr.opcode} {
+            /* verilator lint_off UNSIGNED */
             0..=3  : InstKind::B, // Branch 系
             4      : InstKind::I, // Jump 系
             default: InstKind::Nop,
@@ -255,11 +256,12 @@ module Core (
                 SB: {
                         m_data[w_out] = m_regfile[w_instr.rs2_s][0+:8];
                     }
+                default: {}
             }
 
             // Load
             // 同期読み出しのために１サイクル待つ
-            r_load_ready = (w_instr.opcode == 8'h4) & !r_load_ready;
+            r_load_ready = (w_instr.opcode == 5'h4) & !r_load_ready;
         }
     }
     let w_mem_read: logic<32> = {m_data[w_out + 3], m_data[w_out + 2], m_data[w_out + 1], m_data[w_out]};
@@ -285,7 +287,7 @@ module Core (
                     m_regfile[w_instr.rd]
                 },
                 OUT    : m_regfile[w_instr.rd],
-                default: 0,
+                default: w_out,
             };
         }
     }

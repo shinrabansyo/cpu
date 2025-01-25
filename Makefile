@@ -4,14 +4,14 @@ verilog: verilog_chisel verilog_veryl
 	cp chisel/rtl/*.sv target/
 	cp veryl/target/*.sv target/
 
-verilog_chisel:
+verilog_chisel: chisel/src/*
 	cd chisel && sbt test
 
-verilog_veryl:
-	cd veryl && veryl build
+verilog_veryl: veryl/src/*
+	cd veryl && veryl build || :
 
 test: verilog
-	verilator --trace -threads `nproc` -j `nproc` --binary target/*.sv --top-module top
+	verilator --trace -threads `nproc` -j `nproc` --binary target/*.sv --top-module top -Wno-UNSIGNED
 	obj_dir/Vtop
 
 .PHONY: verilog verilog_chisel verilog_veryl test

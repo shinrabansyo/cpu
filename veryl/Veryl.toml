@@ -4,3 +4,5 @@ version = "0.1.0"
 
 [build]
 target = { type = "directory", path = "target" }
+reset_type = "sync_high"
+expand_inside_operation = true

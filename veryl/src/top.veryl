@@ -1,36 +1,36 @@
 embed (inline) sv{{{
     module top();
-        logic clock;
-        logic reset;
-        logic io_tx;
-        logic io_rx;
-        logic io_sclk;
-        logic io_mosi;
-        logic io_miso;
-        logic [7:0] io_gpout;
+        logic i_clk;
+        logic i_rst;
+        logic o_tx;
+        logic i_rx;
+        logic o_sclk;
+        logic o_mosi;
+        logic i_miso;
+        logic [7:0] o_gpout;
 
-        Core core(.*);
+        veryl_Core core(.*);
 
         initial begin
             $dumpfile("wave.vcd");
             $dumpvars(0);
 
-            clock = 0;
-            reset = 1;
-            io_rx = 0;
-            io_miso = 0;
+            i_clk = 0;
+            i_rst = 1;
+            i_rx = 0;
+            i_miso = 0;
 
-            @(posedge clock);
-            @(posedge clock);
-            @(posedge clock);
-            reset = 0;
+            @(posedge i_clk);
+            @(posedge i_clk);
+            @(posedge i_clk);
+            i_rst = 0;
 
             #1000000;
             $finish;
         end
 
         always #(5) begin
-            clock <= ~clock;
+            i_clk <= ~i_clk;
         end
 
     endmodule
