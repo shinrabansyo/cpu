@@ -36,8 +36,8 @@ module Core (
         i_clk                   ,
         i_rst                   ,
         i_dev_id                ,
-        if_din  : if_io_bus_din ,
-        if_dout : if_io_bus_dout,
+        if_din  : if_io_bus_dout,
+        if_dout : if_io_bus_din ,
         o_tx                    ,
         i_rx                    ,
         o_sclk                  ,
@@ -56,7 +56,7 @@ module Core (
         $readmemh("./test/tmp_data.hex", m_data);
     }
 
-    // 命令フェッチ (TODO: 分岐系)
+    // 命令フェッチ
     var r_load_ready: logic<1> ;
     var r_pc        : logic<32>;
 
@@ -92,6 +92,16 @@ module Core (
                 },
                 JAL                 : w_out,
                 LW, LH, LB, LHU, LBU: if r_load_ready {
+                    r_pc + 32'h6
+                } else {
+                    r_pc
+                },
+                IN: if if_io_bus_din.valid {
+                    r_pc + 32'h6
+                } else {
+                    r_pc
+                },
+                OUT: if if_io_bus_dout.ready {
                     r_pc + 32'h6
                 } else {
                     r_pc
@@ -283,6 +293,16 @@ module Core (
     }
     let w_mem_read: logic<32> = {m_data[w_out + 3], m_data[w_out + 2], m_data[w_out + 1], m_data[w_out]};
 
+    // デバイス読み書き
+    always_comb {
+        i_dev_id = w_out;
+
+        if_io_bus_din.ready = {w_instr.opcode_sub, w_instr.opcode} == IN;
+
+        if_io_bus_dout.valid = {w_instr.opcode_sub, w_instr.opcode} == OUT;
+        if_io_bus_dout.bits  = m_regfile[w_instr.rs2_s];
+    }
+
     // レジスタアクセス
     always_ff (i_clk, i_rst) {
         if_reset {
@@ -293,13 +313,13 @@ module Core (
             m_regfile[w_instr.rd] = case {w_instr.opcode_sub, w_instr.opcode} {
                 BEQ, BNE, BLT, BLE, JAL: r_pc + 6,
                 LW                     : w_mem_read,
-                LH                     : {16'b0, w_mem_read[0+:16]},
-                LHU                    : {w_mem_read[15] repeat 16, w_mem_read[0+:16]},
-                LB                     : {24'b0, w_mem_read[0+:8]},
-                LBU                    : {w_mem_read[7] repeat 24, w_mem_read[0+:8]},
+                LH                     : {w_mem_read[15] repeat 16, w_mem_read[0+:16]},
+                LHU                    : {16'b0, w_mem_read[0+:16]},
+                LB                     : {w_mem_read[7] repeat 24, w_mem_read[0+:8]},
+                LBU                    : {24'b0, w_mem_read[0+:8]},
                 SW, SH, SB             : m_regfile[w_instr.rd],
-                IN                     : if if_io_bus_dout.valid {
-                    if_io_bus_dout.bits
+                IN                     : if if_io_bus_din.valid {
+                    if_io_bus_din.bits
                 } else {
                     m_regfile[w_instr.rd]
                 },

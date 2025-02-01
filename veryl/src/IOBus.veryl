@@ -26,8 +26,6 @@ module IOBus #(
     // UART
     inst if_uart: Decoupled #(Width: 8,);
 
-    assign if_uart.bits = if_din.bits[7:0];
-
     inst uart: UartTx #(
         ClockFrequency              ,
         BaudRate      : UartBaudRate,
@@ -39,22 +37,45 @@ module IOBus #(
     );
 
     // GPIO
-    inst if_gpout: Decoupled #(Width: 8,);
-
-    assign if_gpout.bits = if_din.bits[7:0];
+    inst if_gpout_read: Decoupled #(Width: 8,);
+    inst if_gpout_write: Decoupled #(Width: 8,);
 
     inst gpout: GeneralPurposeOutput (
         i_clk            ,
         i_rst            ,
-        if_din : if_gpout,
+        if_din : if_gpout_write,
+        if_dout: if_gpout_read,
         o_gpout          ,
     );
 
     // デバイス選択
-    let is_uart : logic<1> = (i_dev_id == 32'h0000);
-    let is_gpout: logic<1> = (i_dev_id == 32'h0004);
+    let is_in_instr: logic<1> = if_dout.ready;
+    let is_out_instr: logic<1> = if_din.valid;
+    let is_inout_instr: logic<1> = is_in_instr | is_out_instr;
+    let is_uart : logic<1> = is_inout_instr & (i_dev_id == 32'h0000);
+    let is_gpout: logic<1> = is_inout_instr & (i_dev_id == 32'h0004);
 
-    // デバイス選択 (出力)
+    // デバイス間接続
     assign if_uart.valid  = is_uart & if_din.valid;
-    assign if_gpout.valid = is_gpout & if_din.valid;
+    assign if_uart.bits = if_din.bits[7:0];
+
+    assign if_gpout_write.valid = is_gpout & if_din.valid;
+    assign if_gpout_write.bits = if_din.bits[7:0];
+    assign if_gpout_read.ready = is_gpout & if_dout.ready;
+
+    always_comb {
+        if is_uart {
+            if_din.ready = is_out_instr & if_uart.ready;
+            if_dout.valid = is_in_instr & if_uart.valid;
+            if_dout.bits[7:0] = if_uart.bits;
+        } else if is_gpout {
+            if_din.ready = is_out_instr & if_gpout_write.ready;
+            if_dout.valid = is_in_instr & if_gpout_read.valid;
+            if_dout.bits[7:0] = if_gpout_read.bits;
+        } else {
+            if_din.ready = 0;
+            if_dout.valid = 0;
+            if_dout.bits = 0;
+        }
+    }
 }

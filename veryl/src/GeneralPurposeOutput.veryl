@@ -3,18 +3,21 @@ module GeneralPurposeOutput (
     i_rst: input reset,
 
     if_din : modport Decoupled::receiver   ,
+    if_dout : modport Decoupled::sender   ,
     o_gpout: output  logic              <8>,
 ) {
     var r_pin_out: logic<8>;
 
     assign if_din.ready = 1;
+    assign if_dout.valid = 1;
+    assign if_dout.bits = r_pin_out;
     assign o_gpout      = r_pin_out;
 
     always_ff (i_clk, i_rst) {
         if_reset {
             r_pin_out = 0;
         } else {
-            if (if_din.valid && if_din.ready) {
+            if if_din.valid {
                 r_pin_out = if_din.bits;
             }
         }
