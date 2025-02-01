@@ -1,4 +1,5 @@
-verilog: verilog_chisel verilog_veryl
+# verilog: verilog_chisel verilog_veryl
+verilog: verilog_veryl
 	rm -rf target/
 	mkdir -p target/
 	cp chisel/rtl/*.sv target/
@@ -7,6 +8,7 @@ verilog: verilog_chisel verilog_veryl
 verilog_chisel: chisel/src/*
 	cd chisel && sbt test
 
+# Warning が出た場合でもコマンド実行を継続するための「||」
 verilog_veryl: veryl/src/*
 	cd veryl && veryl build || :
 

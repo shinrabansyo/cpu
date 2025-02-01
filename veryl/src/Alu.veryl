@@ -5,8 +5,10 @@ module Alu (
     o_zero   : output logic<1> ,
     o_out    : output logic<32>,
 ) {
-    // 符号付き a
+    // 算術右シフト
     let i_a_signed: signed logic<32> = i_a;
+    let i_b_signed: signed logic<32> = i_b;
+    let o_sra_out : signed logic<32> = i_a_signed >>> i_b_signed[4:0];
 
     // ゼロフラグ
     assign o_zero = (o_out == 32'b0);
@@ -19,7 +21,7 @@ module Alu (
         8'h4   : i_a | i_b,
         8'h5   : i_a ^ i_b,
         8'h6   : i_a >> i_b[4:0],
-        8'h7   : i_a_signed >>> i_b[4:0],
+        8'h7   : o_sra_out,
         8'h8   : i_a << i_b[4:0],
         default: 32'b0,
     };
