@@ -67,12 +67,30 @@ module Core (
             r_pc = 32'h0;
         } else {
             r_pc = case {w_instr.opcode_sub, w_instr.opcode} {
-                // BEQ, BNE, BLT, BLE: if w_zero {
-                //     r_pc + w_instr.imm_b_sext
-                // } else {
-                //     r_pc
-                // },
-                // JAL    : r_pc + w_instr.imm,
+                BEQ: if w_zero {
+                    r_pc + w_instr.imm_b_sext
+                } else {
+                    r_pc + 32'h6
+                },
+                BNE: if !w_zero {
+                    r_pc + w_instr.imm_b_sext
+                } else {
+                    r_pc + 32'h6
+                },
+                // a < b -> a - b < 0 -> aluの出力 最上位ビットが1
+                BLT: if w_out[31] {
+                    r_pc + w_instr.imm_b_sext
+                } else {
+                    r_pc + 32'h6
+                },
+                // a < b -> a - b < 0 -> aluの出力 最上位ビットが1
+                // もしくは a = b -> a - b = 0 -> aluの出力 0
+                BLE: if w_out[31] || w_zero {
+                    r_pc + w_instr.imm_b_sext
+                } else {
+                    r_pc + 32'h6
+                },
+                JAL                 : w_out,
                 LW, LH, LB, LHU, LBU: if r_load_ready {
                     r_pc + 32'h6
                 } else {
@@ -110,7 +128,7 @@ module Core (
     assign w_instr.rs2_s      = w_instr_raw[12:8];
     assign w_instr.imm        = w_instr_raw[47:16];
     assign w_instr.imm_b      = w_instr_raw[47:23];
-    assign w_instr.imm_b_sext = {w_instr_raw[24] repeat 8, w_instr_raw[23:0]};
+    assign w_instr.imm_b_sext = {w_instr_raw[47] repeat 7, w_instr_raw[47:23]};
 
     // 命令実行
     const NOP : logic<8> = (8'h0 << 5) | 8'h0;
@@ -155,17 +173,16 @@ module Core (
     }
 
     let inst_kind: InstKind = case w_instr.opcode {
-        1: InstKind::R,
-        2: InstKind::I,
-        3: case {w_instr.opcode_sub, w_instr.opcode} {
-            /* verilator lint_off UNSIGNED */
-            0..=3  : InstKind::B, // Branch 系
-            4      : InstKind::I, // Jump 系
-            default: InstKind::Nop,
+        1         : InstKind::R,
+        2         : InstKind::I,
+        3         : case w_instr.opcode_sub {
+            0, 1, 2, 3: InstKind::B, // Branch 系
+            4         : InstKind::I, // Jump 系
+            default   : InstKind::Nop,
         },
         4      : InstKind::I,
         5      : InstKind::S,
-        6      : case {w_instr.opcode_sub, w_instr.opcode} {
+        6      : case w_instr.opcode_sub {
             0      : InstKind::I, // in
             1      : InstKind::S, // out
             default: InstKind::Nop,
@@ -272,7 +289,7 @@ module Core (
             for i: u32 in 0..32 {
                 m_regfile[i] = 32'h0;
             }
-        } else {
+        } else if w_instr.rd != 0 {
             m_regfile[w_instr.rd] = case {w_instr.opcode_sub, w_instr.opcode} {
                 BEQ, BNE, BLT, BLE, JAL: r_pc + 6,
                 LW                     : w_mem_read,

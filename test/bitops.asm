@@ -3,6 +3,7 @@
 // r20: テストケース名
 // andのテスト 
 @test_and
+    addi r20 = r0, 0
     addi r10 = r0, 1
 
     // テスト1 : 即値
@@ -34,6 +35,7 @@
 
 // orのテスト 
 @test_or
+    addi r20 = r0, 0
     addi r10 = r0, 1
 
     // テスト1 : 即値
@@ -66,6 +68,7 @@
     subi r10 = r6, 1    // 1 | 1 = 1
 
 @test_xor
+    addi r20 = r0, 0
     addi r10 = r0, 1
 
     // テスト1 : 即値
@@ -92,6 +95,7 @@
     subi r10 = r6, 1    // b11 ^ b10 = b01
 
 @test_srl
+    addi r20 = r0, 0
     addi r10 = r0, 1
 
     // テスト1 : 即値
@@ -120,6 +124,7 @@
 
 // sraのテスト 
 @test_sra
+    addi r20 = r0, 0
     addi r10 = r0, 1
 
     // テスト1 : 即値
@@ -164,6 +169,7 @@
 
 // sllのテスト 
 @test_sll
+    addi r20 = r0, 0
     addi r10 = r0, 1
 
     // テスト1 : 即値
