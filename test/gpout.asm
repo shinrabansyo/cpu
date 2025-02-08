@@ -3,7 +3,7 @@
 // r10: 結果(0: 正常終了, 1: 異常終了)
 // r20: テストケース名
 
-@test_gpio
+@test_gpout
     addi r20 = r0, 0
     addi r10 = r0, 1
 
@@ -15,7 +15,7 @@
     addi r5 = r0, 0xFFFFFFFF
     out r4[0] = r5
     in r11 = r4[0]
-    addi r12 = r0, 0xFFFFFFFF
+    addi r12 = r0, 0x000000FF
     beq r1, (r0, r0) -> @assert
 
     // テスト2: 全ビット0を出力して読み込み
@@ -31,7 +31,7 @@
     addi r5 = r0, 0x55555555
     out r4[0] = r5
     in r11 = r4[0]
-    addi r12 = r0, 0x55555555
+    addi r12 = r0, 0x00000055
     beq r1, (r0, r0) -> @assert
 
     // テスト4: 逆交互パターンを出力して読み込み
@@ -39,7 +39,7 @@
     addi r5 = r0, 0xAAAAAAAA
     out r4[0] = r5
     in r11 = r4[0]
-    addi r12 = r0, 0xAAAAAAAA
+    addi r12 = r0, 0x000000AA
     beq r1, (r0, r0) -> @assert
 
 @assert
