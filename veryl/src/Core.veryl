@@ -7,12 +7,12 @@ module Core (
 
     // UART
     o_tx: output logic<1>,
-    i_rx: input  logic<1>,
+    // i_rx: input  logic<1>,
 
     // SPI
-    o_sclk: output logic<1>,
-    o_mosi: output logic<1>,
-    i_miso: input  logic<1>,
+    // o_sclk: output logic<1>,
+    // o_mosi: output logic<1>,
+    // i_miso: input  logic<1>,
 
     // GPIO
     o_gpout: output logic<8>,
@@ -39,17 +39,41 @@ module Core (
         if_din  : if_io_bus_dout,
         if_dout : if_io_bus_din ,
         o_tx                    ,
-        i_rx                    ,
-        o_sclk                  ,
-        o_mosi                  ,
-        i_miso                  ,
-        o_gpout                 ,
+        // i_rx                    ,
+        // o_sclk                  ,
+        // o_mosi                  ,
+        // i_miso                  ,
+        o_gpout  ,
     );
 
     // メモリ
     var m_regfile: logic<32> [32]      ;
     var m_inst   : logic<8>  [6 * 1024];
-    var m_data   : logic<8>  [4 * 1024];
+    var m_data   : logic<8>  [4 * 64]  ;
+
+    // inst m_inst_mod: IMemSync (
+    //     i_clk  ,
+    //     i_rst  ,
+    //     i_clr (1'b0),
+    //     i_mea (1'b0),
+    //     i_wea (1'b0),
+    //     i_adra(10'h0),
+    //     i_da (48'h0),
+    //     i_meb (1'b1),
+    //     i_adrb(r_pc),       // TODO
+    //     o_qb (r_instr_raw), // TODO
+    // );
+
+    // i_clk : input  clock                   , // クロック
+    // i_rst : input  reset                   , // リセット
+    // i_clr : input  logic                   , // リセット2
+    // i_mea : input  logic                   , // セレクト (w)
+    // i_wea : input  logic                   , // 書き込み (w)
+    // i_adra: input  logic    <ADDRESS_WIDTH>, // アドレス (w)
+    // i_da  : input  DATA_TYPE               , // データ (w)
+    // i_meb : input  logic                   , // セレクト (r)
+    // i_adrb: input  logic    <ADDRESS_WIDTH>, // アドレス (r)
+    // o_qb  : output DATA_TYPE               , // データ (r)
 
     initial {
         $readmemh("./test/tmp_inst.hex", m_inst);
@@ -57,36 +81,30 @@ module Core (
     }
 
     // 命令フェッチ
-    var r_load_ready: logic<1> ;
-    var r_pc        : logic<32>;
+    var r_load_ready  : logic<1> ;
+    var r_pc          : logic<32>;
+    var r_instr_raw   : logic<48>;
+    var w_branch_ready: logic<1> ;
 
-    let w_instr_raw: logic<48> = {m_inst[r_pc + 5], m_inst[r_pc + 4], m_inst[r_pc + 3], m_inst[r_pc + 2], m_inst[r_pc + 1], m_inst[r_pc]};
+    // 命令メモリの読み出し
+    always_ff (i_clk, i_rst) {
+        if_reset {
+            r_instr_raw = 48'h0;
+        } else if w_branch_ready {
+            r_instr_raw = 48'h0; // nop
+        } else {
+            r_instr_raw = {m_inst[r_pc + 5], m_inst[r_pc + 4], m_inst[r_pc + 3], m_inst[r_pc + 2], m_inst[r_pc + 1], m_inst[r_pc]};
+        }
+    }
 
+    // プログラムカウンタ
     always_ff (i_clk, i_rst) {
         if_reset {
             r_pc = 32'h0;
         } else {
             r_pc = case {w_instr.opcode_sub, w_instr.opcode} {
-                BEQ: if w_zero {
-                    r_pc + w_instr.imm_b_sext
-                } else {
-                    r_pc + 32'h6
-                },
-                BNE: if !w_zero {
-                    r_pc + w_instr.imm_b_sext
-                } else {
-                    r_pc + 32'h6
-                },
-                // a < b -> a - b < 0 -> aluの出力 最上位ビットが1
-                BLT: if w_out[31] {
-                    r_pc + w_instr.imm_b_sext
-                } else {
-                    r_pc + 32'h6
-                },
-                // a < b -> a - b < 0 -> aluの出力 最上位ビットが1
-                // もしくは a = b -> a - b = 0 -> aluの出力 0
-                BLE: if w_out[31] || w_zero {
-                    r_pc + w_instr.imm_b_sext
+                BEQ, BNE, BLT, BLE: if w_branch_ready {
+                    r_pc + w_instr.imm_b_sext - 32'h6
                 } else {
                     r_pc + 32'h6
                 },
@@ -128,17 +146,17 @@ module Core (
 
     var w_instr: Instructure;
 
-    assign w_instr.opcode     = w_instr_raw[4:0];
-    assign w_instr.opcode_sub = w_instr_raw[7:5];
-    assign w_instr.rd         = w_instr_raw[12:8];
-    assign w_instr.rs1        = w_instr_raw[17:13];
-    assign w_instr.rs1_i      = {2'b0, w_instr_raw[15:13]};
-    assign w_instr.rs1_s      = {2'b0, w_instr_raw[15:13]};
-    assign w_instr.rs2        = w_instr_raw[22:18];
-    assign w_instr.rs2_s      = w_instr_raw[12:8];
-    assign w_instr.imm        = w_instr_raw[47:16];
-    assign w_instr.imm_b      = w_instr_raw[47:23];
-    assign w_instr.imm_b_sext = {w_instr_raw[47] repeat 7, w_instr_raw[47:23]};
+    assign w_instr.opcode     = r_instr_raw[4:0];
+    assign w_instr.opcode_sub = r_instr_raw[7:5];
+    assign w_instr.rd         = r_instr_raw[12:8];
+    assign w_instr.rs1        = r_instr_raw[17:13];
+    assign w_instr.rs1_i      = {2'b0, r_instr_raw[15:13]};
+    assign w_instr.rs1_s      = {2'b0, r_instr_raw[15:13]};
+    assign w_instr.rs2        = r_instr_raw[22:18];
+    assign w_instr.rs2_s      = r_instr_raw[12:8];
+    assign w_instr.imm        = r_instr_raw[47:16];
+    assign w_instr.imm_b      = r_instr_raw[47:23];
+    assign w_instr.imm_b_sext = {r_instr_raw[47] repeat 7, r_instr_raw[47:23]};
 
     // 命令実行
     const NOP : logic<8> = (8'h0 << 5) | 8'h0;
@@ -303,6 +321,18 @@ module Core (
         if_io_bus_dout.bits  = m_regfile[w_instr.rs2_s];
     }
 
+    // 分岐判定
+    always_comb {
+        w_branch_ready = case {w_instr.opcode_sub, w_instr.opcode} {
+            BEQ    : w_zero,
+            BNE    : !w_zero,
+            BLT    : w_out[31],
+            BLE    : w_out[31] || w_zero,
+            JAL    : 1'h1,
+            default: 1'h0,
+        };
+    }
+
     // レジスタアクセス
     always_ff (i_clk, i_rst) {
         if_reset {
@@ -311,7 +341,7 @@ module Core (
             }
         } else if w_instr.rd != 0 {
             m_regfile[w_instr.rd] = case {w_instr.opcode_sub, w_instr.opcode} {
-                BEQ, BNE, BLT, BLE, JAL: r_pc + 6,
+                BEQ, BNE, BLT, BLE, JAL: r_pc,
                 LW                     : w_mem_read,
                 LH                     : {w_mem_read[15] repeat 16, w_mem_read[0+:16]},
                 LHU                    : {16'b0, w_mem_read[0+:16]},

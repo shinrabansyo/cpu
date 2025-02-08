@@ -26,16 +26,16 @@ module UartTx #(
         } else {
             if (w_ready && if_din.valid) {
                 r_bits         = {1'b1, if_din.bits, 1'b0};
-                r_rate_counter = 8 + 2;
+                r_rate_counter = 8'h8 + 8'h2; // param がデフォルト値だった場合を決め打ち
                 r_bit_counter  = BAUD_DIVIDER[3:0];
             }
             if r_bit_counter >: 0 {
                 if (r_rate_counter == 0) {
                     r_bits[7:0]    =  r_bits[8:1];
-                    r_bit_counter  -= 1;
+                    r_bit_counter  -= 4'h1;
                     r_rate_counter =  BAUD_DIVIDER[7:0];
                 } else {
-                    r_rate_counter -= 1;
+                    r_rate_counter -= 8'h1;
                 }
             }
         }

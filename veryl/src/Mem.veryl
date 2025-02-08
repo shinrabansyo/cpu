@@ -1,0 +1,162 @@
+//
+// Licensed under the Apache License, Version 2.0 (the "License");
+// you may not use this file except in compliance with the License.
+// You may obtain a copy of the License at
+//   http://www.apache.org/licenses/LICENSE-2.0
+// Unless required by applicable law or agreed to in writing,
+// software distributed under the License is distributed on an
+// "AS IS" BASIS, WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND,
+// either express or implied. See the License for the specific
+// language governing permissions and limitations under the License.
+//
+// MIT License
+// Permission is hereby granted, free of charge, to any person obtaining
+// a copy of this software and associated documentation files...
+
+// Copyright:
+// This file is originally based on:
+// https://github.com/veryl-lang/veryl/blob/6d3c23ce2d176a192ad67dcd99c97914cf5d46cb/crates/std/veryl/src/ram/ram.veryl
+
+pub module IMemSync #(
+    param WORD_SIZE    : u32       = 1024             ,
+    param ADDRESS_WIDTH: u32       = $clog2(WORD_SIZE),
+    param DATA_WIDTH   : u32       = 8                ,
+    param DATA_TYPE    : type      = logic<DATA_WIDTH>,
+    param BUFFER_OUT   : bit       = 1                ,
+    param USE_RESET    : bit       = 1                ,
+    param INITIAL_VALUE: DATA_TYPE = 0 as DATA_TYPE   ,
+) (
+    i_clk : input  clock                   , // クロック
+    i_rst : input  reset                   , // リセット
+    i_clr : input  logic                   , // リセット2
+    i_mea : input  logic                   , // セレクト (w)
+    i_wea : input  logic                   , // 書き込み (w)
+    i_adra: input  logic    <ADDRESS_WIDTH>, // アドレス (w)
+    i_da  : input  DATA_TYPE               , // データ (w)
+    i_meb : input  logic                   , // セレクト (r)
+    i_adrb: input  logic    <ADDRESS_WIDTH>, // アドレス (r)
+    o_qb  : output DATA_TYPE               , // データ (r)
+) {
+    var ram_data: logic<$bits(DATA_TYPE)> [WORD_SIZE];
+    var q       : logic<$bits(DATA_TYPE)>            ;
+
+    initial {
+        $readmemh("./test/tmp_inst.hex", ram_data);
+    }
+
+    if USE_RESET :g_ram {
+        always_ff {
+            if_reset {
+                ram_data = '{default: INITIAL_VALUE};
+            } else if i_clr {
+                ram_data = '{default: INITIAL_VALUE};
+            } else if i_mea && i_wea {
+                ram_data[i_adra] = i_da;
+            }
+        }
+    } else {
+        always_ff {
+            if i_mea && i_wea {
+                ram_data[i_adra] = i_da;
+            }
+        }
+    }
+
+    always_comb {
+        o_qb = q as DATA_TYPE;
+    }
+
+    if !BUFFER_OUT :g_out {
+        always_comb {
+            q = ram_data[i_adrb];
+        }
+    } else if USE_RESET {
+        always_ff {
+            if_reset {
+                q = INITIAL_VALUE;
+            } else if i_clr {
+                q = INITIAL_VALUE;
+            } else if i_meb {
+                q = ram_data[i_adrb];
+            }
+        }
+    } else {
+        always_ff {
+            if i_meb {
+                q = ram_data[i_adrb];
+            }
+        }
+    }
+}
+
+pub module DMemSync #(
+    param WORD_SIZE    : u32       = 1024             ,
+    param ADDRESS_WIDTH: u32       = $clog2(WORD_SIZE),
+    param DATA_WIDTH   : u32       = 32               ,
+    param DATA_TYPE    : type      = logic<DATA_WIDTH>,
+    param BUFFER_OUT   : bit       = 1                ,
+    param USE_RESET    : bit       = 1                ,
+    param INITIAL_VALUE: DATA_TYPE = 0 as DATA_TYPE   ,
+) (
+    i_clk : input  clock                   , // クロック
+    i_rst : input  reset                   , // リセット
+    i_clr : input  logic                   , // リセット2
+    i_mea : input  logic                   , // セレクト (w)
+    i_wea : input  logic                   , // 書き込み (w)
+    i_adra: input  logic    <ADDRESS_WIDTH>, // アドレス (w)
+    i_da  : input  DATA_TYPE               , // データ (w)
+    i_meb : input  logic                   , // セレクト (r)
+    i_adrb: input  logic    <ADDRESS_WIDTH>, // アドレス (r)
+    o_qb  : output DATA_TYPE               , // データ (r)
+) {
+    var ram_data: logic<$bits(DATA_TYPE)> [WORD_SIZE];
+    var q       : logic<$bits(DATA_TYPE)>            ;
+
+    initial {
+        $readmemh("./test/tmp_data.hex", ram_data);
+    }
+
+    if USE_RESET :g_ram {
+        always_ff {
+            if_reset {
+                ram_data = '{default: INITIAL_VALUE};
+            } else if i_clr {
+                ram_data = '{default: INITIAL_VALUE};
+            } else if i_mea && i_wea {
+                ram_data[i_adra] = i_da;
+            }
+        }
+    } else {
+        always_ff {
+            if i_mea && i_wea {
+                ram_data[i_adra] = i_da;
+            }
+        }
+    }
+
+    always_comb {
+        o_qb = q as DATA_TYPE;
+    }
+
+    if !BUFFER_OUT :g_out {
+        always_comb {
+            q = ram_data[i_adrb];
+        }
+    } else if USE_RESET {
+        always_ff {
+            if_reset {
+                q = INITIAL_VALUE;
+            } else if i_clr {
+                q = INITIAL_VALUE;
+            } else if i_meb {
+                q = ram_data[i_adrb];
+            }
+        }
+    } else {
+        always_ff {
+            if i_meb {
+                q = ram_data[i_adrb];
+            }
+        }
+    }
+}
