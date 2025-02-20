@@ -15,17 +15,20 @@ embed (inline) sv{{{
             $dumpfile("wave.vcd");
             $dumpvars(0);
 
-            i_clk = 0;
-            i_rst = 1;
-            i_rx = 0;
-            i_miso = 0;
+            // initial 内部でのノンブロッキング代入を許可
+            /* verilator lint_off INITIALDLY */
+            i_clk <= 0;
+            i_rst <= 1;
+            i_rx <= 0;
+            i_miso <= 0;
 
             @(posedge i_clk);
             @(posedge i_clk);
             @(posedge i_clk);
-            i_rst = 0;
+            i_rst <= 0;
+            /* verilator lint_on INITIALDLY */
 
-            #1000000;
+            repeat(1000) @(posedge i_clk);
             $finish;
         end
 
