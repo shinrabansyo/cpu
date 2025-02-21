@@ -7,7 +7,7 @@ module Core (
 
     // UART
     o_tx: output logic<1>,
-    // i_rx: input  logic<1>,
+    i_rx: input  logic<1>,
 
     // SPI
     // o_sclk: output logic<1>,
@@ -42,7 +42,7 @@ module Core (
         if_din  : if_io_bus_dout,
         if_dout : if_io_bus_din ,
         o_tx                    ,
-        // i_rx                    ,
+        i_rx                    ,
         // o_sclk                  ,
         // o_mosi                  ,
         // i_miso                  ,

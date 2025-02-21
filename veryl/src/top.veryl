@@ -19,7 +19,7 @@ embed (inline) sv{{{
             /* verilator lint_off INITIALDLY */
             i_clk <= 0;
             i_rst <= 1;
-            i_rx <= 0;
+            i_rx <= 1;
             i_miso <= 0;
 
             @(posedge i_clk);
@@ -27,7 +27,19 @@ embed (inline) sv{{{
             @(posedge i_clk);
             i_rst <= 0;
             /* verilator lint_on INITIALDLY */
+            @(posedge i_clk);
 
+            // UART RX に 0x42 ('B') を送信
+            #1000 i_rx = 0;
+            #1000 i_rx = 0;
+            #1000 i_rx = 1;
+            #1000 i_rx = 0;
+            #1000 i_rx = 0;
+            #1000 i_rx = 0;
+            #1000 i_rx = 0;
+            #1000 i_rx = 1;
+            #1000 i_rx = 0;
+            #1000 i_rx = 1;
             repeat(1000) @(posedge i_clk);
             $finish;
         end

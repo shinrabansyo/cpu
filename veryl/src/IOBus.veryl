@@ -13,7 +13,7 @@ module IOBus #(
 
     // UART
     o_tx: output logic<1>,
-    // i_rx: input  logic<1>,
+    i_rx: input  logic<1>,
 
     // SPI
     // o_sclk: output logic<1>,
@@ -24,16 +24,30 @@ module IOBus #(
     o_gpout: output logic<8>,
 ) {
     // UART
-    inst if_uart: Decoupled #(Width: 8,);
+    inst if_uart_tx: Decoupled #(Width: 8,);
+    inst if_uart_rx: Decoupled #(Width: 8,);
+    var uart_rx_overrun: logic<1>;
 
-    inst uart: UartTx #(
+    inst uart_tx: UartTx #(
         ClockFrequency              ,
         BaudRate      : UartBaudRate,
     ) (
         i_clk          ,
         i_rst          ,
         o_tx           ,
-        if_din: if_uart,
+        if_din: if_uart_tx,
+    );
+
+    inst uart_rx: UartRx #(
+        ClockFrequency              ,
+        BaudRate      : UartBaudRate,
+        RxSyncStages  : 2           ,
+    ) (
+        i_clk          ,
+        i_rst          ,
+        if_dout: if_uart_rx,
+        i_rx           ,
+        o_overrun: uart_rx_overrun,
     );
 
     // GPIO
@@ -56,8 +70,9 @@ module IOBus #(
     let is_gpout      : logic<1> = is_inout_instr & (i_dev_id == 32'h0004);
 
     // デバイス間接続
-    assign if_uart.valid = is_uart & if_din.valid;
-    assign if_uart.bits  = if_din.bits[7:0];
+    assign if_uart_tx.valid = is_uart & if_din.valid;
+    assign if_uart_tx.bits  = if_din.bits[7:0];
+    assign if_uart_rx.ready = is_uart & if_dout.ready;
 
     assign if_gpout_write.valid = is_gpout & if_din.valid;
     assign if_gpout_write.bits  = if_din.bits[7:0];
@@ -65,9 +80,9 @@ module IOBus #(
 
     always_comb {
         if is_uart {
-            if_din.ready  = is_out_instr & if_uart.ready;
-            if_dout.valid = is_in_instr & if_uart.valid;
-            if_dout.bits  = {24'b0, if_uart.bits};
+            if_din.ready  = is_out_instr & if_uart_tx.ready;
+            if_dout.valid = is_in_instr & if_uart_rx.valid;
+            if_dout.bits  = {24'b0, if_uart_rx.bits};
         } else if is_gpout {
             if_din.ready  = is_out_instr & if_gpout_write.ready;
             if_dout.valid = is_in_instr & if_gpout_read.valid;
