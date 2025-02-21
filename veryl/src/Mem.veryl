@@ -17,6 +17,27 @@
 // This file is originally based on:
 // https://github.com/veryl-lang/veryl/blob/6d3c23ce2d176a192ad67dcd99c97914cf5d46cb/crates/std/veryl/src/ram/ram.veryl
 
+module Div6 (
+  x   :   input  logic<32> ,
+  quotient :output logic<32> ,
+  remainder:output logic<32> ,
+) {
+
+  // 6 の除算用マジックナンバー:
+  // 2^34/6 = 2863311530.6666... の切り上げ値 = 2863311531 = 32'hAAAAAAAB
+  let MAGIC: logic<32> = 32'hAAAAAAAB;
+
+  // 64ビットの積を用いて計算
+  let prod: logic<64> = x * MAGIC;
+  
+  // 商は上位 64-34=30 ビット (32ビットに収まる)
+  let shift: logic<64> = prod >> 34;
+  assign quotient = shift[31:0];
+  
+  // 余りは、 x から商に6をかけた値を引く
+  assign remainder = x - quotient * 6;
+}
+
 module IMemSync #(
     param WORD_SIZE    : u32       = 1024                 , // 1024個の命令を保持
     param ADDRESS_WIDTH: u32       = 32                   , // アドレスは常に32bit
@@ -39,8 +60,23 @@ module IMemSync #(
 ) {
     const BANK_NUM: u32 = DATA_WIDTH / 8;
 
-    let adra_mod: logic<32> = i_adra % BANK_NUM;
-    let adrb_mod: logic<32> = i_adrb % BANK_NUM;
+    var adra_mod: logic<32>;
+    var adrb_mod: logic<32>;
+    var adra_quot: logic<32>;
+    var adrb_quot: logic<32>;
+
+    inst div6_a : Div6 (
+        x: i_adra,
+        quotient: adra_quot,
+        remainder: adra_mod,
+    );
+    inst div6_b : Div6 (
+        x: i_adrb,
+        quotient: adrb_quot,
+        remainder: adrb_mod,
+    );
+    // let adra_mod: logic<32> = i_adra % BANK_NUM;
+    // let adrb_mod: logic<32> = i_adrb % BANK_NUM;
 
     var adra_mod_buf: logic<32>;
     var adrb_mod_buf: logic<32>;
@@ -85,16 +121,20 @@ module IMemSync #(
             //     バンク0～(x-1)内のメモリアドレス = 入力アドレス / N + 1
             //     バンク(x)～(N-1)内のメモリアドレス = 入力アドレス / N
             if bank_id <: adra_mod {
-                tmpa = i_adra / BANK_NUM + 1;
+                // tmpa = i_adra / BANK_NUM + 1;
+                tmpa = adra_quot + 1;
             } else {
-                tmpa = i_adra / BANK_NUM;
+                // tmpa = i_adra / BANK_NUM;
+                tmpa = adra_quot;
             }
             bank_adra = tmpa[BANK_ADDRESS_WIDTH - 1:0];
 
             if bank_id <: adrb_mod {
-                tmpb = i_adrb / BANK_NUM + 1;
+                // tmpb = i_adrb / BANK_NUM + 1;
+                tmpb = adrb_quot + 1;
             } else {
-                tmpb = i_adrb / BANK_NUM;
+                // tmpb = i_adrb / BANK_NUM;
+                tmpb = adrb_quot;
             }
             bank_adrb = tmpb[BANK_ADDRESS_WIDTH - 1:0];
         }
