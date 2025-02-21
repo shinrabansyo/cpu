@@ -32,7 +32,10 @@ module Core (
     var w_out    : logic<32>;
 
     // IOBus
-    inst io_bus: IOBus (
+    inst io_bus: IOBus #(
+        ClockFrequency: 12_000_000,
+        UartBaudRate: 115200,
+    )(
         i_clk                   ,
         i_rst                   ,
         i_dev_id                ,
@@ -49,9 +52,9 @@ module Core (
     // メモリ
     var m_regfile: logic<32> [32];
 
-    var w_pc_fetching   : logic<32>;
-    var r_pc_fetched    : logic<32>;
-    var w_instr_raw     : logic<48>;
+    var w_pc_fetching: logic<32>;
+    var r_pc_fetched : logic<32>;
+    var w_instr_raw  : logic<48>;
 
     var w_wen      : logic<4> ;
     var w_ren      : logic<1> ;
@@ -60,12 +63,12 @@ module Core (
     inst m_inst_mod: IMemSync (
         i_clk : i_clk        ,
         i_rst : i_rst        ,
-        i_clr : 'h0          ,
-        i_mea : 'h0          ,
-        i_wea : 'h0          ,
-        i_adra: 'h0          ,
-        i_da  : 'h0          ,
-        i_meb : 'b1          ,
+        i_clr : 1'h0         ,
+        i_mea : 1'h0         ,
+        i_wea : 6'h0         ,
+        i_adra: 32'h0        ,
+        i_da  : 48'h0        ,
+        i_meb : 1'b1         ,
         i_adrb: w_pc_fetching,
         o_qb  : w_instr_raw  ,
     );
@@ -73,7 +76,7 @@ module Core (
     inst m_data_mod: DMemSync (
         i_clk : i_clk                   ,
         i_rst : i_rst                   ,
-        i_clr : 'h0                     ,
+        i_clr : 1'h0                    ,
         i_mea : |w_wen                  ,
         i_wea : w_wen                   ,
         i_adra: w_out                   ,
@@ -84,8 +87,8 @@ module Core (
     );
 
     // 命令フェッチ
-    var r_load_ready    : logic<1> ;
-    var w_branch_taken  : logic<1> ;
+    var r_load_ready  : logic<1>;
+    var w_branch_taken: logic<1>;
 
     // プログラムカウンタ
     always_comb {
@@ -117,7 +120,7 @@ module Core (
 
     always_ff (i_clk, i_rst) {
         if_reset {
-            r_pc_fetched  = 32'h0;
+            r_pc_fetched = 32'h0;
         } else {
             r_pc_fetched = w_pc_fetching;
         }
@@ -295,14 +298,14 @@ module Core (
             // 初期状態: r_load_ready = 0
             case {w_instr.opcode_sub, w_instr.opcode} {
                 LW, LH, LB, LHU, LBU: {
-                    // 1. ロード命令 && r_load_ready = 0
-                    if !r_load_ready {
-                        r_load_ready = 1;
-                    // 2. ロード命令 && r_load_ready = 1 -> 読み出し完了，初期状態に戻す
-                    } else {
-                        r_load_ready = 0;
-                    }
-                }
+                                          // 1. ロード命令 && r_load_ready = 0
+                                          if !r_load_ready {
+                                              r_load_ready = 1;
+                                              // 2. ロード命令 && r_load_ready = 1 -> 読み出し完了，初期状態に戻す
+                                          } else {
+                                              r_load_ready = 0;
+                                          }
+                                      }
                 default: r_load_ready = 0;
             }
         }
