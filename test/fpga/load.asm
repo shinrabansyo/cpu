@@ -10,6 +10,12 @@ $test_lb
     string "test_lb"
 $test_lbu
     string "test_lbu"
+$expected
+    string "Expected: "
+$actual
+    string "Actual: "
+$hex_table
+    string "0123456789ABCDEF"
 ===
 
 // r10: 結果(0: 正常終了, 1: 異常終了)
@@ -22,8 +28,8 @@ $test_lbu
     // テスト1 : 0番地 ~ 3番地
     addi r20 = r0, 1
     lw r11 = r0[0]
-    // addi r12 = r0, 0xCAFEBABE
-    addi r12 = r0, 0xDEADBEEF
+    addi r12 = r0, 0xCAFEBABE
+    // addi r12 = r0, 0xDEADBEEF
     addi r13 = r0, $test_lw
     add r14 = r0, r20
     beq r1, (r0, r0) -> @assert
@@ -196,6 +202,20 @@ $test_lbu
         out r0[0] = r3
         addi r3 = r0, 0x0a // '\n'
         out r0[0] = r3
+        addi r13 = r0, $expected
+        beq r2, (r0, r0) -> @print
+        add r13 = r0, r11
+        beq r2, (r0, r0) -> @print_hex
+        addi r3 = r0, 0x2c // ','
+        out r0[0] = r3
+        addi r3 = r0, 0x20 // ' '
+        out r0[0] = r3
+        addi r13 = r0, $actual
+        beq r2, (r0, r0) -> @print
+        add r13 = r0, r12
+        beq r2, (r0, r0) -> @print_hex
+        addi r3 = r0, 0x0a // '\n'
+        out r0[0] = r3
         addi r10 = r0, 1
         jal r0, r1[0]
     @assert.true
@@ -226,3 +246,67 @@ $test_lbu
         addi r3 = r0, 0x20
         out r0[0] = r3
         jal r0, r2[0]
+
+// (inline)
+// 引数
+// r13 : 出力する値
+// 破壊するレジスタ
+// r2 : 一時戻り番地レジスタ
+// r3 : 出力する値を読み込むレジスタ
+@print_hex
+    add r3 = r0, r13
+    srli r3 = r3, 28
+    andi r3 = r3, 0xf
+    addi r3 = r3, $hex_table
+    lbu r3 = r3[0]
+    out r0[0] = r3
+
+    add r3 = r0, r13
+    srli r3 = r3, 24
+    andi r3 = r3, 0xf
+    addi r3 = r3, $hex_table
+    lbu r3 = r3[0]
+    out r0[0] = r3
+
+    add r3 = r0, r13
+    srli r3 = r3, 20
+    andi r3 = r3, 0xf
+    addi r3 = r3, $hex_table
+    lbu r3 = r3[0]
+    out r0[0] = r3
+
+    add r3 = r0, r13
+    srli r3 = r3, 16
+    andi r3 = r3, 0xf
+    addi r3 = r3, $hex_table
+    lbu r3 = r3[0]
+    out r0[0] = r3
+
+    add r3 = r0, r13
+    srli r3 = r3, 12
+    andi r3 = r3, 0xf
+    addi r3 = r3, $hex_table
+    lbu r3 = r3[0]
+    out r0[0] = r3
+
+    add r3 = r0, r13
+    srli r3 = r3, 8
+    andi r3 = r3, 0xf
+    addi r3 = r3, $hex_table
+    lbu r3 = r3[0]
+    out r0[0] = r3
+
+    add r3 = r0, r13
+    srli r3 = r3, 4
+    andi r3 = r3, 0xf
+    addi r3 = r3, $hex_table
+    lbu r3 = r3[0]
+    out r0[0] = r3
+
+    add r3 = r0, r13
+    andi r3 = r3, 0xf
+    addi r3 = r3, $hex_table
+    lbu r3 = r3[0]
+    out r0[0] = r3
+
+    jal r0, r2[0]
