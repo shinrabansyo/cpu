@@ -34,8 +34,8 @@ module Core (
     // IOBus
     inst io_bus: IOBus #(
         ClockFrequency: 12_000_000,
-        UartBaudRate: 115200,
-    )(
+        UartBaudRate  : 921600    ,
+    ) (
         i_clk                   ,
         i_rst                   ,
         i_dev_id                ,
@@ -73,7 +73,9 @@ module Core (
         o_qb  : w_instr_raw  ,
     );
 
-    inst m_data_mod: DMemSync (
+    inst m_data_mod: DMemSync #(
+        WORD_SIZE: 2048,
+    ) (
         i_clk : i_clk                   ,
         i_rst : i_rst                   ,
         i_clr : 1'h0                    ,
