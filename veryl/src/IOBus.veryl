@@ -24,17 +24,17 @@ module IOBus #(
     o_gpout: output logic<8>,
 ) {
     // UART
-    inst if_uart_tx: Decoupled #(Width: 8,);
-    inst if_uart_rx: Decoupled #(Width: 8,);
+    inst if_uart_tx     : Decoupled #(Width: 8,);
+    inst if_uart_rx     : Decoupled #(Width: 8,);
     var uart_rx_overrun: logic<1>;
 
     inst uart_tx: UartTx #(
         ClockFrequency              ,
         BaudRate      : UartBaudRate,
     ) (
-        i_clk          ,
-        i_rst          ,
-        o_tx           ,
+        i_clk             ,
+        i_rst             ,
+        o_tx              ,
         if_din: if_uart_tx,
     );
 
@@ -43,10 +43,10 @@ module IOBus #(
         BaudRate      : UartBaudRate,
         RxSyncStages  : 2           ,
     ) (
-        i_clk          ,
-        i_rst          ,
-        if_dout: if_uart_rx,
-        i_rx           ,
+        i_clk                     ,
+        i_rst                     ,
+        if_dout  : if_uart_rx     ,
+        i_rx                      ,
         o_overrun: uart_rx_overrun,
     );
 
@@ -62,12 +62,31 @@ module IOBus #(
         o_gpout                ,
     );
 
+    // Counter
+    var clk_count: logic<64>;
+    var clk_freq : logic<32>;
+    var ms_count : logic<64>;
+    inst counter: ClkCounter #(
+        ClockFrequency  ,
+    ) (
+        i_clk                 ,
+        i_rst                 ,
+        o_clk_count: clk_count,
+        o_clk_freq : clk_freq ,
+        o_ms_count : ms_count ,
+    );
+
     // デバイス選択
     let is_in_instr   : logic<1> = if_dout.ready;
     let is_out_instr  : logic<1> = if_din.valid;
     let is_inout_instr: logic<1> = is_in_instr | is_out_instr;
     let is_uart       : logic<1> = is_inout_instr & (i_dev_id == 32'h0000);
     let is_gpout      : logic<1> = is_inout_instr & (i_dev_id == 32'h0004);
+    let is_clk_count_l: logic<1> = is_in_instr & (i_dev_id == 32'h1000);
+    let is_clk_count_h: logic<1> = is_in_instr & (i_dev_id == 32'h1001);
+    let is_clk_freq   : logic<1> = is_in_instr & (i_dev_id == 32'h1002);
+    let is_ms_count_l : logic<1> = is_in_instr & (i_dev_id == 32'h1003);
+    let is_ms_count_h : logic<1> = is_in_instr & (i_dev_id == 32'h1004);
 
     // デバイス間接続
     assign if_uart_tx.valid = is_uart & if_din.valid;
@@ -87,6 +106,26 @@ module IOBus #(
             if_din.ready  = is_out_instr & if_gpout_write.ready;
             if_dout.valid = is_in_instr & if_gpout_read.valid;
             if_dout.bits  = {24'b0, if_gpout_read.bits};
+        } else if is_clk_count_l {
+            if_din.ready  = 0;
+            if_dout.bits  = clk_count[31:0];
+            if_dout.valid = 1;
+        } else if is_clk_count_h {
+            if_din.ready  = 0;
+            if_dout.bits  = clk_count[63:32];
+            if_dout.valid = 1;
+        } else if is_clk_freq {
+            if_din.ready  = 0;
+            if_dout.bits  = clk_freq;
+            if_dout.valid = 1;
+        } else if is_ms_count_l {
+            if_din.ready  = 0;
+            if_dout.bits  = ms_count[31:0];
+            if_dout.valid = 1;
+        } else if is_ms_count_h {
+            if_din.ready  = 0;
+            if_dout.bits  = ms_count[63:32];
+            if_dout.valid = 1;
         } else {
             if_din.ready  = 0;
             if_dout.valid = 0;

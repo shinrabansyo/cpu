@@ -27,13 +27,13 @@ module UartTx #(
             if (w_ready && if_din.valid) {
                 r_bits         = {1'b1, if_din.bits, 1'b0};
                 r_bit_counter  = 8 + 2;
-                r_rate_counter = BAUD_DIVIDER[$bits(r_rate_counter)-1:0];
+                r_rate_counter = BAUD_DIVIDER[$bits(r_rate_counter) - 1:0];
             }
             if r_bit_counter >: 0 {
                 if (r_rate_counter == 0) {
                     r_bits[7:0]    =  r_bits[8:1];
                     r_bit_counter  -= 1;
-                    r_rate_counter = BAUD_DIVIDER[$bits(r_rate_counter)-1:0];
+                    r_rate_counter =  BAUD_DIVIDER[$bits(r_rate_counter) - 1:0];
                 } else {
                     r_rate_counter -= 1;
                 }
@@ -50,24 +50,24 @@ module UartRx #(
     i_clk: input clock,
     i_rst: input reset,
 
-    if_dout: modport Decoupled::sender, // 受信データをCPUに出力
-    i_rx : input logic<1>, // UART信号入力
-    o_overrun: output logic<1>, // UARTデータ取りこぼし発生？
+    if_dout  : modport Decoupled::sender   , // 受信データをCPUに出力
+    i_rx     : input   logic            <1>, // UART信号入力
+    o_overrun: output  logic            <1>, // UARTデータ取りこぼし発生？
 ) {
-    const BAUD_DIVIDER: u32 = ClockFrequency / BaudRate;
+    const BAUD_DIVIDER               : u32 = ClockFrequency / BaudRate;
     const BAUD_DIVIDER_TIMES_3_OVER_2: u32 = BAUD_DIVIDER * 3 / 2;
 
     var r_rate_counter: logic<$clog2(BAUD_DIVIDER_TIMES_3_OVER_2)>; // P.103 a～cを測るため 1.5倍
-    var r_bit_counter: logic<$clog2(8 + 2)>            ;
-    var r_bits        : logic<8 + 2>                   ; // UARTから受け取るデータを入れる箱
-    var r_rx_regs     : logic<RxSyncStages + 1>        ; // RxSyncStages : 同期に使うフリップフロップ回路の個数
-    var r_overrun     : logic<1>                       ; // CPU側に送信中にUART相手から受信させられそうな時のフラグ
-    var r_running     : logic<1>                       ; // 受信中のフラグ
+    var r_bit_counter : logic<$clog2(8 + 2)>                      ;
+    var r_bits        : logic<8 + 2>                              ; // UARTから受け取るデータを入れる箱
+    var r_rx_regs     : logic<RxSyncStages + 1>                   ; // RxSyncStages : 同期に使うフリップフロップ回路の個数
+    var r_overrun     : logic<1>                                  ; // CPU側に送信中にUART相手から受信させられそうな時のフラグ
+    var r_running     : logic<1>                                  ; // 受信中のフラグ
 
     // 受信データの出力信号
-    var r_out_valid: logic<1>;
-    var r_out_bits : logic<8>;
-    let w_out_ready: logic<1> = if_dout.ready;
+    var r_out_valid  : logic<1>;
+    var r_out_bits   : logic<8>;
+    let w_out_ready  : logic<1> = if_dout.ready;
     assign if_dout.valid = r_out_valid;
     assign if_dout.bits  = r_out_bits;
 
@@ -76,7 +76,7 @@ module UartRx #(
     always_ff (i_clk, i_rst) {
         if_reset {
             r_rate_counter = 0;
-            r_bit_counter = 0;
+            r_bit_counter  = 0;
             r_bits         = 0;
             r_rx_regs      = 0;
             r_overrun      = 0;
@@ -99,7 +99,7 @@ module UartRx #(
             //         ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~________________________~~~~~~~
             //    10MHz
             // ↓の信号:  1  1  1  1  1  1  1  1  1  0  0  0  0
-            r_rx_regs[RxSyncStages] = i_rx;
+            r_rx_regs[RxSyncStages]       = i_rx;
             r_rx_regs[RxSyncStages - 1:0] = r_rx_regs[RxSyncStages:1];
             // 相手は相手自身のクロックに合わせて送信してくるけど、自分側のクロックとそのクロックは
             // 同期していないので合わせる必要がある
@@ -111,26 +111,26 @@ module UartRx #(
             if !r_running {
                 if !r_rx_regs[1] && r_rx_regs[0] { // aの検出をしたとき
                     // スタートビット検出(立ち下がり検出)、rxRegs(0)が1(平常電位)、rxRegs(1)がゼロ(start信号)
-                    r_rate_counter = BAUD_DIVIDER_TIMES_3_OVER_2[7:0] - 1; // Wait until the center of LSB.
-                    r_bit_counter = 8 + 2 - 1;
-                    r_running = 1; // 舌の処理にcの時移る
+                    r_rate_counter = BAUD_DIVIDER_TIMES_3_OVER_2[$bits(r_rate_counter) - 1:0] - 1; // Wait until the center of LSB.
+                    r_bit_counter  = 8 + 2 - 1;
+                    r_running      = 1; // 舌の処理にcの時移る
                 }
             } else {
                 if r_rate_counter == 0 { // 1ビット周期ごとに処理
                     r_bits[8 + 2 - 1] = r_rx_regs[0]; // つぎのビットを出力
-                    r_bits[8:0] = r_bits[9:1]; // 1ビット右シフト
+                    r_bits[8:0]       = r_bits[9:1]; // 1ビット右シフト
 
                     if r_bit_counter == 0 { // ストップビットまで受信したら
                         r_out_valid = 1; // データ受信完了->CPUが読み取れる状態になる
-                        r_out_bits = r_bits[8:1];
-                        r_overrun = r_out_valid; // 前のデータが処理される前に次のデータの受信が完了した
+                        r_out_bits  = r_bits[8:1];
+                        r_overrun   = r_out_valid; // 前のデータが処理される前に次のデータの受信が完了した
                         // 上のr_out_valid = 1 と同時に入れられるので，普段はr_overrunには0が入るが
                         // やるべきタスクが終わっていない(r_out_valid = 0)がされていない状態で来ると
                         // r_overrun が 1 になる
                         r_running = 0;
                     } else {
-                        r_rate_counter = BAUD_DIVIDER[7:0] - 1;
-                        r_bit_counter -= 1;
+                        r_rate_counter =  BAUD_DIVIDER[$bits(r_rate_counter) - 1:0] - 1;
+                        r_bit_counter  -= 1;
                     }
                 } else {
                     r_rate_counter -= 1;

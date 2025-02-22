@@ -1,0 +1,41 @@
+module ClkCounter #(
+    param ClockFrequency: u32 = 15_000_000, // default 15 MHz
+) (
+    i_clk: input clock,
+    i_rst: input reset,
+
+    // クロック関連
+    o_clk_count: output logic<64>,
+    o_clk_freq : output logic<32>,
+
+    // タイマー関連
+    o_ms_count: output logic<64>,
+) {
+    var r_counter: logic<64>;
+
+    var r_ms_count  : logic<64>;
+    var r_ms_counter: logic<32>;
+
+    const MS_THRESHOLD: u32 = ClockFrequency / 1000;
+
+    assign o_clk_count = r_counter;
+    assign o_clk_freq  = ClockFrequency;
+    assign o_ms_count  = r_ms_count;
+
+    always_ff (i_clk, i_rst) {
+        if_reset {
+            r_counter    = 0;
+            r_ms_count   = 0;
+            r_ms_counter = 0;
+        } else {
+            r_counter += 1;
+
+            if r_ms_counter >= MS_THRESHOLD {
+                r_ms_counter =  0;
+                r_ms_count   += 1;
+            } else {
+                r_ms_counter += 1;
+            }
+        }
+    }
+}
