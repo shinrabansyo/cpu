@@ -16,6 +16,14 @@ module Core (
 
     // GPIO
     o_gpout: output logic<8>,
+
+    // HDMI
+    i_clk_dvi: input  `dvi clock    ,
+    i_rst_dvi: input  `dvi reset    ,
+    o_vsync  : output `dvi logic<1> ,
+    o_hsync  : output `dvi logic<1> ,
+    o_de     : output `dvi logic<1> ,
+    o_data   : output `dvi logic<24>,
 ) {
     // ワイヤ・インタフェース宣言
     // IOBus
@@ -47,6 +55,12 @@ module Core (
         // o_mosi                  ,
         // i_miso                  ,
         o_gpout  ,
+        i_clk_dvi,
+        i_rst_dvi,
+        o_vsync  ,
+        o_hsync  ,
+        o_de     ,
+        o_data   ,
     );
 
     // メモリ
@@ -74,7 +88,7 @@ module Core (
     );
 
     inst m_data_mod: DMemSync #(
-        WORD_SIZE: 2048,
+        WORD_SIZE: 4096,
     ) (
         i_clk : i_clk                   ,
         i_rst : i_rst                   ,

@@ -1,3 +1,4 @@
+#[test(test1)]
 embed (inline) sv{{{
     module top();
         logic i_clk;
@@ -9,7 +10,29 @@ embed (inline) sv{{{
         logic i_miso;
         logic [7:0] o_gpout;
 
+        logic i_clk_dvi;
+        logic i_rst_dvi;
+        logic o_vsync;
+        logic o_hsync;
+        logic o_de;
+        logic [23:0] o_data;
+
         veryl_Core core(.*);
+
+        initial begin
+            /* verilator lint_off INITIALDLY */
+            i_clk_dvi <= 0;
+            i_rst_dvi <= 1;
+
+            @(posedge i_clk_dvi);
+            @(posedge i_clk_dvi);
+            @(posedge i_clk_dvi)
+            i_rst_dvi <= 0;
+
+            repeat (32'h400000) @(posedge i_clk_dvi);
+            $finish;
+            /* verilator lint_on INITIALDLY */
+        end
 
         initial begin
             $dumpfile("wave.vcd");
@@ -24,7 +47,7 @@ embed (inline) sv{{{
 
             @(posedge i_clk);
             @(posedge i_clk);
-            @(posedge i_clk);
+            @(posedge i_clk)
             i_rst <= 0;
             /* verilator lint_on INITIALDLY */
             @(posedge i_clk);
@@ -41,11 +64,15 @@ embed (inline) sv{{{
             #1000 i_rx = 0;
             #1000 i_rx = 1;
             repeat(1000) @(posedge i_clk);
-            $finish;
+            // $finish;
         end
 
-        always #(5) begin
+        always #(2) begin
             i_clk <= ~i_clk;
+        end
+
+        always #(3) begin
+            i_clk_dvi <= ~i_clk_dvi;
         end
 
     endmodule
