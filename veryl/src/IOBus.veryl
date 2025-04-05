@@ -16,9 +16,9 @@ module IOBus #(
     i_rx: input  logic<1>,
 
     // SPI
-    // o_sclk: output logic<1>,
-    // o_mosi: output logic<1>,
-    // i_miso: input  logic<1>,
+    o_sclk: output logic<1>,
+    o_mosi: output logic<1>,
+    i_miso: input  logic<1>,
 
     // GPIO
     o_gpout: output logic<8>,
@@ -32,9 +32,9 @@ module IOBus #(
     o_data   : output `dvi logic<24>,
 ) {
     // UART
-    inst if_uart_tx     : Decoupled #(Width: 8,);
-    inst if_uart_rx     : Decoupled #(Width: 8,);
-    var uart_rx_overrun: logic<1>;
+    inst if_uart_tx       : Decoupled #(Width: 8,);
+    inst if_uart_rx       : Decoupled #(Width: 8,);
+    var w_uart_rx_overrun: logic<1>;
 
     inst uart_tx: UartTx #(
         ClockFrequency              ,
@@ -51,11 +51,41 @@ module IOBus #(
         BaudRate      : UartBaudRate,
         RxSyncStages  : 2           ,
     ) (
-        i_clk                     ,
-        i_rst                     ,
-        if_dout  : if_uart_rx     ,
-        i_rx                      ,
-        o_overrun: uart_rx_overrun,
+        i_clk                       ,
+        i_rst                       ,
+        if_dout  : if_uart_rx       ,
+        i_rx                        ,
+        o_overrun: w_uart_rx_overrun,
+    );
+
+    // SPI
+    inst if_spi_din : Decoupled #(Width: 8,);
+    inst if_spi_dout: Decoupled #(Width: 8,);
+
+    inst if_spi_clkshamt: Decoupled #(Width: 3,);
+    var w_spi_clkshamt : logic<3>;
+
+    inst if_spi_mode: Decoupled #(Width: 2,);
+    var w_spi_mode : logic<2>;
+
+    inst spi: Spi #(
+        ClockFrequency  ,
+    ) (
+        i_clk  ,
+        i_rst  ,
+
+        o_mosi  ,
+        i_miso  ,
+        o_sclk  ,
+
+        if_din : if_spi_din ,
+        if_dout: if_spi_dout,
+
+        if_clkshamt: if_spi_clkshamt,
+        o_clkshamt : w_spi_clkshamt ,
+
+        if_spi_mode: if_spi_mode,
+        o_spi_mode : w_spi_mode ,
     );
 
     // GPIO
@@ -89,18 +119,18 @@ module IOBus #(
     const HDMI_LENGTH       : u32 = 32'h1000000;
     const HDMI_VRAM_ADR_BITS: u32 = $clog2((128 * 128 + 1) >> 1);
     // inst if_col_mode_din   : Decoupled #(Width: 8,);
-    inst if_col_table_din  : Decoupled #(Width: 32,);
-    inst if_vdata_in       : Decoupled #(Width: 8,);
+    inst if_col_table_din: Decoupled #(Width: 32,);
+    inst if_vdata_in     : Decoupled #(Width: 8,);
     // inst if_vdata_out      : Decoupled #(Width: 32,);
-    let i_vdata_adr       : logic<HDMI_VRAM_ADR_BITS> = (i_dev_id - HDMI_BASE) as HDMI_VRAM_ADR_BITS;
+    let i_vdata_adr: logic<HDMI_VRAM_ADR_BITS> = (i_dev_id - HDMI_BASE) as HDMI_VRAM_ADR_BITS;
     inst vc: VideoControllerColTable (
-        i_clk             ,
-        i_rst             ,
+        i_clk  ,
+        i_rst  ,
         // if_col_mode_din   ,
         if_col_table_din  ,
         if_vdata_in       ,
         // if_vdata_out      ,
-        i_vdata_adr       ,
+        i_vdata_adr  ,
 
         i_clk_dvi  ,
         i_rst_dvi  ,
@@ -115,6 +145,9 @@ module IOBus #(
     let is_out_instr     : logic<1> = if_din.valid;
     let is_inout_instr   : logic<1> = is_in_instr | is_out_instr;
     let is_uart          : logic<1> = is_inout_instr & (i_dev_id == 32'h0000);
+    let is_spi_data      : logic<1> = is_inout_instr & (i_dev_id == 32'h0001);
+    let is_spi_mode      : logic<1> = is_inout_instr & (i_dev_id == 32'h0002);
+    let is_spi_clkshamt  : logic<1> = is_inout_instr & (i_dev_id == 32'h0003);
     let is_gpout         : logic<1> = is_inout_instr & (i_dev_id == 32'h0004);
     let is_hdmi_col_mode : logic<1> = is_out_instr & (i_dev_id == 32'h0006);
     let is_hdmi_col_table: logic<1> = is_out_instr & (i_dev_id == 32'h0007);
@@ -129,6 +162,16 @@ module IOBus #(
     assign if_uart_tx.valid = is_uart & if_din.valid;
     assign if_uart_tx.bits  = if_din.bits[7:0];
     assign if_uart_rx.ready = is_uart & if_dout.ready;
+
+    assign if_spi_din.valid  = is_spi_data & if_din.valid;
+    assign if_spi_din.bits   = if_din.bits[7:0];
+    assign if_spi_dout.ready = is_spi_data & if_dout.ready;
+
+    assign if_spi_mode.valid = is_spi_mode & if_din.valid;
+    assign if_spi_mode.bits  = if_din.bits[1:0];
+
+    assign if_spi_clkshamt.valid = is_spi_clkshamt & if_din.valid;
+    assign if_spi_clkshamt.bits  = if_din.bits[2:0];
 
     assign if_gpout_write.valid = is_gpout & if_din.valid;
     assign if_gpout_write.bits  = if_din.bits[7:0];
@@ -145,6 +188,18 @@ module IOBus #(
             if_din.ready  = is_out_instr & if_uart_tx.ready;
             if_dout.valid = is_in_instr & if_uart_rx.valid;
             if_dout.bits  = {24'b0, if_uart_rx.bits};
+        } else if is_spi_data {
+            if_din.ready  = is_out_instr & if_spi_din.ready;
+            if_dout.valid = is_in_instr & if_spi_dout.valid;
+            if_dout.bits  = {24'b0, if_spi_dout.bits};
+        } else if is_spi_mode {
+            if_din.ready  = is_out_instr & if_spi_mode.ready;
+            if_dout.valid = 1;
+            if_dout.bits  = {30'b0, w_spi_mode};
+        } else if is_spi_clkshamt {
+            if_din.ready  = is_out_instr & if_spi_clkshamt.ready;
+            if_dout.valid = 1;
+            if_dout.bits  = {29'b0, w_spi_clkshamt};
         } else if is_gpout {
             if_din.ready  = is_out_instr & if_gpout_write.ready;
             if_dout.valid = is_in_instr & if_gpout_read.valid;
@@ -179,10 +234,10 @@ module IOBus #(
             if_dout.bits  = ms_count[63:32];
             if_dout.valid = 1;
         } else if is_hdmi_vram {
-            if_din.ready  = is_out_instr & if_vdata_in.ready;
+            if_din.ready = is_out_instr & if_vdata_in.ready;
             // if_dout.valid = is_in_instr & if_vdata_out.valid;
             if_dout.valid = 1;
-            if_dout.bits = 32'hdeadbeef;
+            if_dout.bits  = 32'hdeadbeef;
             // if_dout.bits  = if_vdata_out.bits;
         } else {
             if_din.ready  = 0;
