@@ -186,12 +186,22 @@ module IMemSync #(
 
         if !BUFFER_OUT :g_out {
             always_comb {
-                q = ram_data[bank_adrb];
+                // Write throughモード: 同じアドレスに書き込みがある場合は書き込みデータを返す
+                if i_mea && i_wea[BANK_NUM - adra_mod + bank_id] && bank_adra == bank_adrb {
+                    q = data_table[(BANK_NUM - adra_mod + bank_id)*8+:8];
+                } else {
+                    q = ram_data[bank_adrb];
+                }
             }
         } else {
             always_ff {
                 if i_meb {
-                    q = ram_data[bank_adrb];
+                    // Write throughモード: 同じアドレスに書き込みがある場合は書き込みデータを返す
+                    if i_mea && i_wea[BANK_NUM - adra_mod + bank_id] && bank_adra == bank_adrb {
+                        q = data_table[(BANK_NUM - adra_mod + bank_id)*8+:8];
+                    } else {
+                        q = ram_data[bank_adrb];
+                    }
                 }
             }
         }
@@ -323,12 +333,22 @@ module DMemSync #(
 
         if !BUFFER_OUT :g_out {
             always_comb {
-                q = ram_data[bank_adrb];
+                // Write throughモード: 同じアドレスに書き込みがある場合は書き込みデータを返す
+                if i_mea && i_wea[BANK_NUM - adra_mod + bank_id] && bank_adra == bank_adrb {
+                    q = data_table[(BANK_NUM - adra_mod + bank_id)*8+:8];
+                } else {
+                    q = ram_data[bank_adrb];
+                }
             }
         } else {
             always_ff {
                 if i_meb {
-                    q = ram_data[bank_adrb];
+                    // Write throughモード: 同じアドレスに書き込みがある場合は書き込みデータを返す
+                    if i_mea && i_wea[BANK_NUM - adra_mod + bank_id] && bank_adra == bank_adrb {
+                        q = data_table[(BANK_NUM - adra_mod + bank_id)*8+:8];
+                    } else {
+                        q = ram_data[bank_adrb];
+                    }
                 }
             }
         }

@@ -22,6 +22,14 @@ module IOBus #(
 
     // GPIO
     o_gpout: output logic<8>,
+
+    // HDMI
+    i_clk_dvi: input  `dvi clock    ,
+    i_rst_dvi: input  `dvi reset    ,
+    o_vsync  : output `dvi logic<1> ,
+    o_hsync  : output `dvi logic<1> ,
+    o_de     : output `dvi logic<1> ,
+    o_data   : output `dvi logic<24>,
 ) {
     // UART
     inst if_uart_tx     : Decoupled #(Width: 8,);
@@ -76,17 +84,46 @@ module IOBus #(
         o_ms_count : ms_count ,
     );
 
+    // HDMI
+    const HDMI_BASE         : u32 = 32'h10000000;
+    const HDMI_LENGTH       : u32 = 32'h1000000;
+    const HDMI_VRAM_ADR_BITS: u32 = $clog2((128 * 128 + 1) >> 1);
+    // inst if_col_mode_din   : Decoupled #(Width: 8,);
+    inst if_col_table_din  : Decoupled #(Width: 32,);
+    inst if_vdata_in       : Decoupled #(Width: 8,);
+    // inst if_vdata_out      : Decoupled #(Width: 32,);
+    let i_vdata_adr       : logic<HDMI_VRAM_ADR_BITS> = (i_dev_id - HDMI_BASE) as HDMI_VRAM_ADR_BITS;
+    inst vc: VideoControllerColTable (
+        i_clk             ,
+        i_rst             ,
+        // if_col_mode_din   ,
+        if_col_table_din  ,
+        if_vdata_in       ,
+        // if_vdata_out      ,
+        i_vdata_adr       ,
+
+        i_clk_dvi  ,
+        i_rst_dvi  ,
+        o_vsync    ,
+        o_hsync    ,
+        o_de       ,
+        o_data     ,
+    );
+
     // デバイス選択
-    let is_in_instr   : logic<1> = if_dout.ready;
-    let is_out_instr  : logic<1> = if_din.valid;
-    let is_inout_instr: logic<1> = is_in_instr | is_out_instr;
-    let is_uart       : logic<1> = is_inout_instr & (i_dev_id == 32'h0000);
-    let is_gpout      : logic<1> = is_inout_instr & (i_dev_id == 32'h0004);
-    let is_clk_count_l: logic<1> = is_in_instr & (i_dev_id == 32'h1000);
-    let is_clk_count_h: logic<1> = is_in_instr & (i_dev_id == 32'h1001);
-    let is_clk_freq   : logic<1> = is_in_instr & (i_dev_id == 32'h1002);
-    let is_ms_count_l : logic<1> = is_in_instr & (i_dev_id == 32'h1003);
-    let is_ms_count_h : logic<1> = is_in_instr & (i_dev_id == 32'h1004);
+    let is_in_instr      : logic<1> = if_dout.ready;
+    let is_out_instr     : logic<1> = if_din.valid;
+    let is_inout_instr   : logic<1> = is_in_instr | is_out_instr;
+    let is_uart          : logic<1> = is_inout_instr & (i_dev_id == 32'h0000);
+    let is_gpout         : logic<1> = is_inout_instr & (i_dev_id == 32'h0004);
+    let is_hdmi_col_mode : logic<1> = is_out_instr & (i_dev_id == 32'h0006);
+    let is_hdmi_col_table: logic<1> = is_out_instr & (i_dev_id == 32'h0007);
+    let is_clk_count_l   : logic<1> = is_in_instr & (i_dev_id == 32'h1000);
+    let is_clk_count_h   : logic<1> = is_in_instr & (i_dev_id == 32'h1001);
+    let is_clk_freq      : logic<1> = is_in_instr & (i_dev_id == 32'h1002);
+    let is_ms_count_l    : logic<1> = is_in_instr & (i_dev_id == 32'h1003);
+    let is_ms_count_h    : logic<1> = is_in_instr & (i_dev_id == 32'h1004);
+    let is_hdmi_vram     : logic<1> = is_inout_instr & (HDMI_BASE <= i_dev_id & i_dev_id <: HDMI_BASE + HDMI_LENGTH);
 
     // デバイス間接続
     assign if_uart_tx.valid = is_uart & if_din.valid;
@@ -97,6 +134,12 @@ module IOBus #(
     assign if_gpout_write.bits  = if_din.bits[7:0];
     assign if_gpout_read.ready  = is_gpout & if_dout.ready;
 
+    assign if_col_table_din.valid = is_hdmi_col_table & if_din.valid;
+    assign if_col_table_din.bits  = if_din.bits;
+    assign if_vdata_in.valid      = is_hdmi_vram & if_din.valid;
+    assign if_vdata_in.bits       = if_din.bits[7:0];
+    // assign if_vdata_out.ready     = is_hdmi_vram & if_dout.ready;
+
     always_comb {
         if is_uart {
             if_din.ready  = is_out_instr & if_uart_tx.ready;
@@ -106,6 +149,15 @@ module IOBus #(
             if_din.ready  = is_out_instr & if_gpout_write.ready;
             if_dout.valid = is_in_instr & if_gpout_read.valid;
             if_dout.bits  = {24'b0, if_gpout_read.bits};
+        } else if is_hdmi_col_mode {
+            // if_din.ready  = is_out_instr & if_col_table_din.ready;
+            if_din.ready  = 1; // 16色モード固定
+            if_dout.valid = 0;
+            if_dout.bits  = 0;
+        } else if is_hdmi_col_table {
+            if_din.ready  = is_out_instr & if_col_table_din.ready;
+            if_dout.valid = 0;
+            if_dout.bits  = 0;
         } else if is_clk_count_l {
             if_din.ready  = 0;
             if_dout.bits  = clk_count[31:0];
@@ -126,6 +178,12 @@ module IOBus #(
             if_din.ready  = 0;
             if_dout.bits  = ms_count[63:32];
             if_dout.valid = 1;
+        } else if is_hdmi_vram {
+            if_din.ready  = is_out_instr & if_vdata_in.ready;
+            // if_dout.valid = is_in_instr & if_vdata_out.valid;
+            if_dout.valid = 1;
+            if_dout.bits = 32'hdeadbeef;
+            // if_dout.bits  = if_vdata_out.bits;
         } else {
             if_din.ready  = 0;
             if_dout.valid = 0;
