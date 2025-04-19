@@ -174,20 +174,29 @@ module VideoControllerColTable #(
     var r_hsync        : `dvi logic<1>                     ;
     var r_de           : `dvi logic<1>                     ;
     var r_data         : `dvi logic<24>                    ;
+
     var r_pixel_counter: `dvi logic<$clog2(CONFIG.H_TOTAL)>;
     var r_line_counter : `dvi logic<$clog2(CONFIG.V_TOTAL)>;
 
     var r_red  : `dvi logic<8>;
     var r_green: `dvi logic<8>;
     var r_blue : `dvi logic<8>;
-    assign o_data  = {r_blue, r_green, r_red};
+    assign o_data  = {r_red, r_green, r_blue};
 
     // let w_pixel_adr_flatten : `dvi logic<$clog2(CONFIG.H_ACTIVE * CONFIG.V_ACTIVE)> = YPos(r_line_counter) * CONFIG.H_ACTIVE + XPos(r_pixel_counter);
-    let w_pixel_adr_flatten : `dvi logic<PIXEL_ADR_BITS>     = (YPos(r_line_counter) * 128 + XPos(r_pixel_counter)) as PIXEL_ADR_BITS;
-    let w_draw_adr          : `dvi logic<VRAM_ADDRESS_WIDTH> = (w_pixel_adr_flatten >> 1) as VRAM_ADDRESS_WIDTH;
+    let w_inv_zoom: `dvi logic<VRAM_ADDRESS_WIDTH + 1> = InvZoom(XPos(r_pixel_counter), YPos(r_line_counter));
+    let w_pixel_adr_flatten : `dvi logic<VRAM_ADDRESS_WIDTH>     = w_inv_zoom[VRAM_ADDRESS_WIDTH - 1:0];
+    let w_draw_adr          : `dvi logic<VRAM_ADDRESS_WIDTH> = w_pixel_adr_flatten >> 1;
     var w_draw_data         : `dvi logic<8>                 ;
-    let w_draw_col_table_adr: `dvi logic<TABLE_BITS>         = (w_draw_data >> (w_pixel_adr_flatten[0] << 1)) as TABLE_BITS; // pixel の番地が奇数のとき、上位 4bit を使う
-    let w_is_vram_region    : `dvi logic<1>                 = IsVramRegion(XPos(r_pixel_counter), YPos(r_line_counter));
+    let w_draw_col_table_adr: `dvi logic<TABLE_BITS>         = if w_pixel_adr_flatten[0] {
+        (w_draw_data >> 4) as TABLE_BITS
+    } else {
+        w_draw_data as TABLE_BITS
+    }; // pixel の番地が奇数のとき、上位 4bit を使う
+    
+    // (x, y) = (3, 0) pixel を指していた場合
+    // vram上では vram[1] の上位 4bit が (3, 0) に対応
+    // xxxx ????
 
     const H_LBORDER_START     : u32 = CONFIG.H_SYNC + CONFIG.H_BACK_PORCH;
     const H_ACTIVE_VIDEO_START: u32 = H_LBORDER_START + CONFIG.H_LBORDER;
@@ -199,9 +208,15 @@ module VideoControllerColTable #(
     const V_BOTTOM_BORDER_START: u32 = V_ACTIVE_VIDEO_START + CONFIG.V_ACTIVE;
     const V_FRONT_PORCH_START  : u32 = V_BOTTOM_BORDER_START + CONFIG.V_BOTTOM_BORDER;
 
+    // const H_MAX_ZOOM: u32 = 1280 / WIDTH;
+    // const V_MAX_ZOOM: u32 = 720  / HEIGHT;
+    // const ZOOM_RATIO: u32 = if (H_MAX_ZOOM < V_MAX_ZOOM) { H_MAX_ZOOM } else { V_MAX_ZOOM };
+    // var r_hzoom_counter: `dvi logic<$clog2(ZOOM_RATIO+1)>;
+    // var r_vzoom_counter: `dvi logic<$clog2(ZOOM_RATIO+1)>;
+
     // WIDTH x HEIGHT のVRAM領域のオフセット(原点：左上)
-    const OFFSET_X: u32 = 0;
-    const OFFSET_Y: u32 = 0;
+    // const OFFSET_X: u32 = 0;
+    // const OFFSET_Y: u32 = 0;
 
     function IsActiveRegion (
         i_pixel_counter: input logic<$clog2(CONFIG.H_TOTAL)>,
@@ -222,13 +237,16 @@ module VideoControllerColTable #(
         return i_line_counter as 32 - V_ACTIVE_VIDEO_START;
     }
 
-    function IsVramRegion (
+    function InvZoom(
         i_x: input logic<32>,
         i_y: input logic<32>,
-    ) -> logic {
-        /* verilator lint_off UNSIGNED */
-        return (OFFSET_X <= i_x && i_x <: WIDTH + OFFSET_X && OFFSET_Y <= i_y && i_y <: HEIGHT + OFFSET_Y);
-        /* verilator lint_on UNSIGNED */
+    ) -> logic <VRAM_ADDRESS_WIDTH + 1>{
+
+        let w_x: logic<32> = i_x >> 2;
+        let w_y: logic<32> = i_y >> 2;
+        let w_valid: logic = (w_x <: WIDTH) && (w_y <: HEIGHT);
+
+        return {w_valid, (w_y * WIDTH + w_x) as VRAM_ADDRESS_WIDTH};
     }
 
     var w_draw_red  : `dvi logic<8>;
@@ -236,7 +254,7 @@ module VideoControllerColTable #(
     var w_draw_blue : `dvi logic<8>;
 
     unsafe (cdc) {
-        assign {w_draw_blue, w_draw_green, w_draw_red} = r_col_table[w_draw_col_table_adr];
+        assign {w_draw_red, w_draw_green, w_draw_blue} = r_col_table[w_draw_col_table_adr];
     }
 
     // 1 pixel per clock
@@ -274,7 +292,7 @@ module VideoControllerColTable #(
             o_vsync = (r_line_counter as 32 <: CONFIG.V_SYNC);
             o_de    = IsActiveRegion(r_pixel_counter, r_line_counter);
 
-            if (IsActiveRegion(r_pixel_counter, r_line_counter) && IsVramRegion(XPos(r_pixel_counter), YPos(r_line_counter))) {
+            if (IsActiveRegion(r_pixel_counter, r_line_counter) && w_inv_zoom[msb]) {
                 r_red   = w_draw_red;
                 r_green = w_draw_green;
                 r_blue  = w_draw_blue;
