@@ -71,6 +71,13 @@ module Spi #(
                 r_sclk_counter -= 1;
             }
         } else {
+            // din と clkshamt が同じクロックで設定された場合への対処
+            if if_din.valid && if_clkshamt.valid && if_clkshamt.ready {
+                r_sclk_counter = (1 << (if_clkshamt.bits + 1)) - 1;
+            } else {
+                r_sclk_counter = (1 << (r_clkshamt + 1)) - 1;
+            }
+
             if if_spi_mode.valid && if_spi_mode.ready {
                 r_sclk = if_spi_mode.bits[1];
             } else {
@@ -139,21 +146,13 @@ module Spi #(
             r_shift_reg    = 0;
             r_busy         = 0;
             r_bit_counter  = 0;
-            r_sclk_counter = 0;
             r_miso_buf     = 0;
         } else if r_busy && r_bit_counter == 0 {
             r_busy = 0;
         } else if !r_busy && if_din.valid { // 送信開始処理
             r_shift_reg   = if_din.bits;
             r_busy        = 1;
-            r_bit_counter = 8;
-
-            // din と clkshamt が同じクロックで設定された場合への対処
-            if if_clkshamt.valid && if_clkshamt.ready {
-                r_sclk_counter = (1 << (if_clkshamt.bits + 1)) - 1;
-            } else {
-                r_sclk_counter = (1 << (r_clkshamt + 1)) - 1;
-            }
+            r_bit_counter = 8; 
         } else if r_busy && r_bit_counter != 0 { // 送受信処理の本体
             if w_mode_1_2 {
                 // posedge かつ mode 1 の最初のクロックでない場合

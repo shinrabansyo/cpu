@@ -10,9 +10,9 @@ module Core (
     i_rx: input  logic<1>,
 
     // SPI
-    // o_sclk: output logic<1>,
-    // o_mosi: output logic<1>,
-    // i_miso: input  logic<1>,
+    o_sclk: output logic<1>,
+    o_mosi: output logic<1>,
+    i_miso: input  logic<1>,
 
     // GPIO
     o_gpout: output logic<8>,
@@ -51,9 +51,9 @@ module Core (
         if_dout : if_io_bus_din ,
         o_tx                    ,
         i_rx                    ,
-        // o_sclk                  ,
-        // o_mosi                  ,
-        // i_miso                  ,
+        o_sclk                  ,
+        o_mosi                  ,
+        i_miso                  ,
         o_gpout  ,
         i_clk_dvi,
         i_rst_dvi,
