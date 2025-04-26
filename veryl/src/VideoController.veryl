@@ -46,7 +46,7 @@ module VideoControllerColTable #(
     param CONFIG            : Video::VesaDmtConfig = Video::Dmt1280x720At60Hz()       ,
     param NUM_PIXELS        : u32                  = CONFIG.H_ACTIVE * CONFIG.V_ACTIVE,
     param PIXEL_ADR_BITS    : u32                  = $clog2(NUM_PIXELS)               ,
-    param VRAM_ADDRESS_WIDTH: u32                  = $clog2((WIDTH * HEIGHT + 1) >> 1),
+    param VRAM_ADDRESS_WIDTH: u32                  = $clog2((WIDTH * HEIGHT + 1) >> 1) + 1,
 ) (
     i_clk: input clock,
     i_rst: input reset,
@@ -55,7 +55,7 @@ module VideoControllerColTable #(
 
     if_vdata_in : modport Decoupled::receiver                    ,
     // if_vdata_out: modport Decoupled::sender                      ,
-    i_vdata_adr : input   logic              <VRAM_ADDRESS_WIDTH>,
+    i_vdata_adr : input   logic              <VRAM_ADDRESS_WIDTH-1>,
 
 
     // o_clr : output logic                        ,
@@ -121,7 +121,7 @@ module VideoControllerColTable #(
         i_clr      : 0                    ,
         i_mea      : if_vdata_in.valid    ,
         i_wea      : if_vdata_in.valid    ,
-        i_adra     : i_vdata_adr          ,
+        i_adra     : i_vdata_adr[VRAM_ADDRESS_WIDTH-2:0],
         i_da       : if_vdata_in.bits[7:0],
         // i_meb      : 1                    ,
         // i_adrb     : i_vdata_adr          ,
@@ -129,7 +129,7 @@ module VideoControllerColTable #(
         i_clk_video: i_clk_dvi            ,
         i_rst_video: i_rst_dvi            ,
         i_mev      : 1                    ,
-        i_adrv     : w_draw_adr           ,
+        i_adrv     : w_draw_adr[VRAM_ADDRESS_WIDTH-2:0],
         o_qv       : w_draw_data          ,
     );
 
@@ -175,6 +175,8 @@ module VideoControllerColTable #(
     var r_de           : `dvi logic<1>                     ;
     var r_data         : `dvi logic<24>                    ;
 
+    let w_pre_pre_pixel_counter: `dvi logic<$clog2(CONFIG.H_TOTAL)> = if r_pixel_counter as 32 + 1 == CONFIG.H_TOTAL - 1 { 0 } else if r_pixel_counter as 32 == CONFIG.H_TOTAL - 1 { 1 } else { r_pixel_counter + 2 };
+    let w_pre_pixel_counter: `dvi logic<$clog2(CONFIG.H_TOTAL)> = if r_pixel_counter as 32 == CONFIG.H_TOTAL - 1 { 0 } else { r_pixel_counter + 1 };
     var r_pixel_counter: `dvi logic<$clog2(CONFIG.H_TOTAL)>;
     var r_line_counter : `dvi logic<$clog2(CONFIG.V_TOTAL)>;
 
@@ -184,9 +186,11 @@ module VideoControllerColTable #(
     assign o_data  = {r_red, r_green, r_blue};
 
     // let w_pixel_adr_flatten : `dvi logic<$clog2(CONFIG.H_ACTIVE * CONFIG.V_ACTIVE)> = YPos(r_line_counter) * CONFIG.H_ACTIVE + XPos(r_pixel_counter);
-    let w_inv_zoom: `dvi logic<VRAM_ADDRESS_WIDTH + 1> = InvZoom(XPos(r_pixel_counter), YPos(r_line_counter));
+    let w_inv_zoom: `dvi logic<VRAM_ADDRESS_WIDTH + 1> = InvZoom(XPos(w_pre_pixel_counter), YPos(r_line_counter));
+    let w_inv_zoom_reading : `dvi logic<VRAM_ADDRESS_WIDTH + 1> = InvZoom(XPos(w_pre_pre_pixel_counter), YPos(r_line_counter));
+    let w_pixel_adr_flatten_reading : `dvi logic<VRAM_ADDRESS_WIDTH>     = w_inv_zoom_reading[VRAM_ADDRESS_WIDTH - 1:0];
     let w_pixel_adr_flatten : `dvi logic<VRAM_ADDRESS_WIDTH>     = w_inv_zoom[VRAM_ADDRESS_WIDTH - 1:0];
-    let w_draw_adr          : `dvi logic<VRAM_ADDRESS_WIDTH> = w_pixel_adr_flatten >> 1;
+    let w_draw_adr          : `dvi logic<VRAM_ADDRESS_WIDTH> = w_pixel_adr_flatten_reading >> 1;
     var w_draw_data         : `dvi logic<8>                 ;
     let w_draw_col_table_adr: `dvi logic<TABLE_BITS>         = if w_pixel_adr_flatten[0] {
         (w_draw_data >> 4) as TABLE_BITS
@@ -215,8 +219,8 @@ module VideoControllerColTable #(
     // var r_vzoom_counter: `dvi logic<$clog2(ZOOM_RATIO+1)>;
 
     // WIDTH x HEIGHT のVRAM領域のオフセット(原点：左上)
-    // const OFFSET_X: u32 = 0;
-    // const OFFSET_Y: u32 = 0;
+    const OFFSET_X: u32 = 384;
+    const OFFSET_Y: u32 = 104;
 
     function IsActiveRegion (
         i_pixel_counter: input logic<$clog2(CONFIG.H_TOTAL)>,
@@ -228,13 +232,13 @@ module VideoControllerColTable #(
     function XPos (
         i_pixel_counter: input logic<$clog2(CONFIG.H_TOTAL)>,
     ) -> u32 {
-        return i_pixel_counter as 32 - H_ACTIVE_VIDEO_START;
+        return i_pixel_counter as 32 - H_ACTIVE_VIDEO_START - OFFSET_X;
     }
 
     function YPos (
         i_line_counter: input logic<$clog2(CONFIG.V_TOTAL)>,
     ) -> u32 {
-        return i_line_counter as 32 - V_ACTIVE_VIDEO_START;
+        return i_line_counter as 32 - V_ACTIVE_VIDEO_START - OFFSET_Y;
     }
 
     function InvZoom(
@@ -280,13 +284,15 @@ module VideoControllerColTable #(
             // ほんとは as $bits(r_pixel_counter) を使いたいが、現状使えないので u32 に揃える
             if (r_pixel_counter as 32 == CONFIG.H_TOTAL - 1) {
                 r_pixel_counter = 0;
+            } else {
+                r_pixel_counter += 1;
+            }
+            if (w_pre_pixel_counter as 32 == CONFIG.H_TOTAL - 1) {
                 if (r_line_counter as 32 == CONFIG.V_TOTAL - 1) {
                     r_line_counter = 0;
                 } else {
                     r_line_counter += 1;
                 }
-            } else {
-                r_pixel_counter += 1;
             }
             o_hsync = (r_pixel_counter as 32 <: CONFIG.H_SYNC);
             o_vsync = (r_line_counter as 32 <: CONFIG.V_SYNC);
@@ -297,9 +303,9 @@ module VideoControllerColTable #(
                 r_green = w_draw_green;
                 r_blue  = w_draw_blue;
             } else {
-                r_red   = 8'hFF;
-                r_green = 8'hFF;
-                r_blue  = 8'hFF;
+                r_red   = 8'h00;
+                r_green = 8'h00;
+                r_blue  = 8'h00;
             }
         }
     }
