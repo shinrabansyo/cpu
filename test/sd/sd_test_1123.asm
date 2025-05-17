@@ -11,33 +11,69 @@
 
     // 1. SDカードの初期化
     addi r10 = r0, 0  // cs
-    addi r11 = r0, 5  // clk_shamt
+    addi r11 = r0, 4  // clk_shamt
     beq r1, (r0, r0) -> @func_sd_init
 
-    // 2. シングルブロックの読み取り
-    addi r10 = r0, 0  // block_addr (SDカード)
-    addi r11 = r0, 0  // buffer (CPU)
-    beq r1, (r0, r0) -> @func_single_block_read
+    // 2. 10 ブロック分読み取り
+    addi r4 = r0, 0
+    add r20 = r0, r4
+    addi r5 = r0, 10
+    add r21 = r0, r5
+    @print_loop.func_main
+    beq r0, (r20, r21) -> @inf_loop.func_main
+        add r10 = r0, r20
+        add r11 = r0, r0
+        beq r1, (r0, r0) -> @func_single_block_print
+        addi r4 = r0, 1
+        add r20 = r20, r4
+        beq r0, (r0, r0) -> @print_loop.func_main
 
-    // 3. 実行結果確認
-    beq r0, (r10, 0) -> @uart.func_main
+    // 3. 無限ループ
+    @inf_loop.func_main
     beq r0, (r0, r0) -> @inf_loop.func_main
 
-    // 4. 512byte UART送信
-    @uart.func_main
+// void func_single_block_print(uint32_t block_addr, uint8_t *buffer)
+@func_single_block_print
+// プロローグ
+    // フレームポインタの退避
+    subi r2 = r2, 4
+    sw r2[0] = r3
+    addi r3 = r2, 0
+
+    // リターンアドレスの退避
+    subi r2 = r2, 16
+    sw r3[-4] = r1
+
+    // 1. シングルブロックの読み取り
+    beq r1, (r0, r0) -> @func_single_block_read
+
+    // 2. 実行結果確認
+    beq r0, (r10, r0) -> @uart.func_single_block_print
+    beq r0, (r0, r0) -> @epilogue.func_single_block_print
+
+    // 3. 512byte UART送信
+    @uart.func_single_block_print
     addi r5 = r0, 0
-    @read_loop.func_main
-    beq r0, (r5, 512) -> @inf_loop.func_main
+    addi r7 = r0, 512
+    @read_loop.func_single_block_print
+    beq r0, (r5, r7) -> @epilogue.func_single_block_print
         lb r6 = r5[0]
         out r0[0] = r6
         addi r5 = r5, 1
-        beq r0, (r0, r0) -> @read_loop.func_main
+        beq r0, (r0, r0) -> @read_loop.func_single_block_print
 
-    // 5. 無限ループ
-    @inf_loop.func_main
-    addi r4 = r0, 97
-    out r0[0] = r4
-    beq r0, (r0, r0) -> @inf_loop.func_main
+    // エピローグ
+    @epilogue.func_single_block_print
+    // 保存レジスタの復元
+    lw r1 = r3[-4]
+    addi r2 = r2, 16
+
+    // フレームポインタの復元
+    lw r3 = r3[0]
+    addi r2 = r2, 4
+
+    // return
+    jal r0, r1[0]
 
 // uint8_t func_sd_init(uint8_t cs, uint8_t clk_shamt)
 @func_sd_init
@@ -210,6 +246,9 @@
     addi r11 = r0, 0             // arg
     addi r12 = r0, 0             // crc は cmd8までなのでテキトーで大丈夫
     beq r1, (r0, r0) -> @func_spi_sd_command
+
+    // CMD58 の R3 レスポンス
+    beq r1, (r0, r0) -> @func_polling_r3_r7_response
     
     // R3 resp の 30bit 目が 1 であることを確認（SDHC/SDXC）
     addi r4 = r0, 0x40000000
@@ -488,7 +527,7 @@
     add r21 = r0, r11
     
     addi r10 = r0, 17  // cmd17
-    addi r11 = r0, r20 // arg = block_addr
+    add r11 = r0, r20  // arg = block_addr
     addi r12 = r0, 0   // crc テキトー
     
     beq r1, (r0, r0) -> @func_spi_sd_command
@@ -502,7 +541,7 @@
     // data token を待つ
     beq r1, (r0, r0) -> @func_polling_data_token_for_cmd17_18_24
 
-    // バッファに書き込み
+    // バッファに書き込み (0 ~ 510 番目)
     add r22 = r0, r0
     @store_loop.func_single_block_read
     addi r4 = r0, 512
@@ -510,22 +549,34 @@
     
     addi r10 = r0, 0xFF
     beq r1, (r0, r0) -> @func_spi_transfer
-    
+
+    beq r0, (r0, r22) -> @store_loop_inc.func_single_block_read
     add r5 = r0, r21
     sb r5[0] = r10
 
+    @store_loop_inc.func_single_block_read
     addi r4 = r0, 1
     add r21 = r21, r4
     add r22 = r22, r4
     
     beq r0, (r0, r0) -> @store_loop.func_single_block_read
     @store_loop_end.func_single_block_read
+    
+    // バッファに書き込み (511 番目)
+    addi r10 = r0, 0xFF
+    beq r1, (r0, r0) -> @func_spi_transfer
+    add r5 = r0, r21
+    sb r5[0] = r10
 
     // CRC 読み出し（無視）
     addi r10 = r0, 0xFF
     beq r1, (r0, r0) -> @func_spi_transfer
     addi r10 = r0, 0xFF
     beq r1, (r0, r0) -> @func_spi_transfer
+
+    // 正常終了コードの設定
+    addi r10 = r0, 0
+    beq r0, (r0, r0) -> @epilogue.func_single_block_read
     
     // エラーコードの設定
     @address_error.func_single_block_read

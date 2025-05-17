@@ -42,25 +42,25 @@ module Core (
     // IOBus
     inst io_bus: IOBus #(
         ClockFrequency: 12_000_000,
-        UartBaudRate  : 921600    ,
+        UartBaudRate  : 115200    ,
     ) (
-        i_clk                   ,
-        i_rst                   ,
-        i_dev_id                ,
-        if_din  : if_io_bus_dout,
-        if_dout : if_io_bus_din ,
-        o_tx                    ,
-        i_rx                    ,
-        o_sclk                  ,
-        o_mosi                  ,
-        i_miso                  ,
-        o_gpout  ,
-        i_clk_dvi,
-        i_rst_dvi,
-        o_vsync  ,
-        o_hsync  ,
-        o_de     ,
-        o_data   ,
+        i_clk                    ,
+        i_rst                    ,
+        i_dev_id                 ,
+        if_din   : if_io_bus_dout,
+        if_dout  : if_io_bus_din ,
+        o_tx                     ,
+        i_rx                     ,
+        o_sclk                   ,
+        o_mosi                   ,
+        i_miso                   ,
+        o_gpout                  ,
+        i_clk_dvi                ,
+        i_rst_dvi                ,
+        o_vsync                  ,
+        o_hsync                  ,
+        o_de                     ,
+        o_data                   ,
     );
 
     // メモリ
@@ -109,28 +109,12 @@ module Core (
     // プログラムカウンタ
     always_comb {
         w_pc_fetching = case {w_instr.opcode_sub, w_instr.opcode} {
-            BEQ, BNE, BLT, BLE: if w_branch_taken {
-                r_pc_fetched + w_instr.imm_b_sext
-            } else {
-                r_pc_fetched + 32'h6
-            },
+            BEQ, BNE, BLT, BLE  : if w_branch_taken { r_pc_fetched + w_instr.imm_b_sext } else { r_pc_fetched + 32'h6 },
             JAL                 : w_out,
-            LW, LH, LB, LHU, LBU: if !r_load_ready {
-                r_pc_fetched
-            } else {
-                r_pc_fetched + 32'h6
-            },
-            IN: if !if_io_bus_din.valid {
-                r_pc_fetched
-            } else {
-                r_pc_fetched + 32'h6
-            },
-            OUT: if !if_io_bus_dout.ready {
-                r_pc_fetched
-            } else {
-                r_pc_fetched + 32'h6
-            },
-            default: r_pc_fetched + 32'h6,
+            LW, LH, LB, LHU, LBU: if !r_load_ready { r_pc_fetched } else { r_pc_fetched + 32'h6 },
+            IN                  : if !if_io_bus_din.valid { r_pc_fetched } else { r_pc_fetched + 32'h6 },
+            OUT                 : if !if_io_bus_dout.ready { r_pc_fetched } else { r_pc_fetched + 32'h6 },
+            default             : r_pc_fetched + 32'h6,
         };
     }
 
@@ -364,13 +348,9 @@ module Core (
                 LB                     : {w_dmem_read[7] repeat 24, w_dmem_read[0+:8]},
                 LBU                    : {24'b0, w_dmem_read[0+:8]},
                 SW, SH, SB             : m_regfile[w_instr.rd],
-                IN                     : if if_io_bus_din.valid {
-                    if_io_bus_din.bits
-                } else {
-                    m_regfile[w_instr.rd]
-                },
-                OUT    : m_regfile[w_instr.rd],
-                default: w_out,
+                IN                     : if if_io_bus_din.valid { if_io_bus_din.bits } else { m_regfile[w_instr.rd] },
+                OUT                    : m_regfile[w_instr.rd],
+                default                : w_out,
             };
         }
     }
