@@ -541,7 +541,11 @@
     // data token を待つ
     beq r1, (r0, r0) -> @func_polling_data_token_for_cmd17_18_24
 
-    // バッファに書き込み (0 ~ 510 番目)
+    // とりあえず1回交換する
+    addi r10 = r0, 0xFF
+    beq r1, (r0, r0) -> @func_spi_transfer
+
+    // バッファに書き込み (512回 = 512byte分)
     add r22 = r0, r0
     @store_loop.func_single_block_read
     addi r4 = r0, 512
@@ -549,12 +553,10 @@
     
     addi r10 = r0, 0xFF
     beq r1, (r0, r0) -> @func_spi_transfer
-
-    beq r0, (r0, r22) -> @store_loop_inc.func_single_block_read
+    
     add r5 = r0, r21
     sb r5[0] = r10
 
-    @store_loop_inc.func_single_block_read
     addi r4 = r0, 1
     add r21 = r21, r4
     add r22 = r22, r4
@@ -562,12 +564,6 @@
     beq r0, (r0, r0) -> @store_loop.func_single_block_read
     @store_loop_end.func_single_block_read
     
-    // バッファに書き込み (511 番目)
-    addi r10 = r0, 0xFF
-    beq r1, (r0, r0) -> @func_spi_transfer
-    add r5 = r0, r21
-    sb r5[0] = r10
-
     // CRC 読み出し（無視）
     addi r10 = r0, 0xFF
     beq r1, (r0, r0) -> @func_spi_transfer
