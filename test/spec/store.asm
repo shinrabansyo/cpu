@@ -79,6 +79,49 @@
     addi r12 = r0, 0xFFFFFFCA
     beq r1, (r0, r0) -> @assert
 
+@test_isb
+    addi r20 = r0, 0
+    addi r10 = r0, 1
+
+    // テスト1 : 0番地 ~ 11番地
+    addi r20 = r0, 1
+
+    // 命令書き込み (0x1000 : addi r4 = r0, 1)
+    addi r5 = r0, 0x22
+    isb r0[0x1000] = r5
+    addi r5 = r0, 0x04
+    isb r0[0x1001] = r5
+    addi r5 = r0, 0x01
+    isb r0[0x1002] = r5
+    addi r5 = r0, 0x00
+    isb r0[0x1003] = r5
+    addi r5 = r0, 0x00
+    isb r0[0x1004] = r5
+    addi r5 = r0, 0x00
+    isb r0[0x1005] = r5
+    
+    // 命令書き込み (0x1006 : jal r0, r1[0]) 
+    addi r5 = r0, 0x83
+    isb r0[0x1006] = r5
+    addi r5 = r0, 0x20
+    isb r0[0x1007] = r5
+    addi r5 = r0, 0x00
+    isb r0[0x1008] = r5
+    addi r5 = r0, 0x00
+    isb r0[0x1009] = r5
+    addi r5 = r0, 0x00
+    isb r0[0x100A] = r5
+    addi r5 = r0, 0x00
+    isb r0[0x100B] = r5
+
+    // 書き込んだ命令へジャンプ
+    jal r1, r0[0x1000]
+
+    // テスト
+    add r11 = r0, r4
+    addi r12 = r0, 1
+    beq r1, (r0, r0) -> @assert
+
 @assert
     beq r0, (r11, r12) -> @assert.true
     @assert.false

@@ -18,24 +18,24 @@
 // https://github.com/veryl-lang/veryl/blob/6d3c23ce2d176a192ad67dcd99c97914cf5d46cb/crates/std/veryl/src/ram/ram.veryl
 
 module Div6 (
-  x   :   input  logic<32> ,
-  quotient :output logic<32> ,
-  remainder:output logic<32> ,
+    x        : input  logic<32>,
+    quotient : output logic<32>,
+    remainder: output logic<32>,
 ) {
 
-  // 6 の除算用マジックナンバー:
-  // 2^34/6 = 2863311530.6666... の切り上げ値 = 2863311531 = 32'hAAAAAAAB
-  let MAGIC: logic<32> = 32'hAAAAAAAB;
+    // 6 の除算用マジックナンバー:
+    // 2^34/6 = 2863311530.6666... の切り上げ値 = 2863311531 = 32'hAAAAAAAB
+    let MAGIC: logic<32> = 32'hAAAAAAAB;
 
-  // 64ビットの積を用いて計算
-  let prod: logic<64> = x * MAGIC;
-  
-  // 商は上位 64-34=30 ビット (32ビットに収まる)
-  let shift: logic<64> = prod >> 34;
-  assign quotient = shift[31:0];
-  
-  // 余りは、 x から商に6をかけた値を引く
-  assign remainder = x - quotient * 6;
+    // 64ビットの積を用いて計算
+    let prod: logic<64> = x * MAGIC;
+
+    // 商は上位 64-34=30 ビット (32ビットに収まる)
+    let shift   : logic<64> = prod >> 34;
+    assign quotient = shift[31:0];
+
+    // 余りは、 x から商に6をかけた値を引く
+    assign remainder = x - quotient * 6;
 }
 
 module IMemSync #(
@@ -60,20 +60,20 @@ module IMemSync #(
 ) {
     const BANK_NUM: u32 = DATA_WIDTH / 8;
 
-    var adra_mod: logic<32>;
-    var adrb_mod: logic<32>;
+    var adra_mod : logic<32>;
+    var adrb_mod : logic<32>;
     var adra_quot: logic<32>;
     var adrb_quot: logic<32>;
 
-    inst div6_a : Div6 (
-        x: i_adra,
-        quotient: adra_quot,
-        remainder: adra_mod,
+    inst div6_a: Div6 (
+        x        : i_adra   ,
+        quotient : adra_quot,
+        remainder: adra_mod ,
     );
-    inst div6_b : Div6 (
-        x: i_adrb,
-        quotient: adrb_quot,
-        remainder: adrb_mod,
+    inst div6_b: Div6 (
+        x        : i_adrb   ,
+        quotient : adrb_quot,
+        remainder: adrb_mod ,
     );
     // let adra_mod: logic<32> = i_adra % BANK_NUM;
     // let adrb_mod: logic<32> = i_adrb % BANK_NUM;
@@ -91,9 +91,10 @@ module IMemSync #(
         }
     }
 
-    var data_table : logic<DATA_WIDTH * 2>;
-    var q_buf: logic<DATA_WIDTH * 2>;
-    assign o_qb  = q_buf[8 * adrb_mod_buf+:DATA_WIDTH];
+    let i_wea_table: logic<($bits(i_wea)<<1)> = {i_wea, i_wea};
+    var data_table: logic<DATA_WIDTH * 2>;
+    var q_buf     : logic<DATA_WIDTH * 2>;
+    assign o_qb       = q_buf[8 * adrb_mod_buf+:DATA_WIDTH];
     for bank_id in 0..BANK_NUM :g_bank {
         const BANK_ADDRESS_WIDTH: u32                                            = $clog2(WORD_SIZE);
         var bank_adra         : logic<BANK_ADDRESS_WIDTH>                     ;
@@ -171,16 +172,21 @@ module IMemSync #(
         // 04: be ad de 00    {bank0, bank1, bank2, bank3} <= {da1, da2, da3, da0}
         // ---------------
         always_ff {
-            if i_mea && i_wea[BANK_NUM - adra_mod + bank_id] {
+            if i_mea && i_wea_table[BANK_NUM - adra_mod + bank_id] {
                 // ram_data[bank_adra] = i_da[((adra_mod + bank_id) % BANK_NUM)*8+:8]; と同じ
-                ram_data[bank_adra] = data_table[(BANK_NUM - adra_mod + bank_id)*8+:8];
+                ram_data[bank_adra] = data_table[(BANK_NUM - adra_mod + bank_id) * 8+:8];
             }
         }
 
+        // i_da: 0xdeadbeef
+        // data_table: 0xdeadbeef[deadbeef]
+        // data_table: 0xdeadbe[efdeadbe]ef
+        // data_table: 0xdead[beefdead]beef
+
         always_comb {
-            q_buf[bank_id * 8+:8]              = q;
-            q_buf[bank_id * 8 + DATA_WIDTH+:8] = q;
-            data_table[bank_id * 8+:8]         = i_da[bank_id * 8+:8];
+            q_buf[bank_id * 8+:8]                   = q;
+            q_buf[bank_id * 8 + DATA_WIDTH+:8]      = q;
+            data_table[bank_id * 8+:8]              = i_da[bank_id * 8+:8];
             data_table[bank_id * 8 + DATA_WIDTH+:8] = i_da[bank_id * 8+:8];
         }
 
@@ -188,7 +194,7 @@ module IMemSync #(
             always_comb {
                 // Write throughモード: 同じアドレスに書き込みがある場合は書き込みデータを返す
                 if i_mea && i_wea[BANK_NUM - adra_mod + bank_id] && bank_adra == bank_adrb {
-                    q = data_table[(BANK_NUM - adra_mod + bank_id)*8+:8];
+                    q = data_table[(BANK_NUM - adra_mod + bank_id) * 8+:8];
                 } else {
                     q = ram_data[bank_adrb];
                 }
@@ -198,7 +204,7 @@ module IMemSync #(
                 if i_meb {
                     // Write throughモード: 同じアドレスに書き込みがある場合は書き込みデータを返す
                     if i_mea && i_wea[BANK_NUM - adra_mod + bank_id] && bank_adra == bank_adrb {
-                        q = data_table[(BANK_NUM - adra_mod + bank_id)*8+:8];
+                        q = data_table[(BANK_NUM - adra_mod + bank_id) * 8+:8];
                     } else {
                         q = ram_data[bank_adrb];
                     }
@@ -246,9 +252,9 @@ module DMemSync #(
         }
     }
 
-    var data_table : logic<DATA_WIDTH * 2>;
-    var q_buf    : logic<DATA_WIDTH * 2>;
-    assign o_qb      = q_buf[8 * adrb_mod_buf+:DATA_WIDTH];
+    var data_table: logic<DATA_WIDTH * 2>;
+    var q_buf     : logic<DATA_WIDTH * 2>;
+    assign o_qb       = q_buf[8 * adrb_mod_buf+:DATA_WIDTH];
     for bank_id in 0..BANK_NUM :g_bank {
         const BANK_ADDRESS_WIDTH: u32                                            = $clog2(WORD_SIZE);
         var bank_adra         : logic<BANK_ADDRESS_WIDTH>                     ;
@@ -320,14 +326,14 @@ module DMemSync #(
         always_ff {
             if i_mea && i_wea[BANK_NUM - adra_mod + bank_id] {
                 // ram_data[bank_adra] = i_da[((adra_mod + bank_id) % BANK_NUM)*8+:8]; と同じ
-                ram_data[bank_adra] = data_table[(BANK_NUM - adra_mod + bank_id)*8+:8];
+                ram_data[bank_adra] = data_table[(BANK_NUM - adra_mod + bank_id) * 8+:8];
             }
         }
 
         always_comb {
-            q_buf[bank_id * 8+:8]              = q;
-            q_buf[bank_id * 8 + DATA_WIDTH+:8] = q;
-            data_table[bank_id * 8+:8]         = i_da[bank_id * 8+:8];
+            q_buf[bank_id * 8+:8]                   = q;
+            q_buf[bank_id * 8 + DATA_WIDTH+:8]      = q;
+            data_table[bank_id * 8+:8]              = i_da[bank_id * 8+:8];
             data_table[bank_id * 8 + DATA_WIDTH+:8] = i_da[bank_id * 8+:8];
         }
 
@@ -335,7 +341,7 @@ module DMemSync #(
             always_comb {
                 // Write throughモード: 同じアドレスに書き込みがある場合は書き込みデータを返す
                 if i_mea && i_wea[BANK_NUM - adra_mod + bank_id] && bank_adra == bank_adrb {
-                    q = data_table[(BANK_NUM - adra_mod + bank_id)*8+:8];
+                    q = data_table[(BANK_NUM - adra_mod + bank_id) * 8+:8];
                 } else {
                     q = ram_data[bank_adrb];
                 }
@@ -345,7 +351,7 @@ module DMemSync #(
                 if i_meb {
                     // Write throughモード: 同じアドレスに書き込みがある場合は書き込みデータを返す
                     if i_mea && i_wea[BANK_NUM - adra_mod + bank_id] && bank_adra == bank_adrb {
-                        q = data_table[(BANK_NUM - adra_mod + bank_id)*8+:8];
+                        q = data_table[(BANK_NUM - adra_mod + bank_id) * 8+:8];
                     } else {
                         q = ram_data[bank_adrb];
                     }

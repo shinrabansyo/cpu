@@ -70,21 +70,23 @@ module Core (
     var r_pc_fetched : logic<32>;
     var w_instr_raw  : logic<48>;
 
+    var w_is_dmem  : logic<1> ;
+    var w_is_imem  : logic<1> ;
     var w_wen      : logic<4> ;
     var w_ren      : logic<1> ;
     var w_dmem_read: logic<32>;
 
     inst m_inst_mod: IMemSync (
-        i_clk : i_clk        ,
-        i_rst : i_rst        ,
-        i_clr : 1'h0         ,
-        i_mea : 1'h0         ,
-        i_wea : 6'h0         ,
-        i_adra: 32'h0        ,
-        i_da  : 48'h0        ,
-        i_meb : 1'b1         ,
-        i_adrb: w_pc_fetching,
-        o_qb  : w_instr_raw  ,
+        i_clk : i_clk                            ,
+        i_rst : i_rst                            ,
+        i_clr : 1'h0                             ,
+        i_mea : (|w_wen) & w_is_imem             ,
+        i_wea : {2'b0, w_wen}                    ,
+        i_adra: w_out                            ,
+        i_da  : {16'b0, m_regfile[w_instr.rs2_s]},
+        i_meb : 1'b1                             ,
+        i_adrb: w_pc_fetching                    ,
+        o_qb  : w_instr_raw                      ,
     );
 
     inst m_data_mod: DMemSync #(
@@ -93,7 +95,7 @@ module Core (
         i_clk : i_clk                   ,
         i_rst : i_rst                   ,
         i_clr : 1'h0                    ,
-        i_mea : |w_wen                  ,
+        i_mea : (|w_wen) & w_is_dmem    ,
         i_wea : w_wen                   ,
         i_adra: w_out                   ,
         i_da  : m_regfile[w_instr.rs2_s],
@@ -174,6 +176,7 @@ module Core (
     const SW  : logic<8> = (8'h0 << 5) | 8'h5;
     const SH  : logic<8> = (8'h1 << 5) | 8'h5;
     const SB  : logic<8> = (8'h2 << 5) | 8'h5;
+    const ISB : logic<8> = (8'h3 << 5) | 8'h5;
     const IN  : logic<8> = (8'h0 << 5) | 8'h6;
     const OUT : logic<8> = (8'h1 << 5) | 8'h6;
     const AND : logic<8> = (8'h0 << 5) | 8'h7;
@@ -217,6 +220,17 @@ module Core (
         default: InstKind::Nop,
     };
 
+    assign w_is_dmem = case {w_instr.opcode_sub, w_instr.opcode} {
+        LW, LH, LB, LHU, LBU: 1'b1,
+        SW, SH, SB          : 1'b1,
+        default             : 1'b0,
+    };
+
+    assign w_is_imem = case {w_instr.opcode_sub, w_instr.opcode} {
+        ISB    : 1'b1,
+        default: 1'b0,
+    };
+
     assign w_command = case {w_instr.opcode_sub, w_instr.opcode} {
         ADD    : 8'h1,
         SUB    : 8'h2,
@@ -235,6 +249,7 @@ module Core (
         SW     : 8'h1,
         SH     : 8'h1,
         SB     : 8'h1,
+        ISB    : 8'h1,
         IN     : 8'h1,
         OUT    : 8'h1,
         AND    : 8'h3,
@@ -279,7 +294,7 @@ module Core (
         case {w_instr.opcode_sub, w_instr.opcode} {
             SW     : w_wen = 4'b1111;
             SH     : w_wen = 4'b0011;
-            SB     : w_wen = 4'b0001;
+            SB, ISB: w_wen = 4'b0001;
             default: w_wen = 4'b0000;
         }
 
@@ -347,7 +362,7 @@ module Core (
                 LHU                    : {16'b0, w_dmem_read[0+:16]},
                 LB                     : {w_dmem_read[7] repeat 24, w_dmem_read[0+:8]},
                 LBU                    : {24'b0, w_dmem_read[0+:8]},
-                SW, SH, SB             : m_regfile[w_instr.rd],
+                SW, SH, SB, ISB        : m_regfile[w_instr.rd],
                 IN                     : if if_io_bus_din.valid { if_io_bus_din.bits } else { m_regfile[w_instr.rd] },
                 OUT                    : m_regfile[w_instr.rd],
                 default                : w_out,
