@@ -2,17 +2,10 @@
 
 // void main(void)
 @func_main
-    // 0. 起動確認
-    addi r4 = r0, 0x41
-    out r0[0] = r4
-
     // 1. SDカードの初期化
     addi r10 = r0, 0  // cs
     addi r11 = r0, 4  // clk_shamt
     beq r1, (r0, r0) -> @func_sd_init
-
-    addi r4 = r0, 0x42
-    out r0[0] = r4
 
     // 2. 1ブロック読み込み
     add r10 = r0, r0     // block_addr
@@ -21,15 +14,8 @@
     add r12 = r0, r4
     beq r1, (r0, r0) -> @func_single_block_load
 
-    addi r4 = r0, 0x43
-    out r0[0] = r4
-
     // 3. エントリポイントにジャンプ
     jal r1, r0[0x1002]
-
-    addi r4 = r0, 0x44
-    out r0[0] = r4
-
 
     // 4. 無限ループ
     @inf_loop.func_main

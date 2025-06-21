@@ -31,6 +31,8 @@
     out r0[0] = r4
     addi r4 = r0, 33
     out r0[0] = r4
+    addi r4 = r0, 10
+    out r0[0] = r4
 
     addi r10 = r0, 0
     jal r0, r1[0]
