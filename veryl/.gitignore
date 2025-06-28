@@ -1,4 +1,6 @@
 dependencies/
 target/
+.build/
 *.f
 *.sv
+
