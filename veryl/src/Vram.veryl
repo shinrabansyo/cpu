@@ -32,6 +32,7 @@ module VramSync #(
     // var r_qb     : logic<$bits(DATA_TYPE)>            ;
     var r_qv: 'video logic<$bits(DATA_TYPE)>;
 
+
     initial {
         // $readmemh("ram_data.hex", ram_data);
     }

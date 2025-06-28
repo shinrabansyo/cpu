@@ -1,5 +1,7 @@
 .build/
 dependencies/
 target/
+.build/
 *.f
 *.sv
+
