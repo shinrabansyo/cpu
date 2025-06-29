@@ -1,0 +1,150 @@
+// 基本的なキャッシュ：ブロッキングで動く
+// OoO なキャッシュ： ReqQ が埋まる＆依存関係のあるアクセスが来ない限りはノンブロッキングで動く
+module DCache #(
+    param LineSize     : u32 = 64, // byte
+    param Associativity: u32 = 2 , // num way
+    param LineNum      : u32 = 32,
+    const AddrWidth    : u32 = 32,
+    param DataWidth    : u32 = 32,
+) (
+    i_clk: input clock,
+    i_rst: input reset,
+
+    i_valid   : input  logic               ,
+    o_ready   : output logic               ,
+    i_addr    : input  logic<AddrWidth>    ,
+    i_write_en: input  logic               ,
+    i_byte_en : input  logic<DataWidth / 8>,
+    i_data    : input  logic<DataWidth>    ,
+    o_data    : output logic<DataWidth>    ,
+
+) {
+    // |     tag      | index | line |
+    const Capacity  : u32 = LineSize * LineNum; // default: 2 KiB
+    const IndexNum  : u32 = LineNum / Associativity;
+    const LineWidth : u32 = $clog2(LineSize / 8);
+    const IndexWidth: u32 = $clog2(IndexNum);
+    const TagWidth  : u32 = AddrWidth - IndexWidth - LineWidth;
+    const WayWidth  : u32 = $clog2(Associativity);
+
+    var tag_array : logic<TagWidth>     [Associativity, IndexNum];
+    var data_array: logic<8 * LineSize> [Associativity, IndexNum];
+    var valid     : logic               [Associativity, IndexNum];
+
+    var r_saved_addr     : logic<AddrWidth>    ;
+    var r_saved_byte_en  : logic<DataWidth / 8>;
+    let w_addr_idx       : logic<IndexWidth>    = i_addr[LineWidth+:IndexWidth];
+    let w_addr_line      : logic<LineWidth>     = i_addr[0+:LineWidth];
+    let w_saved_addr_line: logic<LineWidth>     = r_saved_addr[0+:LineWidth];
+    let w_saved_addr_tag : logic<TagWidth>      = r_saved_addr[LineWidth + IndexWidth+:TagWidth];
+
+    var r_read_tag  : logic<TagWidth>     [Associativity];
+    var r_read_line : logic<LineSize * 8> [Associativity];
+    var r_read_valid: logic               [Associativity];
+
+    var w_need_two_line: logic;
+    var w_overflow_count: logic<LineWidth>;
+    var r_need_two_line : logic           ;
+    var r_overflow_count: logic<LineWidth>;
+
+    var r_hit     : logic           ;
+    var r_hit_way : logic<WayWidth> ;
+    var r_hit_data: logic<DataWidth>;
+
+    enum State {
+        idle,
+        ta_da_read,
+        tag_cmp,
+    }
+
+    var w_next_state: State;
+    var r_state     : State;
+
+    always_comb {
+        case (r_state) {
+            State::idle: {
+                             if i_valid {
+                                 w_next_state = State::ta_da_read;
+                             } else {
+                                 w_next_state = State::idle;
+                             }
+                         }
+            State::ta_da_read: {}
+            State::tag_cmp   : {}
+        }
+    }
+
+    always_comb {
+        for i: u32 in (DataWidth / 8)..=0 {
+            r_need_two_line |= i_byte_en[i] && ((i + w_addr_line) >= LineSize);
+        }
+    }
+
+    always_ff {
+        if_reset {
+            for way: u32 in 0..Associativity {
+                for idx: u32 in 0..IndexNum {
+                    tag_array[way][idx]  = 0;
+                    data_array[way][idx] = 0;
+                    valid[way][idx]      = 0;
+                }
+                r_read_line[way]  = 0;
+                r_read_tag[way]   = 0;
+                r_read_valid[way] = 0;
+            }
+            r_saved_addr    = 0;
+            r_saved_byte_en = 0;
+            r_hit           = 0;
+            r_hit_way       = 0;
+            r_need_two_line = 0;
+            r_state         = State::idle;
+        } else {
+            case (r_state) {
+                State::idle: {
+                                 if i_valid {
+                                     // TA/DA の並列読み出し
+                                     for way: u32 in 0..Associativity {
+                                         r_read_line[way]  = data_array[way][w_addr_idx];
+                                         r_read_tag[way]   = tag_array[way][w_addr_idx];
+                                         r_read_valid[way] = valid[way][w_addr_idx];
+                                     }
+                                     r_saved_addr    = i_addr;
+                                     r_saved_byte_en = i_byte_en;
+                                     r_hit           = 0;
+                                     // ライン境界にまたがった読み出しをマーク
+                                     for i: u32 in (DataWidth / 8)..=0 {
+                                         r_need_two_line |= i_byte_en[i] && ((i + w_addr_line) >= LineSize);
+                                     }
+
+                                 } else {
+                                     // 読み出さない場合は valid を下げる
+                                     for way: u32 in 0..Associativity {
+                                         r_read_valid[way] = 0;
+                                     }
+                                 }
+                             }
+                State::tag_cmp: {
+                                    for way: u32 in 0..Associativity {
+                                        if r_read_valid[way] && r_read_tag[way] == w_saved_addr_tag {
+                                            // hit したラインから byte_en に従って切り出し
+                                            for idx: u32 in 0..(DataWidth / 8) {
+                                                if r_saved_byte_en[idx] && ((idx + w_saved_addr_line) <: LineSize) {
+                                                    r_hit_data[idx * 8+:8] = r_read_line[way][w_saved_addr_line + idx+:8];
+                                                } else if r_saved_byte_en[idx] {
+                                                    r_hit_data[idx * 8+:8] = 0;
+                                                }
+                                            }
+                                            r_hit     = 1;
+                                            r_hit_way = way;
+                                            break;
+                                        }
+                                    }
+                                    if r_need_two_line {
+                                        r_saved_addr    = r_saved_addr + LineSize;
+                                        r_need_two_line = 0;
+                                    }
+                                }
+            }
+        }
+    }
+}
