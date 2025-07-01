@@ -1,150 +1,327 @@
+package Config {
+    struct ProcessorConfig{
+        addr_width: u32,
+        data_width: u32,
+    }
+    struct DCacheConfig {
+        line_size: u32,
+        associativity: u32,
+        line_num: u32,
+    }
+    struct AxiConfig {
+        addr_w: u32,
+        data_w_bytes: u32,
+        id_len: u32,
+    }
+}
+
 // 基本的なキャッシュ：ブロッキングで動く
 // OoO なキャッシュ： ReqQ が埋まる＆依存関係のあるアクセスが来ない限りはノンブロッキングで動く
-module DCache #(
-    param LineSize     : u32 = 64, // byte
-    param Associativity: u32 = 2 , // num way
-    param LineNum      : u32 = 32,
-    const AddrWidth    : u32 = 32,
-    param DataWidth    : u32 = 32,
-) (
+module DCache::<
+    PROC_CONF: Config::ProcessorConfig,
+    DCACHE_CONF: Config::DCacheConfig,
+    AXI_CONF: Config::AxiConfig,
+    AXI_ADDR_W: u32 = AXI_CONF.addr_w,
+    AXI_DATA_W_BYTES: u32 = AXI_CONF.data_w_bytes,
+    AXI_ID_LEN:u32 = AXI_CONF.id_len,
+> (
     i_clk: input clock,
     i_rst: input reset,
 
+    // Core <-> Cache
     i_valid   : input  logic               ,
     o_ready   : output logic               ,
-    i_addr    : input  logic<AddrWidth>    ,
+    i_addr    : input  logic<PROC_CONF.data_width>    ,
     i_write_en: input  logic               ,
-    i_byte_en : input  logic<DataWidth / 8>,
-    i_data    : input  logic<DataWidth>    ,
-    o_data    : output logic<DataWidth>    ,
+    i_byte_en : input  logic<PROC_CONF.data_width / 8>,
+    i_data    : input  logic<PROC_CONF.data_width>    ,
+    o_data    : output logic<PROC_CONF.data_width>    ,
+
+    // Cache <-> RAM
+    mem_if_master: modport $std::axi4_if::<$std::axi4_pkg::<AXI_ADDR_W, AXI_DATA_W_BYTES, AXI_ID_LEN, 0, 0, 0, 0, 0>>::master,
 
 ) {
-    // |     tag      | index | line |
-    const Capacity  : u32 = LineSize * LineNum; // default: 2 KiB
-    const IndexNum  : u32 = LineNum / Associativity;
-    const LineWidth : u32 = $clog2(LineSize / 8);
-    const IndexWidth: u32 = $clog2(IndexNum);
-    const TagWidth  : u32 = AddrWidth - IndexWidth - LineWidth;
-    const WayWidth  : u32 = $clog2(Associativity);
+    // 各種定数
+    const DataWidthInByte: u32 = PROC_CONF.data_width / 8;
+    const Capacity       : u32 = DCACHE_CONF.line_size * DCACHE_CONF.line_num; // default: 2 KiB
+    const IndexNum       : u32 = DCACHE_CONF.line_num / DCACHE_CONF.associativity;
+    const LineWidth      : u32 = $clog2(DCACHE_CONF.line_size / 8);
+    const IndexWidth     : u32 = $clog2(IndexNum);
+    const TagWidth       : u32 = PROC_CONF.data_width - IndexWidth - LineWidth;
+    const WayWidth       : u32 = $clog2(DCACHE_CONF.associativity);
 
-    var tag_array : logic<TagWidth>     [Associativity, IndexNum];
-    var data_array: logic<8 * LineSize> [Associativity, IndexNum];
-    var valid     : logic               [Associativity, IndexNum];
+    // 接続
+    inst mem_if: $std::axi4_if::<$std::axi4_pkg::<AXI_ADDR_W, AXI_DATA_W_BYTES, AXI_ID_LEN, 0, 0, 0, 0, 0>>;
+    connect mem_if.master <> mem_if_master;
 
-    var r_saved_addr     : logic<AddrWidth>    ;
-    var r_saved_byte_en  : logic<DataWidth / 8>;
-    let w_addr_idx       : logic<IndexWidth>    = i_addr[LineWidth+:IndexWidth];
-    let w_addr_line      : logic<LineWidth>     = i_addr[0+:LineWidth];
-    let w_saved_addr_line: logic<LineWidth>     = r_saved_addr[0+:LineWidth];
-    let w_saved_addr_tag : logic<TagWidth>      = r_saved_addr[LineWidth + IndexWidth+:TagWidth];
+    // 記憶領域
+    inst tag_array: DCacheTagArray::<PROC_CONF, DCACHE_CONF>(
+        i_clk,
+        i_rst,
+    );
+    var m_tag_array : logic<TagWidth>     [DCACHE_CONF.associativity, IndexNum];
+    var m_data_array: logic<8 * DCACHE_CONF.line_size> [DCACHE_CONF.associativity, IndexNum];
+    var m_valid     : logic               [DCACHE_CONF.associativity, IndexNum];
+    var m_dirty     : logic               [DCACHE_CONF.associativity, IndexNum];
 
-    var r_read_tag  : logic<TagWidth>     [Associativity];
-    var r_read_line : logic<LineSize * 8> [Associativity];
-    var r_read_valid: logic               [Associativity];
+    // 内部状態
+    var r_saved_write_en : logic;
+    var r_saved_wdata : logic;
+    var r_saved_addr     : logic<PROC_CONF.data_width>      ;
+    var r_saved_byte_en  : logic<DataWidthInByte>;
+    let w_addr_idx       : logic<IndexWidth>      = i_addr[LineWidth+:IndexWidth];
+    let w_addr_line      : logic<LineWidth>       = i_addr[0+:LineWidth];
+    let w_saved_addr_line: logic<LineWidth>       = r_saved_addr[0+:LineWidth];
+    let w_saved_addr_tag : logic<TagWidth>        = r_saved_addr[LineWidth + IndexWidth+:TagWidth];
 
-    var w_need_two_line: logic;
-    var w_overflow_count: logic<LineWidth>;
-    var r_need_two_line : logic           ;
-    var r_overflow_count: logic<LineWidth>;
+    var r_read_tag  : logic<TagWidth>     [DCACHE_CONF.associativity];
+    var r_read_line : logic<DCACHE_CONF.line_size * 8> [DCACHE_CONF.associativity];
+    var r_read_valid: logic               [DCACHE_CONF.associativity];
+    var r_read_dirty: logic               [DCACHE_CONF.associativity];
 
+    var w_need_two_line       : logic    ;
+    var w_firsttime_read_bytes: logic<16>;
+    var r_need_two_line       : logic    ;
+    var r_firsttime_read_bytes: logic<16>;
+
+    var w_hit     : logic           ;
     var r_hit     : logic           ;
+    var w_hit_way : logic<WayWidth> ;
     var r_hit_way : logic<WayWidth> ;
-    var r_hit_data: logic<DataWidth>;
+    var r_hit_data: logic<PROC_CONF.data_width>;
+
+    var r_refill_way: logic<WayWidth>; // ミス時にリフィルする位置
+    var r_need_wb: logic;
+    var r_wb_line: logic<DCACHE_CONF.line_size * 8>; // WB するラインの一時保管場所
+    var r_wb_line_addr: logic<PROC_CONF.data_width>;
+    var r_wb_burst_count: logic<8>;    // WBのバースト転送済みバイト数
+
+    var r_mem_resp_count: logic<8>;     // memreq のバースト転送済みバイト数
+    var r_mem_resp_line: logic<DCACHE_CONF.line_size * 8>;
 
     enum State {
         idle,
-        ta_da_read,
         tag_cmp,
+        mem_req,
+        replace,
     }
 
-    var w_next_state: State;
-    var r_state     : State;
+    var r_state: State;
+
+    function GetTag(addr: input logic<PROC_CONF.data_width>) -> logic<TagWidth> {
+        return addr[IndexWidth + LineWidth +: TagWidth];
+    }
+    function GetIndex(addr: input logic<PROC_CONF.data_width>) -> logic<IndexWidth> {
+        return addr[LineWidth +: IndexWidth];
+    }
+    function GetLineIndex(addr: input logic<PROC_CONF.data_width>) -> logic<LineWidth> {
+        return addr[0 +: LineWidth];
+    }
+
+    function GetLineAddr( addr: input logic<PROC_CONF.data_width> ) -> logic<PROC_CONF.data_width> {
+        return addr & {1'b1 repeat (PROC_CONF.data_width - LineWidth), 1'b0 repeat LineWidth};
+    }
+
+    function GenAddr( tag: input logic<TagWidth>, index: input logic<IndexWidth>, line_index: input logic<LineWidth>) -> logic<PROC_CONF.data_width> {
+        return (tag << (IndexWidth + LineWidth)) | (index << (LineWidth)) | line_index;
+    }
 
     always_comb {
+        w_hit_way = 0;
+        w_hit     = 0;
         case (r_state) {
-            State::idle: {
-                             if i_valid {
-                                 w_next_state = State::ta_da_read;
-                             } else {
-                                 w_next_state = State::idle;
-                             }
-                         }
-            State::ta_da_read: {}
-            State::tag_cmp   : {}
+            State::tag_cmp: {
+                for way: u32 in 0..DCACHE_CONF.associativity {
+                    if r_read_valid[way] && r_read_tag[way] == w_saved_addr_tag {
+                        w_hit     = 1;
+                        w_hit_way = way as WayWidth;
+                        break;
+                    }
+                }
+            }
         }
     }
 
     always_comb {
-        for i: u32 in (DataWidth / 8)..=0 {
-            r_need_two_line |= i_byte_en[i] && ((i + w_addr_line) >= LineSize);
+        w_firsttime_read_bytes = DataWidthInByte as 16;
+        for i: u32 in 0..DataWidthInByte {
+            if i + w_addr_line as 32 >= DCACHE_CONF.line_size {
+                w_firsttime_read_bytes = i as 16;
+                break;
+            }
+        }
+        w_need_two_line = 0;
+        for i: u32 in 0..DataWidthInByte {
+            w_need_two_line |= i_byte_en[i] && (i + w_addr_line as 32) >= DCACHE_CONF.line_size;
         }
     }
 
     always_ff {
         if_reset {
-            for way: u32 in 0..Associativity {
+            for way: u32 in 0..DCACHE_CONF.associativity {
                 for idx: u32 in 0..IndexNum {
-                    tag_array[way][idx]  = 0;
-                    data_array[way][idx] = 0;
-                    valid[way][idx]      = 0;
+                    m_tag_array[way][idx]  = 0;
+                    m_data_array[way][idx] = 0;
+                    m_valid[way][idx]      = 0;
+                    m_dirty[way][idx]      = 0;
                 }
                 r_read_line[way]  = 0;
                 r_read_tag[way]   = 0;
                 r_read_valid[way] = 0;
             }
-            r_saved_addr    = 0;
-            r_saved_byte_en = 0;
-            r_hit           = 0;
-            r_hit_way       = 0;
-            r_need_two_line = 0;
-            r_state         = State::idle;
+            r_saved_write_en = 0;
+            r_saved_wdata = 0;
+            r_saved_addr           = 0;
+            r_saved_byte_en        = 0;
+            r_hit                  = 0;
+            r_hit_way              = 0;
+            r_hit_data             = 0;
+            r_need_two_line        = 0;
+            r_firsttime_read_bytes = 0;
+            r_mem_resp_count = 0;
+            r_mem_resp_line = 0;
+            r_state                = State::idle;
         } else {
             case (r_state) {
                 State::idle: {
-                                 if i_valid {
-                                     // TA/DA の並列読み出し
-                                     for way: u32 in 0..Associativity {
-                                         r_read_line[way]  = data_array[way][w_addr_idx];
-                                         r_read_tag[way]   = tag_array[way][w_addr_idx];
-                                         r_read_valid[way] = valid[way][w_addr_idx];
-                                     }
-                                     r_saved_addr    = i_addr;
-                                     r_saved_byte_en = i_byte_en;
-                                     r_hit           = 0;
-                                     // ライン境界にまたがった読み出しをマーク
-                                     for i: u32 in (DataWidth / 8)..=0 {
-                                         r_need_two_line |= i_byte_en[i] && ((i + w_addr_line) >= LineSize);
-                                     }
+                    // 状態の更新
+                    if i_valid {
+                        r_state = State::tag_cmp;
+                    }
 
-                                 } else {
-                                     // 読み出さない場合は valid を下げる
-                                     for way: u32 in 0..Associativity {
-                                         r_read_valid[way] = 0;
-                                     }
-                                 }
-                             }
+                    // 内部状態の更新
+                    if i_valid {
+                        // TA/DA の並列読み出し
+                        for way: u32 in 0..DCACHE_CONF.associativity {
+                            r_read_line[way]  = m_data_array[way][w_addr_idx];
+                            r_read_tag[way]   = m_tag_array[way][w_addr_idx];
+                            r_read_valid[way] = m_valid[way][w_addr_idx];
+                            r_read_dirty[way] = m_dirty[way][w_addr_idx];
+                        }
+                        r_saved_write_en = i_write_en;
+                        r_saved_wdata = i_data;
+                        r_saved_addr    = i_addr;
+                        r_saved_byte_en = i_byte_en;
+                        r_hit           = 0;
+                        // ライン境界にまたがった読み出しをマーク
+                        r_need_two_line        = w_need_two_line;
+                        r_firsttime_read_bytes = w_firsttime_read_bytes;
+                    } else {
+                        // 読み出さない場合は valid を下げる
+                        for way: u32 in 0..DCACHE_CONF.associativity {
+                            r_read_valid[way] = 0;
+                        }
+                    }
+                }
                 State::tag_cmp: {
-                                    for way: u32 in 0..Associativity {
-                                        if r_read_valid[way] && r_read_tag[way] == w_saved_addr_tag {
-                                            // hit したラインから byte_en に従って切り出し
-                                            for idx: u32 in 0..(DataWidth / 8) {
-                                                if r_saved_byte_en[idx] && ((idx + w_saved_addr_line) <: LineSize) {
-                                                    r_hit_data[idx * 8+:8] = r_read_line[way][w_saved_addr_line + idx+:8];
-                                                } else if r_saved_byte_en[idx] {
-                                                    r_hit_data[idx * 8+:8] = 0;
-                                                }
-                                            }
-                                            r_hit     = 1;
-                                            r_hit_way = way;
-                                            break;
-                                        }
-                                    }
-                                    if r_need_two_line {
-                                        r_saved_addr    = r_saved_addr + LineSize;
-                                        r_need_two_line = 0;
-                                    }
+                    // 状態の更新
+                    if w_hit & !r_need_two_line {
+                        r_state = State::idle;
+                    } else if w_hit & r_need_two_line {
+                        r_state = State::tag_cmp;
+                    } else if !w_hit {
+                        r_state = State::mem_req;
+                    }
+
+                    // 内部状態の更新
+                    r_hit     = w_hit;
+                    r_hit_way = w_hit_way;
+                    for way: u32 in 0..DCACHE_CONF.associativity {
+                        if r_read_valid[way] && r_read_tag[way] == w_saved_addr_tag {
+                            // hit したラインから byte_en に従って切り出し
+                            for idx: u32 in 0..DataWidthInByte {
+                                if r_saved_byte_en[idx] && ((idx + w_saved_addr_line as 32) <: DCACHE_CONF.line_size) {
+                                    r_hit_data[idx * 8+:8] = r_read_line[way][w_saved_addr_line as 32 + idx+:8];
+                                } else if r_saved_byte_en[idx] {
+                                    r_hit_data[idx * 8+:8] = 0;
                                 }
+                            }
+                            break;
+                        }
+                    }
+                    if r_need_two_line {
+                        // 次のラインの先頭アドレス = 現在のラインの先頭アドレス + ラインサイズ
+                        r_saved_addr           = GetLineAddr(r_saved_addr) + DCACHE_CONF.line_size;
+                        r_saved_byte_en        = r_saved_byte_en >> r_firsttime_read_bytes;
+                        r_firsttime_read_bytes = DataWidthInByte as 16;
+                        r_need_two_line        = 0;
+                    }
+
+                    // ミス時はメモリにリクエストを出す
+                    if !w_hit {
+                        if !r_saved_write_en {
+                            // replace 位置は way=0 で仮決め
+                            r_refill_way = 0;
+                            // replace対象がdirtyならWB
+                            if r_read_dirty[0] {
+                                r_need_wb = 1;
+                                // r_wb_line_addr = GenAddr(r_read_tag[0], GetIndex(r_saved_addr), 0);
+                                r_wb_line = r_read_line[0];
+                                mem_if.awid = 0;
+                                mem_if.awvalid = 1;
+                                mem_if.awaddr = GenAddr(r_read_tag[0], GetIndex(r_saved_addr), 0);
+                                mem_if.awlen = DCACHE_CONF.line_size / AXI_CONF.data_w_bytes;
+                                mem_if.awburst = 2'z;
+
+                                mem_if.wvalid = 1;
+                                mem_if.wdata = r_read_line[0][0 +: 8*AXI_CONF.data_w_bytes];
+                                mem_if.wstrb = {1'b1 repeat AXI_CONF.data_w_bytes};
+                                mem_if.wlast = 0;
+                                r_wb_burst_count = 1;
+                            } else {
+                                r_need_wb = 0;
+                            }
+
+                            // 
+                            mem_if.arid = 0; // 仮
+                            mem_if.arvalid = 1;
+                            mem_if.araddr = GetLineAddr(r_saved_addr);
+                            mem_if.arlen = DCACHE_CONF.line_size / AXI_CONF.data_w_bytes;
+                            mem_if.arburst = 2'z;
+                            mem_if.rready = 1;
+                            r_mem_resp_count = 0;
+                            r_mem_resp_line = 0;
+                        }
+                    }
+                }
+                State::mem_req: {
+                    if !r_saved_write_en {
+                        if mem_if.awaddr_ack() {
+                            mem_if.awvalid = 0;
+                        }
+                        if mem_if.wdata_ack() {
+                            r_wb_burst_count += 1;
+                            mem_if.wdata = r_read_line[0][r_wb_burst_count*8*AXI_CONF.data_w_bytes +: 8*AXI_CONF.data_w_bytes];
+                            if r_wb_burst_count + 1 == AXI_CONF.data_w_bytes - 1 {
+                                mem_if.wlast = 1;
+                            }
+                        }
+
+                        if mem_if.araddr_ack() {
+                            mem_if.arvalid = 0;
+                        }
+                        if mem_if.rdata_ack() {
+                            r_mem_resp_count += 1;
+                            r_mem_resp_line[r_mem_resp_count*8*AXI_CONF.data_w_bytes +: 8*AXI_CONF.data_w_bytes] = mem_if.rdata;
+                            if mem_if.rlast {
+                                mem_if.rready = 0;
+                                // r_state = State::
+                            }
+                        }
+                    }
+                }
             }
         }
     }
+}
+
+module DCacheTagArray::< 
+    PROC_CONF: Config::ProcessorConfig,
+    DCACHE_CONF: Config::DCacheConfig,
+>(
+    i_clk: input clock,
+    i_rst: input reset,
+
+) {
+
 }

@@ -29,9 +29,9 @@ module VramSync #(
 ) {
     #[allow(missing_reset_statement)]
     var ram_data: logic<$bits(DATA_TYPE)> [WORD_SIZE];
+
     // var r_qb     : logic<$bits(DATA_TYPE)>            ;
     var r_qv: 'video logic<$bits(DATA_TYPE)>;
-
 
     initial {
         // $readmemh("ram_data.hex", ram_data);
