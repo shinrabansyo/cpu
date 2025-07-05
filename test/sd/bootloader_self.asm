@@ -8,66 +8,110 @@
     beq r1, (r0, r0) -> @func_sd_init
 
     // 2. 1ブロック読み込み
-    add r10 = r0, r0     // block_addr
-    add r11 = r0, r0     // buffer
-    addi r4 = r0, 0x1002 // entry_point
-    add r12 = r0, r4
-    beq r1, (r0, r0) -> @func_single_block_load
-
-    // 3. エントリポイントにジャンプ
-    jal r1, r0[0x1002]
-
-    // 4. 無限ループ
-    @inf_loop.func_main
-    beq r0, (r0, r0) -> @inf_loop.func_main
-
-// void func_single_block_load(uint32_t block_addr, uint8_t *buffer, uint8_t *entry_point)
-@func_single_block_load
-// プロローグ
-    // フレームポインタの退避
-    subi r2 = r2, 4
-    sw r2[0] = r3
-    addi r3 = r2, 0
-
-    // リターンアドレスの退避
-    subi r2 = r2, 16
-    sw r3[-4] = r1
-
-    // entry_point を退避
-    add r20 = r0, r12
-
-    // 1. シングルブロックの読み取り
+    add r10 = r0, r0      // block_addr
+    addi r11 = r0, 0x400  // buffer
     beq r1, (r0, r0) -> @func_single_block_read
 
-    // 2. 実行結果確認
-    beq r0, (r10, r0) -> @uart.func_single_block_load
-    beq r0, (r0, r0) -> @epilogue.func_single_block_load
+    // 3. バッファアドレスを整数演算レジスタに保存
+    add r4 = r0, r11
 
-    // 3. 512byte entry_point に書き込み
-    @uart.func_single_block_load
+    // 4. ヘッダ・バージョン番号確認(SELF)
+    lw r5 = r4[0]
+    addi r6 = r0, 0x464C4553
+    bne r0, (r5, r6) -> @inf_loop.func_main
+    lw r5 = r4[4]
+    bne r0, (r5, r0) -> @inf_loop.func_main
+
+    // 5. 各セクションのサイズを取得
+    lw r20 = r4[8]    // データセクション
+    lw r21 = r4[12]   // 命令セクション
+
+    // 5. データ読み込み
+    addi r5 = r0, 0   // RAM アドレス
+    addi r6 = r4, 16  // バッファアドレス
+    @data_loop.func_main
+        // 5.1. 終了判定
+        blt r0, (r20, r5) -> @data_loop_end.func_main
+
+        // 5.2. バッファ -> RAM (1ブロック分)
+        @data_move_loop.func_main
+            // 5.2.1. 終了判定
+            addi r7 = r0, 512
+            ble r0, (r7, r6) -> @data_move_loop_end.func_main
+
+            // 5.2.2. バッファ -> RAM (1byte)
+            sw r5[0] = r6
+
+            // 5.2.3. ポインタ更新
+            addi r5 = r5, 4
+            addi r6 = r6, 4
+
+            // 5.2.4. ループ継続
+            beq r0, (r0, r0) -> @data_move_loop.func_main
+        @data_move_loop_end.func_main
+
+        // 5.3. 1ブロック読み込み (※続く命令セクションのために，最後に1ブロック分読み込む)
+        addi r7 = r5, 16
+        srli r10 = r7, 9
+        addi r11 = r0, 0x400
+        add r22 = r0, r5
+        beq r1, (r0, r0) -> @func_single_block_read
+        add r5 = r0, r22
+
+        // 5.4. ループ継続
+        add r6 = r0, r0
+        beq r0, (r0, r0) -> @data_loop.func_main
+    @data_loop_end.func_main
+
+    // 6. 命令セクションの先頭が含まれるブロックアドレスを計算
     add r4 = r0, r20
-    addi r5 = r0, 0
-    addi r7 = r0, 512
-    @read_loop.func_single_block_load
-    beq r0, (r5, r7) -> @epilogue.func_single_block_load
-        lb r6 = r5[0]
-        isb r4[0] = r6
-        addi r5 = r5, 1
-        addi r4 = r4, 1
-        beq r0, (r0, r0) -> @read_loop.func_single_block_load
+    add r4 = r4, 16      // 命令セクションの開始アドレス
+    andi r5 = r4, 0x1FF  // 命令セクション先頭のブロック内オフセット
+    srli r4 = r4, 9      // 命令セクションの開始ブロックアドレス
 
-    // エピローグ
-    @epilogue.func_single_block_load
-    // 保存レジスタの復元
-    lw r1 = r3[-4]
-    addi r2 = r2, 16
+    // 7. 命令読み込み
+    add  r6 = r0, r5  // バッファアドレス
+    addi r5 = r0, 0   // RAM アドレス
+    @data_loop.func_main
+        // 7.1. 終了判定
+        blt r0, (r20, r5) -> @data_loop_end.func_main
 
-    // フレームポインタの復元
-    lw r3 = r3[0]
-    addi r2 = r2, 4
+        // 7.2. バッファ -> RAM (1ブロック分)
+        @data_move_loop.func_main
+            // 7.2.1. 終了判定
+            addi r7 = r0, 512
+            ble r0, (r7, r6) -> @data_move_loop_end.func_main
 
-    // return
-    jal r0, r1[0]
+            // 7.2.2. バッファ -> RAM (1byte)
+            isb r5[0] = r6
+
+            // 7.2.3. ポインタ更新
+            addi r5 = r5, 1
+            addi r6 = r6, 1
+
+            // 7.2.4. ループ継続
+            beq r0, (r0, r0) -> @data_move_loop.func_main
+        @data_move_loop_end.func_main
+
+        // 7.3. 1ブロック読み込み (※1回余分に読み込んじゃう)
+        addi r7 = r5, 16
+        srli r10 = r7, 9
+        addi r11 = r0, 0x400
+        add r22 = r0, r5
+        beq r1, (r0, r0) -> @func_single_block_read
+        add r5 = r0, r22
+
+        // 7.4. ループ継続
+        add r6 = r0, r0
+        beq r0, (r0, r0) -> @data_loop.func_main
+    @data_loop_end.func_main
+
+    // 8. ジャンプ
+    jal r1, r0[0]
+
+    // 9. 無限ループ
+    @inf_loop.func_main
+    beq r0, (r0, r0) -> @inf_loop.func_main
 
 // uint8_t func_sd_init(uint8_t cs, uint8_t clk_shamt)
 @func_sd_init
@@ -675,7 +719,6 @@
 
     // return
     jal r0, r1[0]
-
 
 
 // void  gpio_write(uint32_t pin, uint32_t value)
