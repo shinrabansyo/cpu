@@ -2,18 +2,30 @@
 
 // void main(void)
 @func_main
+    addi r7 = r0, 97
+    out r0[0] = r7
+
     // 1. SDカードの初期化
     addi r10 = r0, 0  // cs
     addi r11 = r0, 4  // clk_shamt
     beq r1, (r0, r0) -> @func_sd_init
+
+    addi r7 = r0, 98
+    out r0[0] = r7
 
     // 2. 1ブロック読み込み
     add r10 = r0, r0      // block_addr
     addi r11 = r0, 0x400  // buffer
     beq r1, (r0, r0) -> @func_single_block_read
 
+    addi r7 = r0, 99
+    out r0[0] = r7
+
     // 3. バッファアドレスを整数演算レジスタに保存
     add r4 = r0, r11
+
+    addi r7 = r0, 100
+    out r0[0] = r7
 
     // 4. ヘッダ・バージョン番号確認(SELF)
     lw r5 = r4[0]
@@ -22,11 +34,17 @@
     lw r5 = r4[4]
     bne r0, (r5, r0) -> @inf_loop.func_main
 
+    addi r7 = r0, 101
+    out r0[0] = r7
+
     // 5. 各セクションのサイズを取得
     lw r20 = r4[8]    // データセクション
     lw r21 = r4[12]   // 命令セクション
 
-    // 5. データ読み込み
+    addi r7 = r0, 102
+    out r0[0] = r7
+
+    // 6. データ読み込み
     addi r5 = r0, 0   // RAM アドレス
     addi r6 = r4, 16  // バッファアドレス
     @data_loop.func_main
@@ -63,13 +81,19 @@
         beq r0, (r0, r0) -> @data_loop.func_main
     @data_loop_end.func_main
 
-    // 6. 命令セクションの先頭が含まれるブロックアドレスを計算
+    addi r7 = r0, 103
+    out r0[0] = r7
+
+    // 7. 命令セクションの先頭が含まれるブロックアドレスを計算
     add r4 = r0, r20
     add r4 = r4, 16      // 命令セクションの開始アドレス
     andi r5 = r4, 0x1FF  // 命令セクション先頭のブロック内オフセット
     srli r4 = r4, 9      // 命令セクションの開始ブロックアドレス
 
-    // 7. 命令読み込み
+    addi r7 = r0, 104
+    out r0[0] = r7
+
+    // 8. 命令読み込み
     add  r6 = r0, r5  // バッファアドレス
     addi r5 = r0, 0   // RAM アドレス
     @data_loop.func_main
@@ -106,10 +130,13 @@
         beq r0, (r0, r0) -> @data_loop.func_main
     @data_loop_end.func_main
 
-    // 8. ジャンプ
+    addi r7 = r0, 105
+    out r0[0] = r7
+
+    // 9. ジャンプ
     jal r1, r0[0]
 
-    // 9. 無限ループ
+    // 10. 無限ループ
     @inf_loop.func_main
     beq r0, (r0, r0) -> @inf_loop.func_main
 
