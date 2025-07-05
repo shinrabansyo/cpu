@@ -78,6 +78,8 @@ module Core (
     let w_is_pc_iram    : logic<1>  = w_pc_fetching >= IRAM_BASE && w_pc_fetching <: IRAM_BASE + IRAM_SIZE;
     let w_is_wout_iram  : logic<1>  = w_is_pc_iram && w_out >= IRAM_BASE && w_out <: IRAM_BASE + IRAM_SIZE;
     let w_is_pc_irom    : logic<1>  = w_pc_fetching >= IROM_BASE;
+    var r_is_pc_iram    : logic<1>;
+    var r_is_pc_irom    : logic<1>;
     var w_iram_instr_raw: logic<48>;
     var w_irom_instr_raw: logic<48>;
 
@@ -113,7 +115,7 @@ module Core (
         o_qb  : w_irom_instr_raw         ,
     );
 
-    assign w_instr_raw = case {w_is_pc_iram, w_is_pc_irom} {
+    assign w_instr_raw = case {r_is_pc_iram, r_is_pc_irom} {
         2'b10  : w_iram_instr_raw,
         2'b01  : w_irom_instr_raw,
         default: 48'h0,
@@ -153,8 +155,12 @@ module Core (
     always_ff (i_clk, i_rst) {
         if_reset {
             r_pc_fetched = IROM_BASE;
+            r_is_pc_iram = 1'b0;
+            r_is_pc_irom = 1'b1;
         } else {
             r_pc_fetched = w_pc_fetching;
+            r_is_pc_iram = w_is_pc_iram;
+            r_is_pc_irom = w_is_pc_irom;
         }
     }
 
