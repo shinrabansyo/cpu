@@ -75,9 +75,11 @@ module Core (
     var r_pc_fetched : logic<32>;
     var w_instr_raw  : logic<48>;
 
+    /* verilator lint_off UNSIGNED */
     let w_is_pc_iram    : logic<1>  = w_pc_fetching >= IRAM_BASE && w_pc_fetching <: IRAM_BASE + IRAM_SIZE;
     let w_is_wout_iram  : logic<1>  = w_is_pc_iram && w_out >= IRAM_BASE && w_out <: IRAM_BASE + IRAM_SIZE;
     let w_is_pc_irom    : logic<1>  = w_pc_fetching >= IROM_BASE;
+    /* verilator lint_on UNSIGNED */
     var r_is_pc_iram    : logic<1>;
     var r_is_pc_irom    : logic<1>;
     var w_iram_instr_raw: logic<48>;
