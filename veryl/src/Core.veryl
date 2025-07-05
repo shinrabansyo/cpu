@@ -152,7 +152,7 @@ module Core (
 
     always_ff (i_clk, i_rst) {
         if_reset {
-            r_pc_fetched = 32'h0;
+            r_pc_fetched = IROM_BASE;
         } else {
             r_pc_fetched = w_pc_fetching;
         }
