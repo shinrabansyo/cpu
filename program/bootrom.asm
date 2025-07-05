@@ -56,17 +56,17 @@
     sw r3[-16] = r22
 
     //////////////////////////////////////////////////////////////
-    
+
     // 引数の保存
     add r20 = r0, r10   // cs
     add r21 = r0, r11   // clk_shamt
 
     //////////////////////////////////////////////////////////////
-    
+
     // GPIO: io空間の0x04番地 32bit の値が入る
     // 0bit: GPIO0
     // 31: GPIO31
-    
+
     // Gpio:Init
     add r10 = r0, r20
     addi r11 = r0, 1
@@ -126,7 +126,7 @@
     addi r10 = r0, 6
     addi r11 = r0, 1
     beq r1, (r0, r0) -> @func_gpio_write
-    
+
     // R1 resp が 0x01 であることを確認、それまでpolling
     beq r1, (r0, r0) -> @func_polling_r1_response // FIX
 
@@ -149,7 +149,7 @@
     addi r11 = r0, 0x000001aa // arg
     addi r12 = r0, 0x87 // crc
     beq r1, (r0, r0) -> @func_spi_sd_command
-    
+
     // R7 resp の下位12bit が 0x1aa であることを確認
     beq r1, (r0, r0) -> @func_polling_r3_r7_response
     addi r4 = r0, 0x1aa
@@ -214,14 +214,14 @@
 
     //////////////////////////////////////////////////////////////
 
-    // CMD58 
+    // CMD58
     // arg: 0x00000000
     @cmd58.func_sd_init
     addi r10 = r0, 58            // cmd58
     addi r11 = r0, 0             // arg
     addi r12 = r0, 0             // crc は cmd8までなのでテキトーで大丈夫
     beq r1, (r0, r0) -> @func_spi_sd_command
-    
+
     // R3 resp の 30bit 目が 1 であることを確認（SDHC/SDXC）
     addi r4 = r0, 0x40000000
     add r5 = r0, r10
@@ -231,7 +231,7 @@
     // 失敗ならエラーコード6
     addi r10 = r0, 0x06
     beq r0, (r0, r0) -> @epilogue.func_sd_init
-    
+
     // SUCCESS (return 0)
     // SD Ver.2+ (Block address) であることが確定
     // 512 bytes/block
@@ -284,7 +284,7 @@
     sw r3[-4] = r1
     sw r3[-8] = r20
     sw r3[-12] = r21
-    
+
     addi r4 = r0, 0xdeadbeef
     sw r0[0] = r4
     lw r4 = r0[0]
@@ -306,7 +306,7 @@
     out r0[0] = r4
     srli r4 = r4, 8
     out r0[0] = r4
- 
+
     // Setup
     addi r5 = r0, @func_spi_transfer
     add  r20 = r0, r11
@@ -351,11 +351,11 @@
     beq r1, (r0, r0) -> @func_gpio_write
 
     // crc
-    add r4 = r0, r21    
+    add r4 = r0, r21
     ori r4 = r4, 0x01
     add r10 = r0, r4
     beq r1, (r0, r0) -> @func_spi_transfer
-    
+
     addi r10 = r0, 5
     addi r11 = r0, 1
     beq r1, (r0, r0) -> @func_gpio_write
@@ -365,7 +365,7 @@
     lw r20 = r3[-8]
     lw r21 = r3[-12]
     addi r2 = r2, 12
-    
+
     add r4 = r0, r1
     out r0[0] = r4
     srli r4 = r4, 8
@@ -430,7 +430,7 @@
     sw r3[-4] = r1
     sw r3[-8] = r20
     sw r3[-12] = r21
-    
+
 
     @loop.func_polling_r3_r7_response
         // spi_transfer
@@ -441,7 +441,7 @@
         add r4 = r0, r10
         andi r4 = r4, 0x80
         bne r0, (r4, r0) -> @loop.func_polling_r3_r7_response
-        
+
     add r20 = r0, r10
 
 
@@ -481,7 +481,7 @@
     // 39                      0
     add r10 = r0, r21
     add r11 = r0, r20
-    
+
 
     // 保存レジスタの復元
     lw r1 = r3[-4]
@@ -544,22 +544,22 @@
     sw r3[-8] = r20
     sw r3[-12] = r21
     sw r3[-16] = r22
-    
+
     add r20 = r0, r10
     add r21 = r0, r11
-    
+
     addi r10 = r0, 17  // cmd17
     addi r11 = r0, r20 // arg = block_addr
     addi r12 = r0, 0   // crc テキトー
-    
+
     beq r1, (r0, r0) -> @func_spi_sd_command
     beq r1, (r0, r0) -> @func_polling_r1_response
-    
+
     addi r4 = r0, 5
     srl r4 = r10, r4   // Address Error フィールドを取得
     andi r4 = r4, 1
     bne r0, (r4, r0) -> @address_error.func_single_block_read
-    
+
     // data token を待つ
     beq r1, (r0, r0) -> @func_polling_data_token_for_cmd17_18_24
 
@@ -568,17 +568,17 @@
     @store_loop.func_single_block_read
     addi r4 = r0, 512
     beq r0, (r22, r4) -> @store_loop_end.func_single_block_read
-    
+
     addi r10 = r0, 0xFF
     beq r1, (r0, r0) -> @func_spi_transfer
-    
+
     add r5 = r0, r21
     sb r5[0] = r10
 
     addi r4 = r0, 1
     add r21 = r21, r4
     add r22 = r22, r4
-    
+
     beq r0, (r0, r0) -> @store_loop.func_single_block_read
     @store_loop_end.func_single_block_read
 
@@ -587,7 +587,7 @@
     beq r1, (r0, r0) -> @func_spi_transfer
     addi r10 = r0, 0xFF
     beq r1, (r0, r0) -> @func_spi_transfer
-    
+
     // エラーコードの設定
     @address_error.func_single_block_read
     addi r10 = r0, 1
@@ -631,17 +631,17 @@
     // 初期時間
     in r20 = r0[0x1003]
     in r21 = r0[0x1004]
-    
+
     // 毎ループ時間を取得して差を取る
     // -> 差が r10 より大きければループを終了
     // -> そうでなければ継続
     @loop.func_wait_ms
         in r10 = r0[0x1003]
         in r11 = r0[0x1004]
-    
+
         add r12 = r20, r0
         add r13 = r21, r0
-    
+
         beq r1, (r0, r0) -> @func_sub64
 
         // 上位32bit が 1 以上ならループ終了
@@ -651,9 +651,9 @@
         blt r0, (r10, r22) -> @loop.func_wait_ms
         // 現在時間 - 初期時間 >= r22 ならループ終了
         beq r0, (r0, r0) -> @end.func_wait_ms
-        
+
     @end.func_wait_ms
-    
+
     // エピローグ
     // 保存レジスタの復元
     lw r1 = r3[-4]
@@ -673,14 +673,14 @@
 @func_sub64
     // return a - b
     // r10 = al, r11 = ah, r12 = bl, r13 = bh
-    
+
     // 繰り下がりが発生したかを確認
     blt r0, (r10, r12) -> @borrow.func_sub64
 
     // 繰り下がりが発生しないならそのまま引き算
     sub r10 = r10, r12
     sub r11 = r11, r13
-    
+
     // 早期リターン
     jal r0, r1[0]
 
@@ -693,7 +693,7 @@
     addi r4 = r0, 1
     sub r11 = r11, r4
 
-    // return 
+    // return
     jal r0, r1[0]
 
 
@@ -704,12 +704,12 @@
     // gpio =     0000_0000
     // -------------------- or
     //            0001_0000
-    
+
     // r5 = 0xef: 1110_1111
     // gpio =     0001_0000
     // -------------------- and
     //            0000_0000
-    
+
     // r4 = シフト量
     add r4 = r0, r10
     addi r5 = r0, 1
@@ -726,7 +726,7 @@
 
         // GPIOの現在状態を取得
         in r6 = r0[4]
-        
+
         // 現在状態にマスクをかける
         and r7 = r5, r6
 
@@ -743,12 +743,12 @@
 
         // GPIOの現在状態を取得
         in r6 = r0[4]
-        
+
         // 現在状態にマスクをかける
         or r7 = r4, r6
 
         // GPIOの現在状態を更新
         out r0[4] = r7
-    
+
         // return
         jal r0, r1[0]

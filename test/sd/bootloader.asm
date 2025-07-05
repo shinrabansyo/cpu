@@ -316,32 +316,31 @@
     ori r4 = r4, 0x40
     andi r4 = r4, 0x7F
     add r10 = r0, r4
-    jal r1, r5[0]
+    beq r1, (r0, r0) -> @func_spi_transfer
 
     // arg3
     srli r4 = r6, 24
     add r10 = r0, r4
-    jal r1, r5[0]
+    beq r1, (r0, r0) -> @func_spi_transfer
 
     // arg2
     srli r4 = r6, 16
     add r10 = r0, r4
-    jal r1, r5[0]
+    beq r1, (r0, r0) -> @func_spi_transfer
 
     // arg1
     srli r4 = r6, 8
     add r10 = r0, r4
-    jal r1, r5[0]
+    beq r1, (r0, r0) -> @func_spi_transfer
 
     // arg0
     add r10 = r0, r6
-    jal r1, r5[0]
+    beq r1, (r0, r0) -> @func_spi_transfer
 
     // crc
     ori r4 = r7, 0x01
     add r10 = r0, r4
-    jal r1, r5[0]
-
+    beq r1, (r0, r0) -> @func_spi_transfer
 
     // 保存レジスタの復元
     lw r1 = r3[-4]

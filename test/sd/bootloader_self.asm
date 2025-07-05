@@ -2,7 +2,7 @@
 
 // void main(void)
 @func_main
-    addi r7 = r0, 97
+    addi r7 = r0, 97 // 'a'
     out r0[0] = r7
 
     // 1. SDカードの初期化
@@ -10,7 +10,7 @@
     addi r11 = r0, 4  // clk_shamt
     beq r1, (r0, r0) -> @func_sd_init
 
-    addi r7 = r0, 98
+    addi r7 = r0, 98 // 'b'
     out r0[0] = r7
 
     // 2. 1ブロック読み込み
@@ -18,47 +18,87 @@
     addi r11 = r0, 0x400  // buffer
     beq r1, (r0, r0) -> @func_single_block_read
 
-    addi r7 = r0, 99
+    addi r7 = r0, 99 // 'c'
     out r0[0] = r7
 
     // 3. バッファアドレスを整数演算レジスタに保存
-    add r4 = r0, r11
+    addi r4 = r0, 0x400
 
-    addi r7 = r0, 100
+    addi r7 = r0, 100 // 'd'
     out r0[0] = r7
 
     // 4. ヘッダ・バージョン番号確認(SELF)
     lw r5 = r4[0]
     addi r6 = r0, 0x464C4553
+
+    srli r7 = r5, 0
+    out r0[0] = r7
+    srli r7 = r5, 8
+    out r0[0] = r7
+    srli r7 = r5, 16
+    out r0[0] = r7
+    srli r7 = r5, 24
+    out r0[0] = r7
+
     bne r0, (r5, r6) -> @inf_loop.func_main
     lw r5 = r4[4]
+
+    addi r7 = r0, 49 // '1'
+    out r0[0] = r7
+
     bne r0, (r5, r0) -> @inf_loop.func_main
 
-    addi r7 = r0, 101
+    addi r7 = r0, 101 // 'e'
     out r0[0] = r7
 
     // 5. 各セクションのサイズを取得
     lw r20 = r4[8]    // データセクション
     lw r21 = r4[12]   // 命令セクション
 
-    addi r7 = r0, 102
+    add r5 = r0, r20
+    srli r5 = r5, 0
+    out r0[0] = r5
+    srli r5 = r5, 8
+    out r0[0] = r5
+    srli r5 = r5, 16
+    out r0[0] = r5
+    srli r5 = r5, 24
+    out r0[0] = r5
+
+    add r5 = r0, r21
+    srli r5 = r5, 0
+    out r0[0] = r5
+    srli r5 = r5, 8
+    out r0[0] = r5
+    srli r5 = r5, 16
+    out r0[0] = r5
+    srli r5 = r5, 24
+    out r0[0] = r5
+
+
+    addi r7 = r0, 102 // 'f'
     out r0[0] = r7
 
     // 6. データ読み込み
     addi r5 = r0, 0   // RAM アドレス
-    addi r6 = r4, 16  // バッファアドレス
+    addi r6 = r4, 0x410  // バッファアドレス
     @data_loop.func_main
         // 5.1. 終了判定
-        blt r0, (r20, r5) -> @data_loop_end.func_main
+        ble r0, (r20, r5) -> @data_loop_end.func_main
+        addi r4 = r0, 0x41
+        out r0[0] = r4
 
         // 5.2. バッファ -> RAM (1ブロック分)
         @data_move_loop.func_main
             // 5.2.1. 終了判定
-            addi r7 = r0, 512
+            addi r7 = r0, 0x600
             ble r0, (r7, r6) -> @data_move_loop_end.func_main
+            addi r4 = r0, 0x42
+            out r0[0] = r4
 
             // 5.2.2. バッファ -> RAM (1byte)
-            sw r5[0] = r6
+            lw r7 = r6[0]
+            sw r5[0] = r7
 
             // 5.2.3. ポインタ更新
             addi r5 = r5, 4
@@ -77,45 +117,53 @@
         add r5 = r0, r22
 
         // 5.4. ループ継続
-        add r6 = r0, r0
+        addi r6 = r0, 0x400
         beq r0, (r0, r0) -> @data_loop.func_main
     @data_loop_end.func_main
 
-    addi r7 = r0, 103
+    addi r7 = r0, 103 // 'g'
     out r0[0] = r7
 
     // 7. 命令セクションの先頭が含まれるブロックアドレスを計算
     add r4 = r0, r20
-    add r4 = r4, 16      // 命令セクションの開始アドレス
+    addi r4 = r4, 16      // 命令セクションの開始アドレス
     andi r5 = r4, 0x1FF  // 命令セクション先頭のブロック内オフセット
+    addi r5 = r5, 0x400
     srli r4 = r4, 9      // 命令セクションの開始ブロックアドレス
 
-    addi r7 = r0, 104
+    addi r7 = r0, 104 // 'h'
     out r0[0] = r7
 
     // 8. 命令読み込み
     add  r6 = r0, r5  // バッファアドレス
     addi r5 = r0, 0   // RAM アドレス
-    @data_loop.func_main
+    @inst_loop.func_main
         // 7.1. 終了判定
-        blt r0, (r20, r5) -> @data_loop_end.func_main
+        ble r0, (r20, r5) -> @inst_loop_end.func_main
+        addi r4 = r0, 0x41
+        out r0[0] = r4
 
         // 7.2. バッファ -> RAM (1ブロック分)
-        @data_move_loop.func_main
+        @inst_move_loop.func_main
             // 7.2.1. 終了判定
-            addi r7 = r0, 512
-            ble r0, (r7, r6) -> @data_move_loop_end.func_main
+            addi r7 = r0, 0x600
+            ble r0, (r7, r6) -> @inst_move_loop_end.func_main
+
+            addi r4 = r0, 0x42
+            out r0[0] = r4
 
             // 7.2.2. バッファ -> RAM (1byte)
-            isb r5[0] = r6
+            lb r7 = r6[0]
+            isb r5[0] = r7
+            out r0[0] = r7
 
             // 7.2.3. ポインタ更新
             addi r5 = r5, 1
             addi r6 = r6, 1
 
             // 7.2.4. ループ継続
-            beq r0, (r0, r0) -> @data_move_loop.func_main
-        @data_move_loop_end.func_main
+            beq r0, (r0, r0) -> @inst_move_loop.func_main
+        @inst_move_loop_end.func_main
 
         // 7.3. 1ブロック読み込み (※1回余分に読み込んじゃう)
         addi r7 = r5, 16
@@ -126,11 +174,11 @@
         add r5 = r0, r22
 
         // 7.4. ループ継続
-        add r6 = r0, r0
-        beq r0, (r0, r0) -> @data_loop.func_main
-    @data_loop_end.func_main
+        addi r6 = r0, 0x400
+        beq r0, (r0, r0) -> @inst_loop.func_main
+    @inst_loop_end.func_main
 
-    addi r7 = r0, 105
+    addi r7 = r0, 105 // 'i'
     out r0[0] = r7
 
     // 9. ジャンプ
@@ -378,7 +426,6 @@
 
 
     // Setup
-    addi r5 = r0, @func_spi_transfer
     add  r6 = r0, r11
     add  r7 = r0, r12
 
@@ -387,32 +434,31 @@
     ori r4 = r4, 0x40
     andi r4 = r4, 0x7F
     add r10 = r0, r4
-    jal r1, r5[0]
+    beq r1, (r0, r0) -> @func_spi_transfer
 
     // arg3
     srli r4 = r6, 24
     add r10 = r0, r4
-    jal r1, r5[0]
+    beq r1, (r0, r0) -> @func_spi_transfer
 
     // arg2
     srli r4 = r6, 16
     add r10 = r0, r4
-    jal r1, r5[0]
+    beq r1, (r0, r0) -> @func_spi_transfer
 
     // arg1
     srli r4 = r6, 8
     add r10 = r0, r4
-    jal r1, r5[0]
+    beq r1, (r0, r0) -> @func_spi_transfer
 
     // arg0
     add r10 = r0, r6
-    jal r1, r5[0]
+    beq r1, (r0, r0) -> @func_spi_transfer
 
     // crc
     ori r4 = r7, 0x01
     add r10 = r0, r4
-    jal r1, r5[0]
-
+    beq r1, (r0, r0) -> @func_spi_transfer
 
     // 保存レジスタの復元
     lw r1 = r3[-4]
