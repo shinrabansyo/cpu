@@ -18,19 +18,24 @@ module Core (
     o_gpout: output logic<8>,
 
     // HDMI
-    i_clk_dvi: input  `dvi clock    ,
-    i_rst_dvi: input  `dvi reset    ,
-    o_vsync  : output `dvi logic<1> ,
-    o_hsync  : output `dvi logic<1> ,
-    o_de     : output `dvi logic<1> ,
-    o_data   : output `dvi logic<24>,
+    i_clk_dvi: input  'dvi clock    ,
+    i_rst_dvi: input  'dvi reset    ,
+    o_vsync  : output 'dvi logic<1> ,
+    o_hsync  : output 'dvi logic<1> ,
+    o_de     : output 'dvi logic<1> ,
+    o_data   : output 'dvi logic<24>,
 ) {
+    const IROM_BASE: u32 = 32'h8000_0004;
+    const IRAM_BASE: u32 = 32'h0000_0000;
+
+    const IRAM_SIZE: u32 = 4096; // 4KB
+
     // ワイヤ・インタフェース宣言
     // IOBus
     var i_dev_id: logic<32>;
 
-    inst if_io_bus_din : Decoupled #(Width: 32,);
-    inst if_io_bus_dout: Decoupled #(Width: 32,);
+    inst if_io_bus_din : Decoupled #( Width: 32 );
+    inst if_io_bus_dout: Decoupled #( Width: 32 );
 
     // ALU
     var w_command: logic<8> ;
@@ -70,24 +75,49 @@ module Core (
     var r_pc_fetched : logic<32>;
     var w_instr_raw  : logic<48>;
 
+    let w_is_pc_iram    : logic<1>  = w_pc_fetching >= IRAM_BASE && w_pc_fetching <: IRAM_BASE + IRAM_SIZE;
+    let w_is_wout_iram  : logic<1>  = w_is_pc_iram && w_out >= IRAM_BASE && w_out <: IRAM_BASE + IRAM_SIZE;
+    let w_is_pc_irom    : logic<1>  = w_pc_fetching >= IROM_BASE;
+    var w_iram_instr_raw: logic<48>;
+    var w_irom_instr_raw: logic<48>;
+
     var w_is_dmem  : logic<1> ;
     var w_is_imem  : logic<1> ;
     var w_wen      : logic<4> ;
     var w_ren      : logic<1> ;
     var w_dmem_read: logic<32>;
 
-    inst m_inst_mod: IMemSync (
-        i_clk : i_clk                            ,
-        i_rst : i_rst                            ,
-        i_clr : 1'h0                             ,
-        i_mea : (|w_wen) & w_is_imem             ,
-        i_wea : {2'b0, w_wen}                    ,
-        i_adra: w_out                            ,
-        i_da  : {16'b0, m_regfile[w_instr.rs2_s]},
-        i_meb : 1'b1                             ,
-        i_adrb: w_pc_fetching                    ,
-        o_qb  : w_instr_raw                      ,
+    inst m_iram_mod: IMemSync (
+        i_clk : i_clk                                ,
+        i_rst : i_rst                                ,
+        i_clr : 1'h0                                 ,
+        i_mea : (|w_wen) & w_is_imem & w_is_wout_iram,
+        i_wea : {2'b0, w_wen}                        ,
+        i_adra: w_out                                ,
+        i_da  : {16'b0, m_regfile[w_instr.rs2_s]}    ,
+        i_meb : w_is_pc_iram                         ,
+        i_adrb: w_pc_fetching                        ,
+        o_qb  : w_iram_instr_raw                     ,
     );
+
+    inst m_irom_mod: IMemSync (
+        i_clk : i_clk                    ,
+        i_rst : i_rst                    ,
+        i_clr : 1'h0                     ,
+        i_mea : 0                        ,
+        i_wea : 0                        ,
+        i_adra: 0                        ,
+        i_da  : 0                        ,
+        i_meb : w_is_pc_irom             ,
+        i_adrb: w_pc_fetching - IROM_BASE,
+        o_qb  : w_irom_instr_raw         ,
+    );
+
+    assign w_instr_raw = case {w_is_pc_iram, w_is_pc_irom} {
+        2'b10  : w_iram_instr_raw,
+        2'b01  : w_irom_instr_raw,
+        default: 48'h0,
+    };
 
     inst m_data_mod: DMemSync #(
         WORD_SIZE: 4096,
@@ -111,11 +141,11 @@ module Core (
     // プログラムカウンタ
     always_comb {
         w_pc_fetching = case {w_instr.opcode_sub, w_instr.opcode} {
-            BEQ, BNE, BLT, BLE  : if w_branch_taken { r_pc_fetched + w_instr.imm_b_sext } else { r_pc_fetched + 32'h6 },
+            BEQ, BNE, BLT, BLE  : if w_branch_taken ? r_pc_fetched + w_instr.imm_b_sext : r_pc_fetched + 32'h6,
             JAL                 : w_out,
-            LW, LH, LB, LHU, LBU: if !r_load_ready { r_pc_fetched } else { r_pc_fetched + 32'h6 },
-            IN                  : if !if_io_bus_din.valid { r_pc_fetched } else { r_pc_fetched + 32'h6 },
-            OUT                 : if !if_io_bus_dout.ready { r_pc_fetched } else { r_pc_fetched + 32'h6 },
+            LW, LH, LB, LHU, LBU: if !r_load_ready ? r_pc_fetched : r_pc_fetched + 32'h6,
+            IN                  : if !if_io_bus_din.valid ? r_pc_fetched : r_pc_fetched + 32'h6,
+            OUT                 : if !if_io_bus_dout.ready ? r_pc_fetched : r_pc_fetched + 32'h6,
             default             : r_pc_fetched + 32'h6,
         };
     }
@@ -201,16 +231,16 @@ module Core (
     }
 
     let inst_kind: InstKind = case w_instr.opcode {
-        1         : InstKind::R,
-        2         : InstKind::I,
-        3         : case w_instr.opcode_sub {
+        1: InstKind::R,
+        2: InstKind::I,
+        3: case w_instr.opcode_sub {
             0, 1, 2, 3: InstKind::B, // Branch 系
             4         : InstKind::I, // Jump 系
             default   : InstKind::Nop,
         },
-        4      : InstKind::I,
-        5      : InstKind::S,
-        6      : case w_instr.opcode_sub {
+        4: InstKind::I,
+        5: InstKind::S,
+        6: case w_instr.opcode_sub {
             0      : InstKind::I, // in
             1      : InstKind::S, // out
             default: InstKind::Nop,
@@ -313,14 +343,14 @@ module Core (
             // 初期状態: r_load_ready = 0
             case {w_instr.opcode_sub, w_instr.opcode} {
                 LW, LH, LB, LHU, LBU: {
-                                          // 1. ロード命令 && r_load_ready = 0
-                                          if !r_load_ready {
-                                              r_load_ready = 1;
-                                              // 2. ロード命令 && r_load_ready = 1 -> 読み出し完了，初期状態に戻す
-                                          } else {
-                                              r_load_ready = 0;
-                                          }
-                                      }
+                    // 1. ロード命令 && r_load_ready = 0
+                    if !r_load_ready {
+                        r_load_ready = 1;
+                        // 2. ロード命令 && r_load_ready = 1 -> 読み出し完了，初期状態に戻す
+                    } else {
+                        r_load_ready = 0;
+                    }
+                }
                 default: r_load_ready = 0;
             }
         }
@@ -363,7 +393,7 @@ module Core (
                 LB                     : {w_dmem_read[7] repeat 24, w_dmem_read[0+:8]},
                 LBU                    : {24'b0, w_dmem_read[0+:8]},
                 SW, SH, SB, ISB        : m_regfile[w_instr.rd],
-                IN                     : if if_io_bus_din.valid { if_io_bus_din.bits } else { m_regfile[w_instr.rd] },
+                IN                     : if if_io_bus_din.valid ? if_io_bus_din.bits : m_regfile[w_instr.rd],
                 OUT                    : m_regfile[w_instr.rd],
                 default                : w_out,
             };

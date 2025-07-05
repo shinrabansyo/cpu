@@ -56,7 +56,7 @@ module IMemSync #(
     i_da  : input  DATA_TYPE                , // データ (w)
     i_meb : input  logic                    , // セレクト (r)
     i_adrb: input  logic    <ADDRESS_WIDTH> , // アドレス (r)
-    o_qb  : output DATA_TYPE                , // データ (r)
+    o_qb  : output DATA_TYPE, // データ (r)
 ) {
     const BANK_NUM: u32 = DATA_WIDTH / 8;
 
@@ -91,10 +91,10 @@ module IMemSync #(
         }
     }
 
-    let i_wea_table: logic<($bits(i_wea)<<1)> = {i_wea, i_wea};
-    var data_table: logic<DATA_WIDTH * 2>;
-    var q_buf     : logic<DATA_WIDTH * 2>;
-    assign o_qb       = q_buf[8 * adrb_mod_buf+:DATA_WIDTH];
+    let i_wea_table: logic<($bits(i_wea) << 1)> = {i_wea, i_wea};
+    var data_table : logic<DATA_WIDTH * 2>     ;
+    var q_buf      : logic<DATA_WIDTH * 2>     ;
+    assign o_qb        = q_buf[8 * adrb_mod_buf+:DATA_WIDTH];
     for bank_id in 0..BANK_NUM :g_bank {
         const BANK_ADDRESS_WIDTH: u32                                            = $clog2(WORD_SIZE);
         var bank_adra         : logic<BANK_ADDRESS_WIDTH>                     ;
@@ -232,7 +232,7 @@ module DMemSync #(
     i_da  : input  DATA_TYPE                , // データ (w)
     i_meb : input  logic                    , // セレクト (r)
     i_adrb: input  logic    <ADDRESS_WIDTH> , // アドレス (r)
-    o_qb  : output DATA_TYPE                , // データ (r)
+    o_qb  : output DATA_TYPE, // データ (r)
 ) {
     const BANK_NUM: u32 = DATA_WIDTH / 8;
 

@@ -143,16 +143,16 @@ module Spi #(
 
     always_ff {
         if_reset {
-            r_shift_reg    = 0;
-            r_busy         = 0;
-            r_bit_counter  = 0;
-            r_miso_buf     = 0;
+            r_shift_reg   = 0;
+            r_busy        = 0;
+            r_bit_counter = 0;
+            r_miso_buf    = 0;
         } else if r_busy && r_bit_counter == 0 {
             r_busy = 0;
         } else if !r_busy && if_din.valid { // 送信開始処理
             r_shift_reg   = if_din.bits;
             r_busy        = 1;
-            r_bit_counter = 8; 
+            r_bit_counter = 8;
         } else if r_busy && r_bit_counter != 0 { // 送受信処理の本体
             if w_mode_1_2 {
                 // posedge かつ mode 1 の最初のクロックでない場合

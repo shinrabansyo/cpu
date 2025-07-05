@@ -24,16 +24,16 @@ module IOBus #(
     o_gpout: output logic<8>,
 
     // HDMI
-    i_clk_dvi: input  `dvi clock    ,
-    i_rst_dvi: input  `dvi reset    ,
-    o_vsync  : output `dvi logic<1> ,
-    o_hsync  : output `dvi logic<1> ,
-    o_de     : output `dvi logic<1> ,
-    o_data   : output `dvi logic<24>,
+    i_clk_dvi: input  'dvi clock    ,
+    i_rst_dvi: input  'dvi reset    ,
+    o_vsync  : output 'dvi logic<1> ,
+    o_hsync  : output 'dvi logic<1> ,
+    o_de     : output 'dvi logic<1> ,
+    o_data   : output 'dvi logic<24>,
 ) {
     // UART
-    inst if_uart_tx       : Decoupled #(Width: 8,);
-    inst if_uart_rx       : Decoupled #(Width: 8,);
+    inst if_uart_tx       : Decoupled #( Width: 8 );
+    inst if_uart_rx       : Decoupled #( Width: 8 );
     var w_uart_rx_overrun: logic<1>;
 
     inst uart_tx: UartTx #(
@@ -59,13 +59,13 @@ module IOBus #(
     );
 
     // SPI
-    inst if_spi_din : Decoupled #(Width: 8,);
-    inst if_spi_dout: Decoupled #(Width: 8,);
+    inst if_spi_din : Decoupled #( Width: 8 );
+    inst if_spi_dout: Decoupled #( Width: 8 );
 
-    inst if_spi_clkshamt: Decoupled #(Width: 3,);
+    inst if_spi_clkshamt: Decoupled #( Width: 3 );
     var w_spi_clkshamt : logic<3>;
 
-    inst if_spi_mode: Decoupled #(Width: 2,);
+    inst if_spi_mode: Decoupled #( Width: 2 );
     var w_spi_mode : logic<2>;
 
     inst spi: Spi #(
@@ -89,8 +89,8 @@ module IOBus #(
     );
 
     // GPIO
-    inst if_gpout_read : Decoupled #(Width: 8,);
-    inst if_gpout_write: Decoupled #(Width: 8,);
+    inst if_gpout_read : Decoupled #( Width: 8 );
+    inst if_gpout_write: Decoupled #( Width: 8 );
 
     inst gpout: GeneralPurposeOutput (
         i_clk                  ,
@@ -119,8 +119,8 @@ module IOBus #(
     const HDMI_LENGTH       : u32 = 32'h1000000;
     const HDMI_VRAM_ADR_BITS: u32 = $clog2((128 * 128 + 1) >> 1);
     // inst if_col_mode_din   : Decoupled #(Width: 8,);
-    inst if_col_table_din: Decoupled #(Width: 32,);
-    inst if_vdata_in     : Decoupled #(Width: 8,);
+    inst if_col_table_din: Decoupled #( Width: 32 );
+    inst if_vdata_in     : Decoupled #( Width: 8 );
     // inst if_vdata_out      : Decoupled #(Width: 32,);
     let i_vdata_adr: logic<HDMI_VRAM_ADR_BITS> = (i_dev_id - HDMI_BASE) as HDMI_VRAM_ADR_BITS;
     inst vc: VideoControllerColTable (
