@@ -39,7 +39,7 @@ module Div6 (
 }
 
 module IMemSync #(
-    param RAM_INIT: u32 = 0,
+    param RAM_INIT     : u32       = 0                    ,
     param WORD_SIZE    : u32       = 1024                 , // 1024個の命令を保持
     param ADDRESS_WIDTH: u32       = 32                   , // アドレスは常に32bit
     param ADDRESS_MAX  : u32       = 6 * $clog2(WORD_SIZE), // アドレスの最大値 = 命令サイズ*WORD_SIZE
@@ -143,7 +143,7 @@ module IMemSync #(
 
         initial {
             // SystemVerilogでは $readmemh() の引数が文字列リテラルに限られており，変数は使用不可
-            if RAM_INIT {
+            if RAM_INIT == 1 {
                 if bank_id == 0 {
                     $readmemh("./test/tmp_inst_bank0.hex", ram_data);
                 } else if bank_id == 1 {

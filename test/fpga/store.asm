@@ -6,6 +6,8 @@ $test_sh
     string "test_sh"
 $test_sb
     string "test_sb"
+$test_isb
+    string "test_isb"
 $expected
     string "Expected: "
 $actual
@@ -106,6 +108,79 @@ $hex_table
     lb r11 = r0[3]
     addi r12 = r0, 0xFFFFFFCA
     addi r13 = r0, $test_sb
+    add r14 = r0, r20
+    beq r1, (r0, r0) -> @assert
+
+@test_isb
+    addi r20 = r0, 0
+    addi r10 = r0, 1
+
+    // テスト1 : 0番地 ~ 11番地
+    addi r20 = r0, 1
+    // 命令書き込み (0x0000 : addi r7 = r0, 97)
+    addi r5 = r0, 0x22
+    isb r0[0x0000] = r5
+    addi r5 = r0, 0x07
+    isb r0[0x0001] = r5
+    addi r5 = r0, 0x61
+    isb r0[0x0002] = r5
+    addi r5 = r0, 0x00
+    isb r0[0x0003] = r5
+    addi r5 = r0, 0x00
+    isb r0[0x0004] = r5
+    addi r5 = r0, 0x00
+    isb r0[0x0005] = r5
+
+    // 命令書き込み (0x0006 : out r0[0] = r7)
+    addi r5 = r0, 0x26
+    isb r0[0x0006] = r5
+    addi r5 = r0, 0x07
+    isb r0[0x0007] = r5
+    addi r5 = r0, 0x00
+    isb r0[0x0008] = r5
+    addi r5 = r0, 0x00
+    isb r0[0x0009] = r5
+    addi r5 = r0, 0x00
+    isb r0[0x000A] = r5
+    addi r5 = r0, 0x00
+    isb r0[0x000B] = r5
+
+    // 命令書き込み (0x000C : addi r4 = r0, 1)
+    addi r5 = r0, 0x22
+    isb r0[0x000C] = r5
+    addi r5 = r0, 0x04
+    isb r0[0x000D] = r5
+    addi r5 = r0, 0x01
+    isb r0[0x000E] = r5
+    addi r5 = r0, 0x00
+    isb r0[0x000F] = r5
+    addi r5 = r0, 0x00
+    isb r0[0x0010] = r5
+    addi r5 = r0, 0x00
+    isb r0[0x0011] = r5
+
+    // 命令書き込み (0x0012 : jal r0, r1[0]) 
+    addi r5 = r0, 0x83
+    isb r0[0x0012] = r5
+    addi r5 = r0, 0x20
+    isb r0[0x0013] = r5
+    addi r5 = r0, 0x00
+    isb r0[0x0014] = r5
+    addi r5 = r0, 0x00
+    isb r0[0x0015] = r5
+    addi r5 = r0, 0x00
+    isb r0[0x0016] = r5
+    addi r5 = r0, 0x00
+    isb r0[0x0017] = r5
+
+    addi r4 = r0, 0
+    // 書き込んだ命令へジャンプ
+    jal r1, r0[0x0000]
+
+    // テスト
+    add r11 = r0, r4
+    addi r12 = r0, 1
+    addi r13 = r0, $test_isb
     add r14 = r0, r20
     beq r1, (r0, r0) -> @assert
 
