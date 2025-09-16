@@ -1,0 +1,132 @@
+/// 命令キャッシュ
+///
+/// - N way set associative cache
+/// - write back
+/// - pLRU
+/// - 1 line = 64B (16 banks)
+/// - 1 bank = 4B
+/// - In-order queue
+///
+/// ```wavedrom
+/// {signal: [
+///   {name: 'i_clk',       wave: 'p..........'},
+///   {name: 'i_req_valid', wave: '010........'},
+///   {name: 'o_req_ready', wave: '1.0.....1..'},
+///   {name: 'i_rep_ready', wave: '01.......0.'},
+///   {name: 'o_rep_valid', wave: '0.......10.'},
+///   {},
+///   {name: 'state',       wave: 'x====..==.x', data: ['IDLE', 'READ', 'CHECK', 'WAIT', 'RESP', 'IDLE', 'READ', 'CHECK', 'IDLE']},
+///   {name: 'w_hit',       wave: '0..10......'},
+///   {},
+///   {name: 'o_mem_valid', wave: '0...1..0...'},
+///   {name: 'i_mem_ready', wave: '0.....10...'}],
+///   config: { hscale: 2 }
+/// }
+/// ```
+pub module ICache #(
+    param ADDR_WIDTH: u32  = 32                                   ,
+    param Addr      : type = logic<ADDR_WIDTH>                    ,
+    param INST_WIDTH: u32  = 48                                   ,
+    param Inst      : type = logic<INST_WIDTH>                    ,
+    param LINE_WIDTH: u32  = 64                                   ,
+    param BANK_WIDTH: u32  = 32                                   ,
+    param SramBank  : type = logic<BANK_WIDTH>                    ,
+    param Line      : type = SramBank[LINE_WIDTH / BANK_WIDTH * 8],
+    param CAPACITY  : u32  = 4096                                 ,
+    param WAY_NUM   : u32  = 1                                    ,
+    param SET_NUM   : u32  = CAPACITY / LINE_WIDTH / WAY_NUM      ,
+) (
+    i_clk: input clock,
+    i_rst: input reset,
+
+    // Interface to CPU
+    i_req_valid: input  logic,
+    o_req_ready: output logic,
+    i_req_addr : input  Addr ,
+    o_req_data : output Inst ,
+
+    // Interface to Memory
+    o_mem_valid: input  logic,
+    o_mem_addr : output Addr ,
+    o_mem_data : input  Line ,
+    i_mem_ready: output logic,
+) {
+    // Addr = Tag + SetIndex + LineOffset
+    type BankOffset = logic<$clog2(4)>                                                                              ;
+    type LineOffset = logic<$clog2(LINE_WIDTH / 4)>                                                                 ;
+    type SetIndex   = logic<$clog2(SET_NUM / WAY_NUM)>                                                              ;
+    type Tag        = logic<$bits(Addr) - $bits(BankOffset) - $bits(LineOffset) - $bits(SetIndex) - $clog2(WAY_NUM)>;
+
+    // Cache
+    var r_valid_array: logic<WAY_NUM> [SET_NUM]         ;
+    var r_dirty_array: logic<WAY_NUM> [SET_NUM]         ;
+    var r_tag_array  : Tag  <WAY_NUM> [SET_NUM]         ;
+    var r_data_array : Line           [WAY_NUM, SET_NUM];
+
+    //
+    let w_bank_offset: BankOffset = i_req_addr[0+:$bits(BankOffset)];
+    let w_bank_index : LineOffset = i_req_addr[$bits(BankOffset)+:$bits(LineOffset)];
+    let w_set_index  : SetIndex   = i_req_addr[$bits(BankOffset) + $bits(LineOffset)+:$bits(SetIndex)];
+    let w_tag        : Tag        = i_req_addr[$bits(Addr)-:$bits(Tag)];
+
+    var w_cross_line: logic                 ; // ライン境界をまたぐアクセス
+    var w_hit_way   : logic<$clog2(WAY_NUM)>; // ヒットしたウェイ
+    var w_hit       : logic                 ; //
+
+    var r_out_buf: Inst;
+
+    enum State: logic<3> {
+        IDLE,
+        ARRAY_READ,
+        TAG_CHECK,
+        MEM_WAIT,
+        MEM_RESP,
+    }
+    var r_state: State;
+
+    always_comb {
+        w_cross_line = {w_bank_index, w_bank_offset} as u32 + INST_WIDTH / 8 >= LINE_WIDTH / 8;
+
+    }
+
+    always_ff (i_clk, i_rst) {
+        if_reset {} else {
+            case (r_state) {
+                State::IDLE: {
+                    if i_req_valid {
+                        r_state = State::TAG_CHECK;
+                    }
+                }
+                State::TAG_CHECK: {
+                    if w_hit {
+                        if w_cross_line {
+                            r_state = State::TAG_CHECK;
+                        } else {
+                            r_state = State::IDLE;
+                        }
+                    } else {
+                        r_state = State::MEM_WAIT;
+                    }
+                }
+                State::MEM_WAIT: {
+                    if i_mem_ready {
+                        r_state = State::MEM_RESP;
+                    }
+                }
+                State::MEM_RESP: {
+                    if w_cross_line {
+                        r_state = State::TAG_CHECK;
+                    } else {
+                        r_state = State::IDLE;
+                    }
+                }
+            }
+            if (w_hit) {
+                r_out_buf[31 - w_bank_offset:0]               = r_data_array[w_set_index][w_hit_way][w_bank_index][31:w_bank_offset];
+                r_out_buf[$bits(Inst) - 1:32 - w_bank_offset] = r_data_array[w_set_index][w_hit_way][w_bank_index + 1][32 - w_bank_offset:0];
+            }
+
+        }
+    }
+
+}
