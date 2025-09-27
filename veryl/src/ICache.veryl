@@ -8,19 +8,31 @@
 /// - In-order queue
 ///
 /// ```wavedrom
-/// {signal: [
-///   {name: 'i_clk',       wave: 'p..........'},
-///   {name: 'i_req_valid', wave: '010........'},
-///   {name: 'o_req_ready', wave: '1.0.....1..'},
-///   {name: 'i_rep_ready', wave: '01.......0.'},
-///   {name: 'o_rep_valid', wave: '0.......10.'},
-///   {},
-///   {name: 'state',       wave: 'x====..==.x', data: ['IDLE', 'READ', 'CHECK', 'WAIT', 'RESP', 'IDLE', 'READ', 'CHECK', 'IDLE']},
-///   {name: 'w_hit',       wave: '0..10......'},
-///   {},
-///   {name: 'o_mem_valid', wave: '0...1..0...'},
-///   {name: 'i_mem_ready', wave: '0.....10...'}],
-///   config: { hscale: 2 }
+/// {
+///     signal: [
+///         {name: 'i_clk',       wave: 'p...........'},
+///         {name: 'o_req_ready', wave: '1.0...10101.'},
+///         {name: 'i_req_valid', wave: '0101.....0..'},
+///         {name: 'i_req_addr',  wave: 'x=x=...=.x..', data: ['addr[0]', 'addr[1]', 'addr[2]']},
+///         {},
+///         {name: 'o_rep_valid', wave: '0.....101010'},
+///         {name: 'o_rep_data',  wave: 'x.....=x=x=x', data: ['data[0]', 'data[1]', 'data[2]']},
+///         {name: 'i_rep_ready', wave: '01.........0'},
+///         {},
+///         {name: 'state',       wave: 'x===..=====.', data: ['IDLE', 'CHECK', 'WAIT', 'IDLE', 'CHECK', 'IDLE', 'CHECK', 'IDLE']},
+///         {name: 'r_tag',       wave: 'x.2x...2x2x.'},
+///         {name: 'w_hit',       wave: 'x.0x...1x1x.'},
+///         {name: 'r_data',      wave: 'x.2x...2x2x.'},
+///         {},
+///         {name: 'o_mem_valid', wave: '0..10.......'},
+///         {name: 'o_mem_addr',  wave: 'x..=x.......', data: ['addr[0]']},
+///         {name: 'i_mem_ready', wave: '1...01......'},
+///         {},
+///         {name: 'o_mrd_ready', wave: '0..1..0.....'},
+///         {name: 'i_mrd_valid', wave: '0....10.....'},
+///         {name: 'i_mrd_data',  wave: 'x....=x.....', data: ['data[0]']},
+///     ],
+///     config: { hscale: 2 }
 /// }
 /// ```
 pub module ICache #(
