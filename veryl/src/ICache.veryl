@@ -36,109 +36,237 @@
 /// }
 /// ```
 pub module ICache #(
-    param ADDR_WIDTH: u32  = 32                                   ,
-    param Addr      : type = logic<ADDR_WIDTH>                    ,
-    param INST_WIDTH: u32  = 48                                   ,
-    param Inst      : type = logic<INST_WIDTH>                    ,
-    param LINE_WIDTH: u32  = 64                                   ,
-    param BANK_WIDTH: u32  = 32                                   ,
-    param SramBank  : type = logic<BANK_WIDTH>                    ,
-    param Line      : type = SramBank[LINE_WIDTH / BANK_WIDTH * 8],
-    param CAPACITY  : u32  = 4096                                 ,
-    param WAY_NUM   : u32  = 1                                    ,
-    param SET_NUM   : u32  = CAPACITY / LINE_WIDTH / WAY_NUM      ,
+    param ADDR_WIDTH: u32  = 32                             ,
+    param Addr      : type = logic<ADDR_WIDTH>              ,
+    param INST_WIDTH: u32  = 48                             ,
+    param Inst      : type = logic<INST_WIDTH>              ,
+    param LINE_WIDTH: u32  = 64 * 8                         ,
+    param Line      : type = logic<LINE_WIDTH>              ,
+    param CAPACITY  : u32  = 4096                           ,
+    param WAY_NUM   : u32  = 1                              ,
+    param SET_NUM   : u32  = CAPACITY / LINE_WIDTH / WAY_NUM,
 ) (
     i_clk: input clock,
     i_rst: input reset,
 
     // Interface to CPU
-    i_req_valid: input  logic,
-    o_req_ready: output logic,
-    i_req_addr : input  Addr ,
-    o_req_data : output Inst ,
+    if_cpu: modport $std::axi4_lite_if::<$std::axi4_lite_pkg::<32, 6, 8>>::slave,
 
     // Interface to Memory
-    o_mem_valid: input  logic,
-    o_mem_addr : output Addr ,
-    o_mem_data : input  Line ,
-    i_mem_ready: output logic,
+    if_mem: modport $std::axi4_lite_if::<$std::axi4_lite_pkg::<ADDR_WIDTH, LINE_WIDTH, 8>>::master,
 ) {
     // Addr = Tag + SetIndex + LineOffset
-    type BankOffset = logic<$clog2(4)>                                                                              ;
-    type LineOffset = logic<$clog2(LINE_WIDTH / 4)>                                                                 ;
-    type SetIndex   = logic<$clog2(SET_NUM / WAY_NUM)>                                                              ;
-    type Tag        = logic<$bits(Addr) - $bits(BankOffset) - $bits(LineOffset) - $bits(SetIndex) - $clog2(WAY_NUM)>;
+    type LineOffset = logic<$clog2(LINE_WIDTH)>                                                 ;
+    type SetIndex   = logic<$clog2(SET_NUM / WAY_NUM)>                                          ;
+    type Tag        = logic<$bits(Addr) - $bits(LineOffset) - $bits(SetIndex) - $clog2(WAY_NUM)>;
 
-    // Cache
-    var r_valid_array: logic<WAY_NUM> [SET_NUM]         ;
-    var r_dirty_array: logic<WAY_NUM> [SET_NUM]         ;
-    var r_tag_array  : Tag  <WAY_NUM> [SET_NUM]         ;
-    var r_data_array : Line           [WAY_NUM, SET_NUM];
+    // useful functions
+    function line_offset (
+        i_addr: input Addr,
+    ) -> LineOffset {
+        return i_addr[0+:$bits(LineOffset)];
+    }
+    function set_index (
+        i_addr: input Addr,
+    ) -> SetIndex {
+        return i_addr[$bits(LineOffset)+:$bits(SetIndex)];
+    }
+    function tag (
+        i_addr: input Addr,
+    ) -> Tag {
+        return i_addr[$bits(Addr)-:$bits(Tag)];
+    }
 
-    //
-    let w_bank_offset: BankOffset = i_req_addr[0+:$bits(BankOffset)];
-    let w_bank_index : LineOffset = i_req_addr[$bits(BankOffset)+:$bits(LineOffset)];
-    let w_set_index  : SetIndex   = i_req_addr[$bits(BankOffset) + $bits(LineOffset)+:$bits(SetIndex)];
-    let w_tag        : Tag        = i_req_addr[$bits(Addr)-:$bits(Tag)];
+    for i in 0..WAY_NUM :way_loop {
+        inst data_array: DataArray #(
+            DATA_WIDTH: LINE_WIDTH,
+            DEPTH     : SET_NUM   ,
+        ) (
+            i_clk  : i_clk                   ,
+            i_rst  : i_rst                   ,
+            i_we   : w_array_we              , // refill 時に書き込み
+            i_addr : w_array_addr,
+            i_wline: 0                       , // refill 時に書き込み
+            o_rline: w_check_line[i]         ,
+        );
 
-    var w_cross_line: logic                 ; // ライン境界をまたぐアクセス
-    var w_hit_way   : logic<$clog2(WAY_NUM)>; // ヒットしたウェイ
-    var w_hit       : logic                 ; //
+        inst tag_array: TagArray #(
+            TAG_W: $bits(Tag),
+            DEPTH: SET_NUM   ,
+        ) (
+            i_clk      : i_clk,
+            i_rst      : i_rst,
+            i_tag_flush: 0    , // キャッシュ全体のフラッシュ時に有効
 
-    var r_out_buf: Inst;
+            i_we        : w_array_we              , // refill 時に書き込み
+            i_addr      : w_array_addr,
+            i_wtag      : 0                       , // refill 時に書き込み
+            i_wtag_valid: 0                       , // refill 時に書き込み
+            o_rtag      : w_check_tags[i]         ,
+            o_rtag_valid: w_check_tag_valids[i]   ,
+        );
+    }
+
+    // ==========
+    // IDLE
+    // ==========
+    var w_cross_line: logic; // ライン境界をまたぐアクセス
+    var w_idle_next_arready: logic;
+    var r_idle_addr : Addr ;
+
+    // ==========
+    // CHECK
+    // ==========
+
+    var w_check_tags      : Tag            [WAY_NUM];
+    var w_check_tag_valids: logic<WAY_NUM>          ;
+    var w_check_lines     : Line           [WAY_NUM];
+    var w_check_data      : Inst           [WAY_NUM];
+
+    var w_check_hit     : logic                 ; // ヒットしたか
+    var w_check_hit_way : logic<$clog2(WAY_NUM)>; // ヒットしたウェイ
+    var w_check_hit_data: Inst                  ; // ヒットしたデータ
+
+    // ==========
+    // MEM_REQ
+    // ==========
+
+    // ==========
+    // MEM_WAIT
+    // ==========
 
     enum State: logic<3> {
         IDLE,
-        ARRAY_READ,
-        TAG_CHECK,
+        CHECK,
+        MEM_REQ,
         MEM_WAIT,
-        MEM_RESP,
     }
     var r_state: State;
+    var w_next_state: State;
+    var r_addr: Addr;
+    var w_next_addr: Addr;
+
+    var r_out_data: Inst;
+    var w_next_out_data: Inst;
+
+    var w_array_addr: logic<$clog2(SET_NUM)>;
+    var w_array_we: logic;
+    var w_array_line: Line;
+    var w_array_tag: Tag;
 
     always_comb {
-        w_cross_line = {w_bank_index, w_bank_offset} as u32 + INST_WIDTH / 8 >= LINE_WIDTH / 8;
+
+        w_next_state = r_state;
+        w_next_addr = r_addr;
+        w_next_out_data = r_out_data;
+
+        if_cpu.arready = 0;
+        if_cpu.rvalid = 0;
+        if_cpu.rdata = 0;
+
+        if_mem.arvalid = 0;
+        if_mem.araddr = 0;
+        if_mem.rready = 0;
+
+        w_check_hit = 0;
+        w_check_hit_way = 0;
+
+        w_array_addr = 0;
+        w_array_we = 0;
+        
+        case (r_state) {
+            State::IDLE: {
+                if_cpu.arready = 1;
+                if if_cpu.araddr_ack() {
+                    w_next_state = State::CHECK;
+                    w_next_addr = if_cpu.araddr;
+                    w_array_addr = set_index(if_cpu.araddr);
+                    w_array_we = 0; // 読み出し
+                }
+            }
+            State::CHECK: {
+                // チェック
+                for i in 0..WAY_NUM :way_loop {
+                    if (w_check_tag_valids[i] && (w_check_tags[i] == tag(r_addr))) {
+                        w_check_hit = 1;
+                        w_check_hit_way = i;
+                        break;
+                    }
+                }
+
+                if (w_check_hit) {
+                    // ヒット
+                    if_cpu.rvalid = 1;
+                    if_cpu.rdata = w_check_hit_data;
+                    if if_cpu.rready {
+                        w_next_state = State::IDLE;
+                        w_next_out_data = w_check_data[w_check_hit_way];
+                    }
+                } else {
+                    // ミス
+                    w_next_state = State::MEM_REQ;
+                }
+            }
+            State::MEM_REQ: {
+                if_mem.arvalid = 1;
+                if_mem.araddr = {tag(r_addr), set_index(r_addr), $bits(LineOffset)'(0)};
+
+                if if_mem.araddr_ack() {
+                    w_next_state = State::MEM_WAIT;
+                }
+            }
+            State::MEM_WAIT: {
+                if_mem.rready = 1;
+                if if_mem.rdata_ack() {
+                    w_next_state = State::IDLE;
+                    w_next_out_data = if_mem.rdata[line_offset(r_addr) +: INST_WIDTH];
+                    w_array_we = 1; // リフィル
+                    w_array_addr = set_index(set_index(r_addr));
+                    w_array_line = if_mem.rdata;
+                    w_array_tag = tag(r_addr);
+                }
+
+            }
+        }
 
     }
 
+    // ステートマシン の更新
     always_ff (i_clk, i_rst) {
-        if_reset {} else {
-            case (r_state) {
-                State::IDLE: {
-                    if i_req_valid {
-                        r_state = State::TAG_CHECK;
-                    }
-                }
-                State::TAG_CHECK: {
-                    if w_hit {
-                        if w_cross_line {
-                            r_state = State::TAG_CHECK;
-                        } else {
-                            r_state = State::IDLE;
-                        }
-                    } else {
-                        r_state = State::MEM_WAIT;
-                    }
-                }
-                State::MEM_WAIT: {
-                    if i_mem_ready {
-                        r_state = State::MEM_RESP;
-                    }
-                }
-                State::MEM_RESP: {
-                    if w_cross_line {
-                        r_state = State::TAG_CHECK;
-                    } else {
-                        r_state = State::IDLE;
-                    }
-                }
-            }
-            if (w_hit) {
-                r_out_buf[31 - w_bank_offset:0]               = r_data_array[w_set_index][w_hit_way][w_bank_index][31:w_bank_offset];
-                r_out_buf[$bits(Inst) - 1:32 - w_bank_offset] = r_data_array[w_set_index][w_hit_way][w_bank_index + 1][32 - w_bank_offset:0];
-            }
-
+        if_reset {
+            r_state = State::IDLE;
+            r_addr = 0;
+            r_out_data = 0;
+        } else {
+            r_state = w_next_state;
+            r_addr = w_next_addr;
+            r_out_data = w_next_out_data;
         }
     }
+
+    // idle -> check
+    always_ff (i_clk, i_rst) {
+        if_reset {
+            r_idle_addr = 0;
+        } else {
+            r_idle_addr = if_cpu.araddr;
+        }
+    }
+
+
+    // check -> mem_req
+    always_ff (i_clk, i_rst) {
+        if_reset {
+            if_mem.arvalid = 0;
+            if_mem.araddr  = 0;
+        } else {
+            if_mem.arvalid = w_mem_arvalid;
+            if_mem.araddr  = w_mem_araddr;
+        }
+    }
+
+    // mem_req -> mem_wait
+
+    // mem_wait -> idle
 
 }

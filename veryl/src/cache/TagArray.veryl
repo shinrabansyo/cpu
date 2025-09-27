@@ -1,0 +1,39 @@
+module TagArray #(
+    param TAG_W: u32 = 128,
+    param DEPTH: u32 = 32 ,
+) (
+    i_clk: input clock,
+    i_rst: input reset,
+
+    i_tag_flush: input logic,
+
+    i_we        : input  logic               ,
+    i_addr      : input  logic<$clog2(DEPTH)>,
+    i_wtag      : input  logic<TAG_W>        ,
+    i_wtag_valid: input  logic               ,
+    o_rtag      : output logic<TAG_W>        ,
+    o_rtag_valid: output logic               ,
+) {
+    var r_tag      : logic<TAG_W> [DEPTH];
+    var r_tag_valid: logic<DEPTH>        ;
+
+    var r_rtag      : logic<TAG_W>;
+    var r_rtag_valid: logic       ;
+
+    always_ff (i_clk, i_rst) {
+        if_reset {
+            o_rtag       = 0;
+            o_rtag_valid = '0;
+        } else {
+            if i_tag_flush {
+                r_tag_valid = '0;
+            } else if i_we {
+                r_tag[i_addr]       = i_wtag;
+                r_tag_valid[i_addr] = i_wtag_valid;
+            }
+
+            o_rtag       = r_tag[i_addr];
+            o_rtag_valid = if i_tag_flush ? '0 : r_tag_valid[i_addr];
+        }
+    }
+}

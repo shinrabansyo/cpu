@@ -1,0 +1,31 @@
+module DataArray #(
+    param DATA_WIDTH: u32 = 128,
+    param DEPTH     : u32 = 32 ,
+) (
+    i_clk: input clock,
+    i_rst: input reset,
+
+    i_we   : input  logic               ,
+    i_addr : input  logic<$clog2(DEPTH)>,
+    i_wline: input  logic<DATA_WIDTH>   ,
+    o_rline: output logic<DATA_WIDTH>   ,
+) {
+    var r_mem: logic<DATA_WIDTH> [DEPTH];
+
+    var r_rdata: logic<DATA_WIDTH>;
+
+    always_comb {
+        o_rdata = r_rdata;
+    }
+
+    always_ff (i_clk, i_rst) {
+        if_reset {
+            r_rdata = 0;
+        } else {
+            if (i_we) {
+                r_mem[i_addr] = i_wdata;
+            }
+            r_rdata = r_mem[i_addr];
+        }
+    }
+}
