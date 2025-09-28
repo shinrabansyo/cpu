@@ -1,0 +1,76 @@
+#[test(icache_tb)]
+embed (inline) sv{{{
+    module icache_tb();
+        logic i_clk;
+        logic i_rst;
+
+        logic i_flush;
+
+        \{$std::axi4_lite_if::<$std::axi4_lite_pkg::<32, 6, 8>>\} cpu_if();
+        \{$std::axi4_lite_if::<$std::axi4_lite_pkg::<32, 16, 8>>\} mem_if();
+
+        \{ICache\} icache(
+            .i_clk,
+            .i_rst,
+            .if_cpu(cpu_if.slave),
+            .i_flush(i_flush),
+            .if_mem(mem_if.master)
+        );
+
+        initial begin
+            $display("Starting test...");
+            i_clk = 0;
+            i_rst = 1;
+            cpu_if.arvalid = 0;
+            cpu_if.araddr = 0;
+            cpu_if.rready = 0;
+
+            mem_if.arready = 0;
+            mem_if.rvalid = 0;
+            mem_if.rdata = 0;
+            mem_if.awready = 0;
+            mem_if.wready = 0;
+
+            @(posedge i_clk);
+            @(posedge i_clk);
+            $display("reset done");
+
+            i_rst = 0;
+            @(posedge i_clk);
+
+            cpu_if.arvalid = 1;
+            cpu_if.araddr = 32'h0000_0000;
+            cpu_if.rready = 1;
+            @(posedge i_clk);
+            while (!(cpu_if.araddr_ack())) @(posedge i_clk);
+            $display("cpu_if.araddr_ack()");
+            while (!mem_if.arvalid) @(posedge i_clk);
+            mem_if.arready = 1;
+            @(posedge i_clk);
+            $display("mem_if.araddr_ack()");
+            mem_if.arready = 0;
+            mem_if.rvalid = 1;
+            mem_if.rdata = 128'hfedc_ba98_7654_3210_fedc_ba98_7654_3210;
+            @(posedge i_clk);
+            while (!mem_if.rdata_ack()) @(posedge i_clk);
+            $display("mem_if.rdata_ack()");
+            mem_if.rvalid = 0;
+            mem_if.rdata = 0;
+
+            while (!cpu_if.rdata_ack()) @(posedge i_clk);
+            $display("cpu_if.rdata_ack()");
+            assert (cpu_if.rdata == 48'hba98_7654_3210) else $warning("expect 48'hba98_7654_3210, got %h", cpu_if.rdata);
+
+            @(posedge i_clk);
+            $finish;
+        end
+
+        always #5 i_clk = ~i_clk;
+
+        initial begin
+            repeat(1000) @(posedge i_clk);
+            $finish();
+        end
+
+    endmodule
+}}}

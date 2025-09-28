@@ -41,7 +41,7 @@ pub module ICache #(
     param Addr      : type = logic<ADDR_WIDTH>              ,
     param INST_WIDTH: u32  = 48                             ,
     param Inst      : type = logic<INST_WIDTH>              ,
-    param LINE_WIDTH: u32  = 64 * 8                         ,
+    param LINE_WIDTH: u32  = 16 * 8                         ,
     param Line      : type = logic<LINE_WIDTH>              ,
     param CAPACITY  : u32  = 4096                           ,
     param WAY_NUM   : u32  = 1                              ,
@@ -51,15 +51,19 @@ pub module ICache #(
     i_rst: input reset,
 
     // Interface to CPU
-    if_cpu: modport $std::axi4_lite_if::<$std::axi4_lite_pkg::<32, 6, 8>>::slave,
+    if_cpu : modport $std::axi4_lite_if::<$std::axi4_lite_pkg::<32, 6, 8>>::slave,
+    i_flush: input   logic                                                       ,
 
     // Interface to Memory
-    if_mem: modport $std::axi4_lite_if::<$std::axi4_lite_pkg::<32, 6, 8>>::master,
+    if_mem: modport $std::axi4_lite_if::<$std::axi4_lite_pkg::<32, 16, 8>>::master,
 ) {
     // Addr = Tag + SetIndex + LineOffset
     type LineOffset = logic<$clog2(LINE_WIDTH)>                                                 ;
     type SetIndex   = logic<$clog2(SET_NUM / WAY_NUM)>                                          ;
     type Tag        = logic<$bits(Addr) - $bits(LineOffset) - $bits(SetIndex) - $clog2(WAY_NUM)>;
+
+    const WayIndexWidth: u32                  = if WAY_NUM >: 1 ? $clog2(WAY_NUM) : 1;
+    type WayIndex      = logic<WayIndexWidth>;
 
     // useful functions
     function line_offset (
@@ -75,46 +79,23 @@ pub module ICache #(
     function tag (
         i_addr: input Addr,
     ) -> Tag {
-        return i_addr[$bits(Addr)-:$bits(Tag)];
+        return i_addr[$bits(Addr) - 1-:$bits(Tag)];
     }
 
-    for i in 0..WAY_NUM :way_loop {
-        inst data_array: DataArray #(
-            DATA_WIDTH: LINE_WIDTH,
-            DEPTH     : SET_NUM   ,
-        ) (
-            i_clk  : i_clk          ,
-            i_rst  : i_rst          ,
-            i_we   : w_array_we     , // refill 時に書き込み
-            i_addr : w_array_addr   ,
-            i_wline: 0              , // refill 時に書き込み
-            o_rline: w_check_lines[i],
-        );
+    // Data/Tag Array アクセス用
+    var w_check_addr      : logic<$clog2(SET_NUM)>          ;
+    var w_check_we        : logic<WAY_NUM>                  ;
+    var w_check_wline     : Line                            ;
+    var w_check_wtag      : Tag                             ;
+    var w_check_wtag_valid: logic                           ;
+    var w_check_tags      : Tag                    [WAY_NUM];
+    var w_check_tag_valids: logic<WAY_NUM>                  ;
+    var w_check_lines     : Line                   [WAY_NUM];
+    var w_check_data      : Inst                   [WAY_NUM];
 
-        inst tag_array: TagArray #(
-            TAG_W: $bits(Tag),
-            DEPTH: SET_NUM   ,
-        ) (
-            i_clk      : i_clk,
-            i_rst      : i_rst,
-            i_tag_flush: 0    , // キャッシュ全体のフラッシュ時に有効
-
-            i_we        : w_array_we           , // refill 時に書き込み
-            i_addr      : w_array_addr         ,
-            i_wtag      : 0                    , // refill 時に書き込み
-            i_wtag_valid: 0                    , // refill 時に書き込み
-            o_rtag      : w_check_tags[i]      ,
-            o_rtag_valid: w_check_tag_valids[i],
-        );
-    }
-
-    var w_check_tags      : Tag            [WAY_NUM];
-    var w_check_tag_valids: logic<WAY_NUM>          ;
-    var w_check_lines     : Line           [WAY_NUM];
-    var w_check_data      : Inst           [WAY_NUM];
-
-    var w_check_hit     : logic                 ; // ヒットしたか
-    var w_check_hit_way : logic<$clog2(WAY_NUM)>; // ヒットしたウェイ
+    // ヒット判定用
+    var w_check_hit    : logic   ;
+    var w_check_hit_way: WayIndex;
 
     enum State: logic<3> {
         IDLE,
@@ -125,23 +106,50 @@ pub module ICache #(
     }
     var r_state     : State;
     var w_next_state: State;
-    var r_addr      : Addr ;
-    var w_next_addr : Addr ;
 
-    var r_out_data     : Inst;
-    var w_next_out_data: Inst;
+    // コントローラー用バッファ
+    var r_addr     : Addr;
+    var w_addr_next: Addr;
 
-    // Data/Tag Array アクセス用
-    var w_array_addr: logic<$clog2(SET_NUM)>;
-    var w_array_we  : logic                 ;
-    var w_array_line: Line                  ;
-    var w_array_tag : Tag                   ;
+    var r_data_buf     : Inst;
+    var w_data_buf_next: Inst;
+
+
+    // Data/Tag Array のインスタンス化
+    for i in 0..WAY_NUM :way_loop {
+        inst data_array: DataArray #(
+            DATA_WIDTH: LINE_WIDTH,
+            DEPTH     : SET_NUM   ,
+        ) (
+            i_clk  : i_clk           ,
+            i_rst  : i_rst           ,
+            i_we   : w_check_we[i]   , // refill 時に書き込み
+            i_addr : w_check_addr    ,
+            i_wline: w_check_wline   , // refill 時に書き込み
+            o_rline: w_check_lines[i],
+        );
+
+        inst tag_array: TagArray #(
+            TAG_W: $bits(Tag),
+            DEPTH: SET_NUM   ,
+        ) (
+            i_clk      : i_clk  ,
+            i_rst      : i_rst  ,
+            i_tag_flush: i_flush, // キャッシュ全体のフラッシュ時に有効
+
+            i_we        : w_check_we[i]        , // refill 時に書き込み
+            i_addr      : w_check_addr         ,
+            i_wtag      : w_check_wtag         , // refill 時に書き込み
+            i_wtag_valid: w_check_wtag_valid   , // refill 時に書き込み
+            o_rtag      : w_check_tags[i]      ,
+            o_rtag_valid: w_check_tag_valids[i],
+        );
+    }
 
     always_comb {
-
         w_next_state    = r_state;
-        w_next_addr     = r_addr;
-        w_next_out_data = r_out_data;
+        w_addr_next     = r_addr;
+        w_data_buf_next = r_data_buf;
 
         if_cpu.arready = 0;
         if_cpu.rvalid  = 0;
@@ -154,10 +162,10 @@ pub module ICache #(
         w_check_hit     = 0;
         w_check_hit_way = 0;
 
-        w_array_addr = 0;
-        w_array_we   = 0;
-        w_array_line = 0;
-        w_array_tag  = 0;
+        w_check_addr  = 0;
+        w_check_we    = 0;
+        w_check_wline = 0;
+        w_check_wtag  = 0;
 
         for i: u32 in 0..WAY_NUM {
             w_check_data[i] = 0;
@@ -168,9 +176,11 @@ pub module ICache #(
                 if_cpu.arready = 1;
                 if if_cpu.araddr_ack() {
                     w_next_state = State::CHECK;
-                    w_next_addr  = if_cpu.araddr;
-                    w_array_addr = set_index(if_cpu.araddr);
-                    w_array_we   = 0; // 読み出し
+                    w_addr_next  = if_cpu.araddr;
+                    w_check_addr = set_index(if_cpu.araddr);
+                    for i: u32 in 0..WAY_NUM {
+                        w_check_we[i] = 0; // 読み込み
+                    }
                 }
             }
             State::CHECK: {
@@ -179,7 +189,7 @@ pub module ICache #(
                 for i: u32 in 0..WAY_NUM {
                     if (w_check_tag_valids[i] && (w_check_tags[i] == tag(r_addr))) {
                         w_check_hit     = 1;
-                        w_check_hit_way = i;
+                        w_check_hit_way = i as WayIndex;
                         break;
                     }
                 }
@@ -192,7 +202,7 @@ pub module ICache #(
                     // ヒット
                     if if_cpu.rready {
                         w_next_state    = State::RESP;
-                        w_next_out_data = w_check_data[w_check_hit_way];
+                        w_data_buf_next = w_check_data[w_check_hit_way];
                     }
                 } else {
                     // ミス
@@ -211,16 +221,16 @@ pub module ICache #(
                 if_mem.rready = 1;
                 if if_mem.rdata_ack() {
                     w_next_state    = State::IDLE;
-                    w_next_out_data = if_mem.rdata[line_offset(r_addr)+:INST_WIDTH];
-                    w_array_we      = 1; // リフィル
-                    w_array_addr    = set_index(set_index(r_addr));
-                    w_array_line    = if_mem.rdata;
-                    w_array_tag     = tag(r_addr);
+                    w_data_buf_next = if_mem.rdata[line_offset(r_addr)+:INST_WIDTH];
+                    w_check_we[0]   = 1; // リフィル
+                    w_check_addr    = set_index(r_addr);
+                    w_check_wline   = if_mem.rdata;
+                    w_check_wtag    = tag(r_addr);
                 }
             }
             State::RESP: {
                 if_cpu.rvalid = 1;
-                if_cpu.rdata  = r_out_data;
+                if_cpu.rdata  = r_data_buf;
 
                 if if_cpu.rdata_ack() {
                     w_next_state = State::IDLE;
@@ -235,11 +245,11 @@ pub module ICache #(
         if_reset {
             r_state    = State::IDLE;
             r_addr     = 0;
-            r_out_data = 0;
+            r_data_buf = 0;
         } else {
             r_state    = w_next_state;
-            r_addr     = w_next_addr;
-            r_out_data = w_next_out_data;
+            r_addr     = w_addr_next;
+            r_data_buf = w_data_buf_next;
         }
     }
 }
