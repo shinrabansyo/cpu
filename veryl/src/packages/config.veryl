@@ -1,0 +1,53 @@
+package Config {
+    const ADDR_WIDTH: u32               = 32;
+    type Addr       = logic<ADDR_WIDTH>;
+    type Inst      = logic<48>;
+
+    // キャッシュの設定
+    const LINE_SIZE_BYTES: u32                            = 32;
+    type Line            = logic<LINE_SIZE_BYTES * 8>    ;
+    type LineOffset      = logic<$clog2(LINE_SIZE_BYTES)>;
+
+    function GetLineOffset (
+        addr: input Addr,
+    ) -> LineOffset {
+        return addr[0+:$bits(LineOffset)];
+    }
+
+    // 命令キャッシュ
+    const ICACHE_CAPACITY_BYTES: u32                                                      = 4096;
+    const ICACHE_NUM_WAY       : u32                                                      = 2;
+    const ICACHE_NUM_SET       : u32                                                      = ICACHE_CAPACITY_BYTES / (LINE_SIZE_BYTES * ICACHE_NUM_WAY);
+    type ICacheSet             = logic<$clog2(ICACHE_NUM_SET)>                           ;
+    type ICacheTag             = logic<ADDR_WIDTH - $bits(ICacheSet) - $bits(LineOffset)>;
+    type ICacheWayIndex        = logic<$clog2(ICACHE_NUM_WAY)>                           ;
+
+    function GetICacheTag (
+        addr: input Addr,
+    ) -> ICacheTag {
+        return addr[ADDR_WIDTH - 1-:$bits(ICacheTag)];
+    }
+    function GetICacheSet (
+        addr: input Addr,
+    ) -> ICacheSet {
+        return addr[$bits(LineOffset)+:$bits(ICacheSet)];
+    }
+
+    // データキャッシュ
+    const DCACHE_CAPACITY_BYTES: u32                                                      = 4096;
+    const DCACHE_NUM_WAY       : u32                                                      = 2;
+    const DCACHE_NUM_SET       : u32                                                      = DCACHE_CAPACITY_BYTES / (LINE_SIZE_BYTES * DCACHE_NUM_WAY);
+    type DCacheSet             = logic<$clog2(DCACHE_NUM_SET)>                           ;
+    type DCacheTag             = logic<ADDR_WIDTH - $bits(DCacheSet) - $bits(LineOffset)>;
+
+    function GetDCacheTag (
+        addr: input Addr,
+    ) -> DCacheTag {
+        return addr[ADDR_WIDTH - 1-:$bits(DCacheTag)];
+    }
+    function GetDCacheSet (
+        addr: input Addr,
+    ) -> DCacheSet {
+        return addr[$bits(LineOffset)+:$bits(DCacheSet)];
+    }
+}

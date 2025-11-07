@@ -1,71 +1,151 @@
 #[test(icache_tb)]
 embed (inline) sv{{{
     module icache_tb();
+        import \{Config\}::*;
+
+        localparam int HOLD = 5;
+        localparam int STEP = 20;
+
         logic i_clk;
         logic i_rst;
 
-        logic i_flush;
+        logic w_addr_valid;
+        logic w_addr_ready;
+        Addr w_addr;
+        Inst w_inst;
+        logic w_valid;
 
-        \{$std::axi4_lite_if::<$std::axi4_lite_pkg::<32, 6, 8>>\} cpu_if();
-        \{$std::axi4_lite_if::<$std::axi4_lite_pkg::<32, 16, 8>>\} mem_if();
+        logic w_arvalid;
+        Addr w_araddr;
+        logic w_arready;
+        logic w_rvalid;
+        Line w_rdata;
+        logic w_rready;
 
         \{ICache\} icache(
             .i_clk,
             .i_rst,
-            .if_cpu(cpu_if.slave),
-            .i_flush(i_flush),
-            .if_mem(mem_if.master)
+            .i_addr_valid(w_addr_valid),
+            .o_addr_ready(w_addr_ready),
+            .i_addr(w_addr),
+            .o_inst(w_inst),
+            .o_valid(w_valid),
+            .o_arvalid(w_arvalid),
+            .o_araddr(w_araddr),
+            .i_arready(w_arready),
+            .i_rvalid(w_rvalid),
+            .i_rdata(w_rdata),
+            .o_rready(w_rready)
         );
+
+        task next_cycle();
+            #(HOLD);
+            @(posedge i_clk);
+            #(HOLD);
+        endtask
+
+        task fetch_req(input Addr addr);
+            w_addr_valid = 1;
+            w_addr = addr;
+        endtask
+
 
         initial begin
             $display("Starting test...");
             i_clk = 0;
             i_rst = 1;
-            cpu_if.arvalid = 0;
-            cpu_if.araddr = 0;
-            cpu_if.rready = 0;
 
-            mem_if.arready = 0;
-            mem_if.rvalid = 0;
-            mem_if.rdata = 0;
-            mem_if.awready = 0;
-            mem_if.wready = 0;
+            w_addr_valid = 0;
+            w_addr = 0;
+            w_arready = 0;
+            w_rvalid = 0;
+            w_rdata = 0;
 
-            @(posedge i_clk);
-            @(posedge i_clk);
+            repeat (2) next_cycle();
             $display("reset done");
 
             i_rst = 0;
-            @(posedge i_clk);
+            next_cycle();
 
-            cpu_if.arvalid = 1;
-            cpu_if.araddr = 32'h0000_0000;
-            cpu_if.rready = 1;
-            @(posedge i_clk);
-            while (!(cpu_if.araddr_ack())) @(posedge i_clk);
-            $display("cpu_if.araddr_ack()");
-            while (!mem_if.arvalid) @(posedge i_clk);
-            mem_if.arready = 1;
-            @(posedge i_clk);
-            $display("mem_if.araddr_ack()");
-            mem_if.arready = 0;
-            mem_if.rvalid = 1;
-            mem_if.rdata = 128'hfedc_ba98_7654_3210_fedc_ba98_7654_3210;
-            @(posedge i_clk);
-            while (!mem_if.rdata_ack()) @(posedge i_clk);
-            $display("mem_if.rdata_ack()");
-            mem_if.rvalid = 0;
-            mem_if.rdata = 0;
+            // first access (miss)
+            fetch_req(32'h0000_0000);
+            w_arready = 1;
 
-            while (!cpu_if.rdata_ack()) @(posedge i_clk);
-            $display("cpu_if.rdata_ack()");
-            assert (cpu_if.rdata == 48'hba98_7654_3210) else $warning("expect 48'hba98_7654_3210, got %h", cpu_if.rdata);
+            next_cycle();
 
-            @(posedge i_clk);
+            assert(w_arvalid == 1) else $error("Error: must send read request");
+            assert(w_araddr == 32'h0000_0000) else $error("Error: wrong read address");
+            assert(w_valid == 0) else $error("Error: output valid must be low on miss");
+            assert(icache.w_hit == 0) else $error("Error: must be a miss");
+
+            next_cycle();
+
+            w_arready = 0;
+            assert(w_arvalid == 0) else $error("Error: read request must be accepted");
+            assert(w_rready == 1) else $error("Error: must be ready to receive data");
+            assert(w_valid == 0) else $error("Error: output valid must be low on miss");
+
+            repeat (10) begin
+                next_cycle();
+                assert(w_valid == 0) else $error("Error: output valid must be low on miss");
+            end
+
+            w_rvalid = 1;
+            w_rdata = {
+                32'hDEAD_BEEF,
+                32'hCAF0_BABE,
+                32'h1234_5678,
+                32'h0BAD_C0DE,
+                32'hFEED_FACE,
+                32'hBAAD_F00D,
+                32'h8BAD_F00D,
+                32'hDEAD_C0DE
+            }; // 32 bytes (= 1 line)
+            assert(w_valid == 0) else $error("Error: output valid must be low on miss");
+
+            next_cycle();
+
+            w_rvalid = 0;
+            w_rdata = 0;
+            assert(w_rready == 0) else $error("Error: must not be ready after data received");
+            assert(w_valid == 1) else $error("Error: output valid must be high after data received");
+
+            next_cycle();
+
+            // second access (hit)
+            fetch_req(32'h0000_0000);
+            w_arready = 0;
+
+            next_cycle();
+
+            assert(icache.w_hit == 1) else $error("Error: must be a hit");
+
+            next_cycle();
+
+            assert(w_valid == 1) else $error("Error: output valid must be high on hit");
+            assert(w_inst == 48'hF00D_DEAD_C0DE) else $error("Error: wrong instruction data on hit");
+
+            next_cycle();
+
+            // 3rd access (hit)
+            fetch_req(32'h0000_0006);
+            w_arready = 0;
+
+            next_cycle();
+
+            assert(icache.w_hit == 1) else $error("Error: must be a hit");
+
+            next_cycle();
+
+            assert(w_valid == 1) else $error("Error: output valid must be high on hit");
+            assert(w_inst == 48'hBAAD_F00D_8BAD) else $error("Error: wrong instruction data on hit");
+
+            next_cycle();
+
             $finish;
         end
 
-        always #5 i_clk = ~i_clk;
+        always #STEP i_clk = ~i_clk;
 
         initial begin
             repeat(1000) @(posedge i_clk);

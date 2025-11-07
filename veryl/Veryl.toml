@@ -8,4 +8,7 @@ reset_type = "sync_high"
 expand_inside_operation = true
 
 [test]
-waveform_format = "fst"
+# waveform_format = "fst"
+
+[test.verilator]
+compile_args = ["-j", "8"]

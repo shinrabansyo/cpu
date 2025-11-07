@@ -4,4 +4,6 @@ target/
 .build/
 *.f
 *.sv
+*.vcd
+*.fst
 doc/
