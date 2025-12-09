@@ -2,11 +2,10 @@ module TagArray (
     i_clk: input clock,
     i_rst: input reset,
 
-    i_addr: input  Addr     ,
-    i_we  : input  logic    ,
-    i_tag : input  ICacheTag,
-    o_hit : output logic    ,
-    o_tag : output ICacheTag,
+    i_set: input  ICacheSet,
+    i_we : input  logic    ,
+    i_tag: input  ICacheTag,
+    o_tag: output ICacheTag,
 
     // refill request
 ) {
@@ -17,22 +16,18 @@ module TagArray (
         tag  : ICacheTag,
     }
     // cycle 0
-    var w_tag       : ICacheTag;
     var w_set       : ICacheSet;
     var w_write_meta: Meta     ;
 
     // cycle 1
-    var w_read_meta: Meta     ;
-    var r_tag      : ICacheTag;
+    var w_read_meta: Meta;
 
     always_comb {
-        w_tag              = GetICacheTag(i_addr);
-        w_set              = GetICacheSet(i_addr);
+        w_set              = i_set;
         w_write_meta.valid = 1;
         w_write_meta.tag   = i_tag;
 
         o_tag = w_read_meta.tag;
-        o_hit = w_read_meta.valid && (r_tag == w_read_meta.tag);
     }
 
     inst meta_array: Ram #(
@@ -47,12 +42,4 @@ module TagArray (
         i_data: w_write_meta,
         o_data: w_read_meta ,
     );
-
-    always_ff (i_clk, i_rst) {
-        if_reset {
-            r_tag = 0;
-        } else {
-            r_tag = w_tag;
-        }
-    }
 }
