@@ -1,0 +1,116 @@
+/// 2ラインの境界をまたがるアクセスに非対応のキャッシュ
+///
+/// ヒット時のレイテンシ 2 サイクル
+///
+/// ```wavedrom
+/// {signal: [
+///   {name: 'i_clk',            wave: 'p..............'},
+///   {name: 'i_rst',            wave: '10.............'},
+///   ['core_if',
+///     {name: 'addr_valid',     wave: '011............'},
+///     {name: 'addr_ready',     wave: '010.......1.0..'},
+///     {name: 'addr',           wave: 'x22........22..', data: ['addr0', 'addr0', 'addr1', 'addr2']},
+///     {name: 'instr_valid',    wave: '0.........110..'},
+///     {name: 'instr_ready',    wave: '01.............'},
+///     {name: 'instr',          wave: 'x.........22x..', data: ['inst0', 'inst0', 'addr1', 'inst2']},
+///   ],
+///   ['internal signals',
+///     {name: 'w_set',          wave: 'x2........22...', data: ['set0', 'set0', 'set1', 'set0']},
+///     {name: 'w_tag',          wave: 'x.2.......22x..', data: ['???', 'tag0', 'tag0', 'tag1', 'tag1']},
+///     {name: 'w_hit',          wave: 'x.0.......110..'},
+///     {name: 'w_we',           wave: '0.......10.....'},
+///     {name: 'w_write_line',   wave: 'x.......2x.....', data: ['line0', 'line1', 'line2']},
+///   ],
+///   ['controller signals',
+///     {name: 'w_stall',        wave: '0.1.......0.1..'},
+///     {name: 'r_busy',         wave: '0..1......0..1.'},
+///     {name: 'r_state',        wave: '2..2....222..2.', data: ['IDLE', 'FETCH', 'REFILL', 'READ', 'IDLE', 'FETCH']},
+///   ],
+///   ['mem_if',
+///     {name: 'arvalid',        wave: '0..10..........'},
+///     {name: 'arready',        wave: '01..0..1.......'},
+///     {name: 'araddr',         wave: 'x..2x..........', data: ['addr0']},
+///     {name: 'rvalid',         wave: '0...1...0......'},
+///     {name: 'rready',         wave: '0..1....0......'},
+///     {name: 'rlast',          wave: '0......10......'},
+///     {name: 'rdata',          wave: 'x...2222x......', data: ['d0[0]', 'd0[1]', 'd0[2]', 'd0[3]']},
+///   ],
+/// ]}
+/// ```
+pub module ICacheNonSplitAccess (
+    i_clk: input clock,
+    i_rst: input reset,
+
+    // read request
+    core_if: modport core_icache_if::icache,
+
+    // memory interface
+    mem_if: modport axi_read_if::master,
+) {
+    import Config::*;
+
+    var w_set        : ICacheSet ;
+    var w_tag        : ICacheTag ;
+    var w_line_offset: LineOffset;
+
+    var w_line: Line ;
+    var w_hit : logic;
+    var r_addr: Addr ;
+
+    var w_we        : logic;
+    var w_write_line: Line ;
+    var w_stall     : logic;
+    var r_prev_stall: logic;
+
+    inst tag_array: TagArray (
+        i_clk: i_clk,
+        i_rst: i_rst,
+
+        i_set   : w_set,
+        i_tag   : w_tag,
+        i_we    : w_we ,
+        i_wvalid: 1    , // キャッシュの flush 時はこのポートを使って invalidate する
+        o_hit   : w_hit,
+    );
+    inst data_array: DataArray (
+        i_clk: i_clk,
+        i_rst: i_rst,
+
+        i_set_index: w_set       ,
+        i_we       : w_we        ,
+        i_line     : w_write_line,
+        o_line     : w_line      ,
+    );
+    inst controller: ICacheController (
+        i_clk                   ,
+        i_rst                   ,
+        i_valid   : 1'b1        ,
+        i_hit     : w_hit       ,
+        i_addr    : r_addr      ,
+        o_stall   : w_stall     ,
+        o_array_we: w_we        ,
+        o_line    : w_write_line,
+        mem_if                  ,
+    );
+
+    always_comb {
+        w_set         = GetICacheSet(r_addr);
+        w_tag         = GetICacheTag(r_addr);
+        w_line_offset = GetLineOffset(r_addr);
+
+        core_if.instr_valid = !w_stall;
+        core_if.instr       = w_line[{w_line_offset, 3'b0}+:$bits(Inst)];
+    }
+
+    always_ff (i_clk, i_rst) {
+        if_reset {
+            r_addr       = '0;
+            r_prev_stall = 0;
+        } else {
+            if !w_stall {
+                r_addr = core_if.addr;
+            }
+            r_prev_stall = w_stall;
+        }
+    }
+}

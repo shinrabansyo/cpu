@@ -1,0 +1,62 @@
+module ICacheSplitAccessWrapper (
+    i_clk: input clock,
+    i_rst: input reset,
+
+    // read request
+    core_if_addr: input Addr,
+    core_if_instr_valid: output logic,
+    core_if_instr: output Inst,
+
+    // memory interface
+    mem_if_arvalid: output logic,
+    mem_if_arready: input  logic,
+    mem_if_araddr : output Addr ,
+    mem_if_arid: output Id,
+    mem_if_arlen: output Len,
+    mem_if_arsize: output Size,
+    mem_if_arburst: output Burst,
+
+    mem_if_rvalid : input  logic,
+    mem_if_rready : output logic,
+    mem_if_rdata  : input  logic<32> ,
+    mem_if_rid    : input  Id   ,
+    mem_if_rresp  : input  Resp ,
+    mem_if_rlast  : input  logic,
+) {
+    import Config::*;
+    import axi_pkg::*;
+
+    inst core_if: core_icache_if;
+    inst mem_if: axi_read_if;
+
+    always_comb {
+        core_if.addr        = core_if_addr;
+        core_if_instr = core_if.instr;
+        core_if_instr_valid = core_if.instr_valid;
+
+        mem_if.arready = mem_if_arready ;
+        mem_if_arvalid = mem_if.arvalid;
+        mem_if_araddr = mem_if.araddr ;
+        mem_if_arid   = mem_if.arid   ;
+        mem_if_arlen  = mem_if.arlen  ;
+        mem_if_arsize = mem_if.arsize ;
+        mem_if_arburst= mem_if.arburst;
+
+        mem_if.rvalid = mem_if_rvalid ;
+        mem_if_rready = mem_if.rready ;
+        mem_if.rdata  = mem_if_rdata  ;
+        mem_if.rid    = mem_if_rid    ;
+        mem_if.rresp  = mem_if_rresp  ;
+        mem_if.rlast  = mem_if_rlast  ;
+    }
+
+    inst icache_split_access: ICacheSplitAccess (
+        i_clk: i_clk,
+        i_rst: i_rst,
+
+        core_if: core_if,
+
+        mem_if: mem_if,
+    );
+
+}

@@ -1,0 +1,19 @@
+package axi_pkg {
+    enum Burst: logic<2> {
+        FIXED = 2'b00,
+        INCR = 2'b01,
+        WRAP = 2'b10,
+    }
+
+    enum Resp: logic<2> {
+        OKAY = 2'b00,
+        EXOKAY = 2'b01,
+        SLVERR = 2'b10,
+        DECERR = 2'b11,
+    }
+
+    type Id   = logic<4>;
+    type Size = logic<3>; // bus width = 2^(Size) bytes
+    type Len  = logic<8>; // burst length = (Len) + 1
+    type Strb = logic<4>; // strobe for 32-bit data bus
+}

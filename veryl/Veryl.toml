@@ -9,6 +9,7 @@ expand_inside_operation = true
 
 [test]
 # waveform_format = "fst"
+include_files = [ "verilator.vlt" ]
 
 [test.verilator]
-compile_args = ["-j", "8"]
+compile_args = ["-j", "8", "verilator.vlt"]

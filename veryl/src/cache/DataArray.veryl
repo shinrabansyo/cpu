@@ -2,10 +2,10 @@ module DataArray (
     i_clk: input clock,
     i_rst: input reset,
 
-    i_addr: input  ICacheSet ,
-    i_we  : input  logic,
-    i_line: input  Line ,
-    o_line: output Line ,
+    i_set_index: input  ICacheSet,
+    i_we       : input  logic    ,
+    i_line     : input  Line     ,
+    o_line     : output Line     ,
 ) {
     import Config::*;
 
@@ -16,9 +16,9 @@ module DataArray (
         i_clk: i_clk,
         i_rst: i_rst,
 
-        i_addr: i_addr,
-        i_we  : i_we  ,
-        i_data: i_line,
-        o_data: o_line,
+        i_addr: i_set_index,
+        i_we  : i_we       ,
+        i_data: i_line     ,
+        o_data: o_line     ,
     );
 }

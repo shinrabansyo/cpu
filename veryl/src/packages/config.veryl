@@ -13,6 +13,11 @@ package Config {
     ) -> LineOffset {
         return addr[0+:$bits(LineOffset)];
     }
+    function GetLineAddr (
+        addr: input Addr,
+    ) -> Addr {
+        return addr & ~(LINE_SIZE_BYTES - 1);
+    }
 
     // 命令キャッシュ
     const ICACHE_CAPACITY_BYTES: u32                                                      = 4096;

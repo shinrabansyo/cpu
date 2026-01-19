@@ -1,0 +1,111 @@
+// 2ラインの境界をまたがるアクセスに対応したキャッシュ
+module ICacheSplitAccess (
+    i_clk: input clock,
+    i_rst: input reset,
+
+    // read request
+    core_if: modport core_icache_if::icache,
+
+    // memory interface
+    mem_if: modport axi_read_if::master,
+) {
+    import Config::*;
+    // ライン境界をまたぐかの判定
+    // またがない場合、 nonsplit_access の信号をそのまま使う
+    // またぐ場合、 2 回に分けて nonsplit_access のキャッシュにアクセスし、このモジュール内で2つのラインのそれぞれからデータを切り出す。
+
+    function isCrossBoundary (
+        addr: input Addr,
+    ) -> logic {
+        return GetLineOffset(addr) as 32 >: (LINE_SIZE_BYTES - $bits(Inst) / 8);
+    }
+
+    enum State {
+        IDLE,
+        FETCH_SECOND_LINE,
+    }
+
+    var w_next_state: State;
+    var r_state     : State; // 2ライン分をフェッチするための状態
+    var r_prev_state: State;
+    var r_addr      : Addr ; // cross boundary アクセス対象のアドレス
+
+    inst cache_side_if: core_icache_if;
+
+    var w_cross_boundary: logic;
+
+    var w_next_instr  : Inst    ;
+    var r_instr       : Inst    ; // cross boundary
+    var r_remain_bytes: logic<3>;
+
+    always_comb {
+        w_cross_boundary = isCrossBoundary(core_if.addr);
+
+        core_if.instr_valid = 0;
+        core_if.instr       = '0;
+        w_next_instr        = r_instr;
+        w_next_state        = r_state;
+        case r_state {
+            State::IDLE: {
+                // どんな場合も1ライン目の取得要求はそのまま cache_side_if に投げる
+                cache_side_if.addr = core_if.addr;
+
+                if r_prev_state == State::IDLE {
+                    // 前のリクエストがライン境界をまたがっていなければ
+                    // 前のレスポンスは cache_side_if から直接受け取る
+                    core_if.instr_valid = cache_side_if.instr_valid;
+                    core_if.instr       = cache_side_if.instr;
+                } else {
+                    // 前のリクエストがライン境界をまたいでいた場合
+                    // 前のレスポンスは 2 ライン分マージして返す
+                    core_if.instr_valid = 1;
+                    core_if.instr       = (cache_side_if.instr << (8 * r_remain_bytes)) | r_instr;
+                }
+
+                // ラインをまたぐ場合は 2ライン目の取得に進む
+                if w_cross_boundary {
+                    w_next_state = State::FETCH_SECOND_LINE;
+                }
+            }
+            State::FETCH_SECOND_LINE: {
+                // 1ライン目の取得完了したら
+                // 2ライン目の取得要求を出す
+                if cache_side_if.instr_valid {
+                    w_next_instr       = ('1 >> (8 * (6 - r_remain_bytes))) & cache_side_if.instr;
+                    cache_side_if.addr = r_addr + r_remain_bytes as Addr;
+                    w_next_state       = State::IDLE;
+                }
+            }
+        }
+    }
+
+    always_ff (i_clk, i_rst) {
+        if_reset {
+            r_state        = State::IDLE;
+            r_prev_state   = State::IDLE;
+            r_addr         = '0;
+            r_instr        = '0;
+            r_remain_bytes = '0;
+        } else {
+            r_prev_state = r_state;
+            r_state      = w_next_state;
+            r_instr      = w_next_instr;
+
+            if r_state == State::IDLE {
+                r_addr         = core_if.addr;
+                r_remain_bytes = (LINE_SIZE_BYTES - GetLineOffset(core_if.addr)) as 3;
+            }
+        }
+    }
+
+    inst icache_nonsplit_access: ICacheNonSplitAccess (
+        i_clk  ,
+        i_rst  ,
+
+        // read request
+        core_if: cache_side_if,
+
+        // memory interface
+        mem_if  ,
+    );
+}

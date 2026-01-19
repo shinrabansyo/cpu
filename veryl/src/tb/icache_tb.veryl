@@ -1,42 +1,24 @@
 #[test(icache_tb)]
 embed (inline) sv{{{
     module icache_tb();
-        import \{Config\}::*;
+        import \{ Config \}::*;
+        import \{ axi_pkg \}::*;
 
         localparam int HOLD = 5;
         localparam int STEP = 20;
 
+        localparam int CACHE_HIT_LATENCY = 2;
+        localparam int CACHE_MISS_LATENCY = 4;
+
+        \{ core_icache_if \} core_if();
+        \{ axi_read_if \} #(
+            .Addr(Addr),
+            .Data(logic[31:0])
+        ) mem_if();
+
+
         logic i_clk;
         logic i_rst;
-
-        logic w_addr_valid;
-        logic w_addr_ready;
-        Addr w_addr;
-        Inst w_inst;
-        logic w_valid;
-
-        logic w_arvalid;
-        Addr w_araddr;
-        logic w_arready;
-        logic w_rvalid;
-        Line w_rdata;
-        logic w_rready;
-
-        \{ICache\} icache(
-            .i_clk,
-            .i_rst,
-            .i_addr_valid(w_addr_valid),
-            .o_addr_ready(w_addr_ready),
-            .i_addr(w_addr),
-            .o_inst(w_inst),
-            .o_valid(w_valid),
-            .o_arvalid(w_arvalid),
-            .o_araddr(w_araddr),
-            .i_arready(w_arready),
-            .i_rvalid(w_rvalid),
-            .i_rdata(w_rdata),
-            .o_rready(w_rready)
-        );
 
         task next_cycle();
             #(HOLD);
@@ -44,104 +26,90 @@ embed (inline) sv{{{
             #(HOLD);
         endtask
 
-        task fetch_req(input Addr addr);
-            w_addr_valid = 1;
-            w_addr = addr;
-        endtask
+        \{ ICacheSplitAccessWrapper \} icache(
+            .i_clk,
+            .i_rst,
+            .core_if_addr (core_if.addr),
+            .core_if_instr_valid (core_if.instr_valid),
+            .core_if_instr (core_if.instr),
+            .mem_if_arvalid  (mem_if.arvalid),
+            .mem_if_arready  (mem_if.arready),
+            .mem_if_araddr   (mem_if.araddr ),
+            .mem_if_arid    (mem_if.arid   ),
+            .mem_if_arlen   (mem_if.arlen  ),
+            .mem_if_arsize  (mem_if.arsize ),
+            .mem_if_arburst (mem_if.arburst),
+            .mem_if_rvalid  (mem_if.rvalid ),
+            .mem_if_rready  (mem_if.rready ),
+            .mem_if_rdata   (mem_if.rdata  ),
+            .mem_if_rid     (mem_if.rid    ),
+            .mem_if_rresp   (mem_if.rresp  ),
+            .mem_if_rlast   (mem_if.rlast  )
+        );
+        \{ AxiRam \} axi_ram (
+            .i_clk          (i_clk         ),
+            .i_rst          (i_rst         ),
+            .mem_if_arvalid  (mem_if.arvalid),
+            .mem_if_arready  (mem_if.arready),
+            .mem_if_araddr   (mem_if.araddr ),
+            .mem_if_arid    (mem_if.arid   ),
+            .mem_if_arlen   (mem_if.arlen  ),
+            .mem_if_arsize  (mem_if.arsize ),
+            .mem_if_arburst (mem_if.arburst),
+            .mem_if_rvalid  (mem_if.rvalid ),
+            .mem_if_rready  (mem_if.rready ),
+            .mem_if_rdata   (mem_if.rdata  ),
+            .mem_if_rid     (mem_if.rid    ),
+            .mem_if_rresp   (mem_if.rresp  ),
+            .mem_if_rlast   (mem_if.rlast  )
+        );
 
+        Id w_id;
+        Resp w_resp;
+        Addr w_addr;
+        Burst w_burst;
+        Size w_size;
+        Len w_len;
 
         initial begin
             $display("Starting test...");
             i_clk = 0;
             i_rst = 1;
 
-            w_addr_valid = 0;
-            w_addr = 0;
-            w_arready = 0;
-            w_rvalid = 0;
-            w_rdata = 0;
+            core_if.addr = '0;
+            mem_if.arready = 0;
+            mem_if.rvalid = 0;
+            mem_if.rdata = '0;
+            mem_if.rlast = '0;
+            mem_if.rresp = Resp_OKAY;
+            mem_if.rid = '0;
 
             repeat (2) next_cycle();
             $display("reset done");
 
             i_rst = 0;
+            core_if.addr = '0; // miss アクセス
+            next_cycle();
+            core_if.addr = 4; // hit するアクセス
+            while (!core_if.instr_valid) next_cycle();
+            assert(core_if.instr == {16'hBE02, 32'hDEAD_BE01}) else $error("Instruction0 mismatch!: %h", core_if.instr);
             next_cycle();
 
-            // first access (miss)
-            fetch_req(32'h0000_0000);
-            w_arready = 1;
-
+            core_if.addr = LINE_SIZE_BYTES - 4; // cross boundary なアクセス
+            assert(core_if.instr_valid) else $error("Instruction not valid!");
+            assert(core_if.instr == {16'hBE03, 32'hDEAD_BE02}) else $error("Instruction1 mismatch!: %h", core_if.instr);
             next_cycle();
 
-            assert(w_arvalid == 1) else $error("Error: must send read request");
-            assert(w_araddr == 32'h0000_0000) else $error("Error: wrong read address");
-            assert(w_valid == 0) else $error("Error: output valid must be low on miss");
-            assert(icache.w_hit == 0) else $error("Error: must be a miss");
+            // 1ライン目は hit
+            next_cycle();
+            // assert(icache.icache_split_access.w_next_instr == {16'h0, 32'hDEAD_BEEF + 32'd7}) else $error("First part mismatch!: %h", icache.icache_split_access.w_next_instr);
+            // 2ライン目を返す
+            while (!core_if.instr_valid) next_cycle();
+            assert(core_if.instr == 48'hBE01_DEAD_BE08) else $error("Instruction2 mismatch!: %h", core_if.instr);
 
             next_cycle();
-
-            w_arready = 0;
-            assert(w_arvalid == 0) else $error("Error: read request must be accepted");
-            assert(w_rready == 1) else $error("Error: must be ready to receive data");
-            assert(w_valid == 0) else $error("Error: output valid must be low on miss");
-
-            repeat (10) begin
-                next_cycle();
-                assert(w_valid == 0) else $error("Error: output valid must be low on miss");
-            end
-
-            w_rvalid = 1;
-            w_rdata = {
-                32'hDEAD_BEEF,
-                32'hCAF0_BABE,
-                32'h1234_5678,
-                32'h0BAD_C0DE,
-                32'hFEED_FACE,
-                32'hBAAD_F00D,
-                32'h8BAD_F00D,
-                32'hDEAD_C0DE
-            }; // 32 bytes (= 1 line)
-            assert(w_valid == 0) else $error("Error: output valid must be low on miss");
-
-            next_cycle();
-
-            w_rvalid = 0;
-            w_rdata = 0;
-            assert(w_rready == 0) else $error("Error: must not be ready after data received");
-            assert(w_valid == 1) else $error("Error: output valid must be high after data received");
-
-            next_cycle();
-
-            // second access (hit)
-            fetch_req(32'h0000_0000);
-            w_arready = 0;
-
-            next_cycle();
-
-            assert(icache.w_hit == 1) else $error("Error: must be a hit");
-
-            next_cycle();
-
-            assert(w_valid == 1) else $error("Error: output valid must be high on hit");
-            assert(w_inst == 48'hF00D_DEAD_C0DE) else $error("Error: wrong instruction data on hit");
-
-            next_cycle();
-
-            // 3rd access (hit)
-            fetch_req(32'h0000_0006);
-            w_arready = 0;
-
-            next_cycle();
-
-            assert(icache.w_hit == 1) else $error("Error: must be a hit");
-
-            next_cycle();
-
-            assert(w_valid == 1) else $error("Error: output valid must be high on hit");
-            assert(w_inst == 48'hBAAD_F00D_8BAD) else $error("Error: wrong instruction data on hit");
-
-            next_cycle();
-
+            $display("Test passed!");
+            
             $finish;
         end
 

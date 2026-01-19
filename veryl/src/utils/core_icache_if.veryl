@@ -1,0 +1,17 @@
+interface core_icache_if {
+    import Config::*;
+
+    var addr       : Addr ;
+    var instr      : Inst ;
+    var instr_valid: logic;
+
+    modport core {
+        addr       : output,
+        instr      : input ,
+        instr_valid: input ,
+    }
+
+    modport icache {
+        ..converse(core)
+    }
+}

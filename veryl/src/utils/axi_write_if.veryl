@@ -1,0 +1,53 @@
+interface axi_write_if #(
+    param Addr: type = logic<32>,
+    param Data: type = logic<32>,
+) {
+    import axi_pkg::*;
+
+    // write address channel
+    var awvalid: logic;
+    var awready: logic;
+    var awaddr : Addr ;
+    var awid   : Id   ;
+    var awlen  : Len  ;
+    var awsize : Size ;
+    var awburst: Burst;
+
+    // write data channel
+    var wvalid: logic;
+    var wready: logic;
+    var wid   : Id   ;
+    var wdata : Data ;
+    var wstrb : Strb ;
+    var wlast : logic;
+
+    // write response channel
+    var bvalid: logic;
+    var bready: logic;
+    var bid   : Id   ;
+    var bresp : Resp ;
+
+    modport master {
+        awvalid: output,
+        awaddr : output,
+        awid   : output,
+        awlen  : output,
+        awsize : output,
+        awburst: output,
+        awready: input ,
+        wvalid : output,
+        wid    : output,
+        wdata  : output,
+        wstrb  : output,
+        wlast  : output,
+        wready : input ,
+        bvalid : input ,
+        bid    : input ,
+        bresp  : input ,
+        bready : output,
+    }
+
+    modport slave {
+        ..converse(master)
+    }
+}

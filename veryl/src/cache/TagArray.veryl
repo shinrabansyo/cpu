@@ -2,13 +2,14 @@ module TagArray (
     i_clk: input clock,
     i_rst: input reset,
 
-    i_set: input  ICacheSet,
-    i_we : input  logic    ,
-    i_tag: input  ICacheTag,
-    o_tag: output ICacheTag,
-
-    // refill request
+    i_set   : input  ICacheSet,
+    i_tag   : input  ICacheTag,
+    i_we    : input  logic    ,
+    i_wvalid: input  logic    ,
+    o_hit   : output logic    ,
 ) {
+    // 通常時は we = false でタグ読み出し。
+    // ミス時はコントローラが we = true にしてタグ書き込み
     import Config::*;
 
     struct Meta {
@@ -20,14 +21,23 @@ module TagArray (
     var w_write_meta: Meta     ;
 
     // cycle 1
-    var w_read_meta: Meta;
+    var w_read_meta: Meta     ;
+    var r_tag      : ICacheTag;
 
     always_comb {
         w_set              = i_set;
-        w_write_meta.valid = 1;
+        w_write_meta.valid = i_wvalid;
         w_write_meta.tag   = i_tag;
 
-        o_tag = w_read_meta.tag;
+        o_hit = w_read_meta.valid && (w_read_meta.tag == r_tag);
+    }
+
+    always_ff (i_clk, i_rst) {
+        if_reset {
+            r_tag = '0;
+        } else {
+            r_tag = i_tag;
+        }
     }
 
     inst meta_array: Ram #(

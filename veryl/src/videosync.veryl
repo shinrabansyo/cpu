@@ -139,14 +139,14 @@ embed (inline) sv{{{
             y  = 0.299*R + 0.587*G + 0.114*B;
             cb = 0.564*(B - y);
             cr = 0.713*(R - y);
-            cb_color = {logic[7:0](int(224.0*cr+128.0)), logic[7:0](int(219.0*y + 16.0)), logic[7:0](int(224.0*cb+128.0))};
+            cb_color = {8'(int'(224.0*cr+128.0)), 8'(int'(219.0*y + 16.0)), 8'(int'(224.0*cb+128.0))};
         end else if (COLORSPACE == "BT709") begin
             y  = 0.2126*R + 0.7152*G + 0.0722*B;
             cb = 0.5389*(B - y);
             cr = 0.6350*(R - y);
-            cb_color = {logic[7:0](int(224.0*cr+128.0)), logic[7:0](int(219.0*y + 16.0)), logic[7:0](int(224.0*cb+128.0))};
+            cb_color = {8'(int'(224.0*cr+128.0)), 8'(int'(219.0*y + 16.0)), 8'(int'(224.0*cb+128.0))};
         end else begin
-            cb_color = {logic[7:0](int(R*255.0)), logic[7:0](int(G*255.0)), logic[7:0](int(B*255.0))};
+            cb_color = {8'(int'(R*255.0)), 8'(int'(G*255.0)), 8'(int'(B*255.0))};
         end
         end
     endfunction
@@ -379,7 +379,7 @@ embed (inline) sv{{{
         cb_rgb_reg <= 0;
         end else begin
         if (hcount == CB_LEFTBAND-1) begin
-            cblamp_reg <= {logic[7:0](cb_lampbegin()), 8'h00};
+            cblamp_reg <= {8'(cb_lampbegin()), 8'h00};
         end else begin
             cblamp_reg <= cblamp_reg + cb_lampstep();
         end

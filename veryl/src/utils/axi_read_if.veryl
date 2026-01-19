@@ -1,0 +1,43 @@
+interface axi_read_if #(
+    param Addr: type = logic<32>,
+    param Data: type = logic<32>,
+) {
+    import axi_pkg::*;
+
+    // read address channel
+    var arvalid: logic;
+    var arready: logic;
+    var araddr : Addr ;
+    var arid   : Id   ;
+    var arlen  : Len  ;
+    var arsize : Size ;
+    var arburst: Burst;
+
+    // read data channel
+    var rvalid: logic;
+    var rready: logic;
+    var rdata : Data ;
+    var rid   : Id   ;
+    var rresp : Resp ;
+    var rlast : logic;
+
+    modport master {
+        arvalid: output,
+        araddr : output,
+        arid   : output,
+        arlen  : output,
+        arsize : output,
+        arburst: output,
+        arready: input ,
+        rvalid : input ,
+        rdata  : input ,
+        rready : output,
+        rid    : input ,
+        rresp  : input ,
+        rlast  : input ,
+    }
+
+    modport slave {
+        ..converse(master)
+    }
+}
