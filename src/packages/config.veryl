@@ -1,7 +1,7 @@
 package Config {
     const ADDR_WIDTH: u32               = 32;
     type Addr       = logic<ADDR_WIDTH>;
-    type Inst      = logic<48>;
+    type Inst       = logic<48>        ;
 
     // キャッシュの設定
     const LINE_SIZE_BYTES: u32                            = 32;
@@ -21,11 +21,11 @@ package Config {
 
     // 命令キャッシュ
     const ICACHE_CAPACITY_BYTES: u32                                                      = 4096;
-    const ICACHE_NUM_WAY       : u32                                                      = 2;
+    const ICACHE_NUM_WAY       : u32                                                      = 1;
     const ICACHE_NUM_SET       : u32                                                      = ICACHE_CAPACITY_BYTES / (LINE_SIZE_BYTES * ICACHE_NUM_WAY);
     type ICacheSet             = logic<$clog2(ICACHE_NUM_SET)>                           ;
     type ICacheTag             = logic<ADDR_WIDTH - $bits(ICacheSet) - $bits(LineOffset)>;
-    type ICacheWayIndex        = logic<$clog2(ICACHE_NUM_WAY)>                           ;
+    // type ICacheWayIndex        = logic<$clog2(ICACHE_NUM_WAY)>                           ;
 
     function GetICacheTag (
         addr: input Addr,
@@ -55,4 +55,10 @@ package Config {
     ) -> DCacheSet {
         return addr[$bits(LineOffset)+:$bits(DCacheSet)];
     }
+
+    // memory map
+    const IROM_BASE: u32 = 32'h8000_0004;
+    const IRAM_BASE: u32 = 32'h0000_0000;
+
+    const IRAM_SIZE: u32 = 4096; // 4KB
 }

@@ -71,6 +71,26 @@ embed (inline) sv{{{
         Size w_size;
         Len w_len;
 
+        // TODO: miss/hit, cross boundary の全パターンを網羅したテストがあるとGood
+        // | line 1 miss | line 1 cross boundary | line 2 hit | line 2 cross boundary |
+        // +-------------+-----------------------+------------+-----------------------+
+        // | miss | no | miss | no |
+        // | miss | no | miss | yes |
+        // | miss | no | hit | no |
+        // | miss | no | hit | yes |
+        // | miss | yes | miss | no |
+        // | miss | yes | miss | yes |
+        // | miss | yes | hit | no |
+        // | miss | yes | hit | yes |
+        // | hit | no | miss | no |
+        // | hit | no | miss | yes |
+        // | hit | no | hit | no |
+        // | hit | no | hit | yes |
+        // | hit | yes | miss | no |
+        // | hit | yes | miss | yes |
+        // | hit | yes | hit | no |
+        // | hit | yes | hit | yes |
+
         initial begin
             $display("Starting test...");
             i_clk = 0;
@@ -83,6 +103,9 @@ embed (inline) sv{{{
             mem_if.rlast = '0;
             mem_if.rresp = Resp_OKAY;
             mem_if.rid = '0;
+            for (int i = 0; i < LINE_SIZE_BYTES/4 * 2; i++) begin
+                axi_ram.r_mem[i] = 32'hdeadbe00 + i;
+            end
 
             repeat (2) next_cycle();
             $display("reset done");
@@ -92,20 +115,19 @@ embed (inline) sv{{{
             next_cycle();
             core_if.addr = 4; // hit するアクセス
             while (!core_if.instr_valid) next_cycle();
-            assert(core_if.instr == {16'hBE02, 32'hDEAD_BE01}) else $error("Instruction0 mismatch!: %h", core_if.instr);
+            assert(core_if.instr == {16'hbe00 + 16'h1, 32'hdeadbe00 + 32'h0}) else $error("Instruction0 mismatch!: %h", core_if.instr);
             next_cycle();
 
             core_if.addr = LINE_SIZE_BYTES - 4; // cross boundary なアクセス
             assert(core_if.instr_valid) else $error("Instruction not valid!");
-            assert(core_if.instr == {16'hBE03, 32'hDEAD_BE02}) else $error("Instruction1 mismatch!: %h", core_if.instr);
+            assert(core_if.instr == {16'hbe00 + 16'h2, 32'hdeadbe00 + 32'h1}) else $error("Instruction1 mismatch!: %h", core_if.instr);
             next_cycle();
 
             // 1ライン目は hit
             next_cycle();
-            // assert(icache.icache_split_access.w_next_instr == {16'h0, 32'hDEAD_BEEF + 32'd7}) else $error("First part mismatch!: %h", icache.icache_split_access.w_next_instr);
             // 2ライン目を返す
             while (!core_if.instr_valid) next_cycle();
-            assert(core_if.instr == 48'hBE01_DEAD_BE08) else $error("Instruction2 mismatch!: %h", core_if.instr);
+            assert(core_if.instr == {16'hbe00 + 16'h8, 32'hdeadbe00 + 32'h7}) else $error("Instruction2 mismatch!: %h", core_if.instr);
 
             next_cycle();
             $display("Test passed!");

@@ -17,7 +17,7 @@ embed (inline) sv{{{
         logic o_de;
         logic [23:0] o_data;
 
-        veryl_Core core(.*);
+        veryl_SoC soc(.*);
 
         initial begin
             /* verilator lint_off INITIALDLY */
@@ -48,6 +48,7 @@ embed (inline) sv{{{
             @(posedge i_clk);
             @(posedge i_clk);
             @(posedge i_clk)
+            #1
             i_rst <= 0;
             /* verilator lint_on INITIALDLY */
             @(posedge i_clk);

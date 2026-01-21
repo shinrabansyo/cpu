@@ -1,4 +1,12 @@
-target/
 obj_dir/
 *.hex
+
+.build/
+dependencies/
+target/
+.build/
+*.f
+*.sv
 *.vcd
+*.fst
+doc/

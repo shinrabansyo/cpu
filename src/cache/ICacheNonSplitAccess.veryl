@@ -60,7 +60,6 @@ pub module ICacheNonSplitAccess (
     var w_we        : logic;
     var w_write_line: Line ;
     var w_stall     : logic;
-    var r_prev_stall: logic;
 
     inst tag_array: TagArray (
         i_clk: i_clk,
@@ -94,8 +93,13 @@ pub module ICacheNonSplitAccess (
     );
 
     always_comb {
-        w_set         = GetICacheSet(r_addr);
-        w_tag         = GetICacheTag(r_addr);
+        if w_stall {
+            w_set = GetICacheSet(r_addr);
+            w_tag = GetICacheTag(r_addr);
+        } else {
+            w_set = GetICacheSet(core_if.addr);
+            w_tag = GetICacheTag(core_if.addr);
+        }
         w_line_offset = GetLineOffset(r_addr);
 
         core_if.instr_valid = !w_stall;
@@ -105,12 +109,10 @@ pub module ICacheNonSplitAccess (
     always_ff (i_clk, i_rst) {
         if_reset {
             r_addr       = '0;
-            r_prev_stall = 0;
         } else {
             if !w_stall {
                 r_addr = core_if.addr;
             }
-            r_prev_stall = w_stall;
         }
     }
 }

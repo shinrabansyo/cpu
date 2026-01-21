@@ -5,6 +5,14 @@ module Core (
     i_clk: input clock,
     i_rst: input reset,
 
+    // Instruction Memory
+    imem_read_if : modport axi_read_if::master ,
+    // imem_write_if: modport axi_write_if::master,
+
+    // Data Memory
+    // dmem_read_if : modport axi_read_if::master ,
+    // dmem_write_if: modport axi_write_if::master,
+
     // UART
     o_tx: output logic<1>,
     i_rx: input  logic<1>,
@@ -25,11 +33,7 @@ module Core (
     o_de     : output 'dvi logic<1> ,
     o_data   : output 'dvi logic<24>,
 ) {
-    const IROM_BASE: u32 = 32'h8000_0004;
-    const IRAM_BASE: u32 = 32'h0000_0000;
-
-    const IRAM_SIZE: u32 = 4096; // 4KB
-
+    import Config::*;
     // ワイヤ・インタフェース宣言
     // IOBus
     var i_dev_id: logic<32>;
@@ -80,10 +84,6 @@ module Core (
     let w_is_wout_iram: logic<1> = w_out >= IRAM_BASE && w_out <: IRAM_BASE + IRAM_SIZE;
     let w_is_pc_irom  : logic<1> = w_pc_fetching >= IROM_BASE;
     /* verilator lint_on UNSIGNED */
-    var r_is_pc_iram    : logic<1> ;
-    var r_is_pc_irom    : logic<1> ;
-    var w_iram_instr_raw: logic<48>;
-    var w_irom_instr_raw: logic<48>;
 
     var w_is_dmem  : logic<1> ;
     var w_is_imem  : logic<1> ;
@@ -99,41 +99,21 @@ module Core (
     // |  IROM   |
     // +---------+ 0x8000_0004 + 4kB
 
-    inst m_iram_mod: IMemSync #(
-        RAM_INIT: 0,
-    ) (
-        i_clk : i_clk                                ,
-        i_rst : i_rst                                ,
-        i_clr : 1'h0                                 ,
-        i_mea : (|w_wen) & w_is_imem & w_is_wout_iram,
-        i_wea : {2'b0, w_wen}                        ,
-        i_adra: w_out                                ,
-        i_da  : {16'b0, m_regfile[w_instr.rs2_s]}    ,
-        i_meb : w_is_pc_iram                         ,
-        i_adrb: w_pc_fetching                        ,
-        o_qb  : w_iram_instr_raw                     ,
+    inst icache_if: core_icache_if;
+    inst m_icache_mod: ICacheSplitAccess (
+        i_clk  : i_clk       ,
+        i_rst  : i_rst       ,
+        core_if: icache_if   ,
+        mem_if : imem_read_if,
     );
-
-    inst m_irom_mod: IMemSync #(
-        RAM_INIT: 1,
-    ) (
-        i_clk : i_clk                    ,
-        i_rst : i_rst                    ,
-        i_clr : 1'h0                     ,
-        i_mea : 0                        ,
-        i_wea : 0                        ,
-        i_adra: 0                        ,
-        i_da  : 0                        ,
-        i_meb : w_is_pc_irom             ,
-        i_adrb: w_pc_fetching - IROM_BASE,
-        o_qb  : w_irom_instr_raw         ,
-    );
-
-    assign w_instr_raw = case {r_is_pc_iram, r_is_pc_irom} {
-        2'b10  : w_iram_instr_raw,
-        2'b01  : w_irom_instr_raw,
-        default: 48'h0,
-    };
+    always_comb {
+        icache_if.addr = w_pc_fetching;
+        if icache_if.instr_valid {
+            w_instr_raw = icache_if.instr;
+        } else {
+            w_instr_raw = '0;
+        }
+    }
 
     inst m_data_mod: DMemSync #(
         WORD_SIZE: 4096,
@@ -151,30 +131,35 @@ module Core (
     );
 
     // 命令フェッチ
+    var r_first_fetch : logic<1>;
     var r_load_ready  : logic<1>;
     var w_branch_taken: logic<1>;
 
     // プログラムカウンタ
     always_comb {
-        w_pc_fetching = case {w_instr.opcode_sub, w_instr.opcode} {
-            BEQ, BNE, BLT, BLE  : if w_branch_taken ? r_pc_fetched + w_instr.imm_b_sext : r_pc_fetched + 32'h6,
-            JAL                 : w_out,
-            LW, LH, LB, LHU, LBU: if !r_load_ready ? r_pc_fetched : r_pc_fetched + 32'h6,
-            IN                  : if !if_io_bus_din.valid ? r_pc_fetched : r_pc_fetched + 32'h6,
-            OUT                 : if !if_io_bus_dout.ready ? r_pc_fetched : r_pc_fetched + 32'h6,
-            default             : r_pc_fetched + 32'h6,
-        };
+        if r_first_fetch {
+            w_pc_fetching = 0;
+        } else {
+            w_pc_fetching = case {w_instr.opcode_sub, w_instr.opcode} {
+                BEQ, BNE, BLT, BLE  : if w_branch_taken ? r_pc_fetched + w_instr.imm_b_sext : r_pc_fetched + 32'h6,
+                JAL                 : w_out,
+                LW, LH, LB, LHU, LBU: if !r_load_ready ? r_pc_fetched : r_pc_fetched + 32'h6,
+                IN                  : if !if_io_bus_din.valid ? r_pc_fetched : r_pc_fetched + 32'h6,
+                OUT                 : if !if_io_bus_dout.ready ? r_pc_fetched : r_pc_fetched + 32'h6,
+                default             : r_pc_fetched + 32'h6,
+            };
+        }
     }
 
     always_ff (i_clk, i_rst) {
         if_reset {
-            r_pc_fetched = IROM_BASE;
-            r_is_pc_iram = 1'b0;
-            r_is_pc_irom = 1'b1;
+            r_first_fetch = 1'b1;
+            r_pc_fetched  = IROM_BASE;
         } else {
-            r_pc_fetched = w_pc_fetching;
-            r_is_pc_iram = w_is_pc_iram;
-            r_is_pc_irom = w_is_pc_irom;
+            if icache_if.instr_valid || r_first_fetch {
+                r_first_fetch = 1'b0;
+                r_pc_fetched  = w_pc_fetching;
+            }
         }
     }
 

@@ -64,7 +64,7 @@ module ICacheController (
                         // 32bit で BEAT_MAX 回の転送を連続で行う
                         // ラインの先頭アドレスから昇順に取得
                         mem_if.arvalid = 1;
-                        mem_if.araddr  = i_addr;
+                        mem_if.araddr  = GetLineAddr(i_addr);
                         mem_if.arsize  = 2;
                         mem_if.arlen   = (BEAT_MAX - 1) as axi_pkg::Len;
                         mem_if.arburst = axi_pkg::Burst::INCR;
@@ -92,11 +92,11 @@ module ICacheController (
                 // ラインのrefill
                 State::REFILL: {
                     r_array_we = 0;
-                    r_busy     = 0;
                     r_state    = State::READ;
                 }
                 // TagArray/DataArray の出力が hit 時と同じになるように、 refill したラインを読み出すサイクル
                 State::READ: {
+                    r_busy     = 0;
                     r_state = State::IDLE;
                 }
             }

@@ -1,7 +1,7 @@
 // シミュレーション用のAXI RAMモジュール
 // 実際に合成するとクソデカRAMが合成される可能性が高いので注意
 module AxiRam #(
-    param DEPTH: u32 = 1024,
+    param DEPTH: u32 = 4096,
 ) (
     i_clk         : input  clock    ,
     i_rst         : input  reset    ,
@@ -22,7 +22,7 @@ module AxiRam #(
     import axi_pkg::*;
     import Config::*;
 
-    var r_mem: logic<8> [DEPTH];
+    var r_mem: logic<32> [DEPTH >> 2];
 
     var r_arready: logic                     ;
     var r_rvalid : logic                     ;
@@ -30,6 +30,10 @@ module AxiRam #(
     var r_len    : Len                       ;
     var r_len_cnt: Len                       ;
     var r_addr   : Addr                      ;
+
+    initial {
+        $readmemh("tmp_inst.hex", r_mem);
+    }
 
     always_comb {
         mem_if_arready = r_arready;
@@ -40,18 +44,15 @@ module AxiRam #(
         mem_if_rlast   = (r_len == r_len_cnt) && r_rvalid;
     }
 
+    #[allow(missing_reset_statement)]
     always_ff (i_clk, i_rst) {
         if_reset {
-            for i: u32 in 0..DEPTH / 4 {
-                r_mem[i * 4 + 0] = i as 8;
-                r_mem[i * 4 + 1] = 8'hBE;
-                r_mem[i * 4 + 2] = 8'hAD;
-                r_mem[i * 4 + 3] = 8'hDE;
-            }
+            r_addr    = 0;
             r_data    = 0;
             r_rvalid  = 0;
             r_arready = 1;
             r_len     = 0;
+            r_len_cnt = 0;
         } else {
             if (mem_if_arvalid && r_arready) {
                 r_rvalid = 1;
@@ -61,17 +62,13 @@ module AxiRam #(
                     r_len_cnt = 0;
                     r_addr    = mem_if_araddr;
                 }
-                for i: u32 in 0..8 {
-                    r_data[i * 8+:8] = r_mem[mem_if_araddr as u32 + i];
-                }
+                r_data = r_mem[mem_if_araddr as u32 >> 2];
             }
             if (mem_if_rready && r_rvalid && mem_if_rlast) {
                 r_rvalid = mem_if_arvalid && r_arready;
             } else if (mem_if_rready && r_rvalid) {
-                r_rvalid = 1;
-                for i: u32 in 0..8 {
-                    r_data[i * 8+:8] = r_mem[r_addr as u32 + i + (r_len_cnt as u32 + 1) * 4];
-                }
+                r_rvalid  =  1;
+                r_data    =  r_mem[(r_addr as u32 >> 2) + (r_len_cnt as u32 + 1)];
                 r_len_cnt += 1;
                 r_arready =  1;
             }
