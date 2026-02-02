@@ -1,42 +1,5 @@
 /// 2ラインの境界をまたがるアクセスに非対応のキャッシュ
-///
-/// ヒット時のレイテンシ 2 サイクル
-///
-/// ```wavedrom
-/// {signal: [
-///   {name: 'i_clk',            wave: 'p..............'},
-///   {name: 'i_rst',            wave: '10.............'},
-///   ['core_if',
-///     {name: 'addr_valid',     wave: '011............'},
-///     {name: 'addr_ready',     wave: '010.......1.0..'},
-///     {name: 'addr',           wave: 'x22........22..', data: ['addr0', 'addr0', 'addr1', 'addr2']},
-///     {name: 'instr_valid',    wave: '0.........110..'},
-///     {name: 'instr_ready',    wave: '01.............'},
-///     {name: 'instr',          wave: 'x.........22x..', data: ['inst0', 'inst0', 'addr1', 'inst2']},
-///   ],
-///   ['internal signals',
-///     {name: 'w_set',          wave: 'x2........22...', data: ['set0', 'set0', 'set1', 'set0']},
-///     {name: 'w_tag',          wave: 'x.2.......22x..', data: ['???', 'tag0', 'tag0', 'tag1', 'tag1']},
-///     {name: 'w_hit',          wave: 'x.0.......110..'},
-///     {name: 'w_we',           wave: '0.......10.....'},
-///     {name: 'w_write_line',   wave: 'x.......2x.....', data: ['line0', 'line1', 'line2']},
-///   ],
-///   ['controller signals',
-///     {name: 'w_stall',        wave: '0.1.......0.1..'},
-///     {name: 'r_busy',         wave: '0..1......0..1.'},
-///     {name: 'r_state',        wave: '2..2....222..2.', data: ['IDLE', 'FETCH', 'REFILL', 'READ', 'IDLE', 'FETCH']},
-///   ],
-///   ['mem_if',
-///     {name: 'arvalid',        wave: '0..10..........'},
-///     {name: 'arready',        wave: '01..0..1.......'},
-///     {name: 'araddr',         wave: 'x..2x..........', data: ['addr0']},
-///     {name: 'rvalid',         wave: '0...1...0......'},
-///     {name: 'rready',         wave: '0..1....0......'},
-///     {name: 'rlast',          wave: '0......10......'},
-///     {name: 'rdata',          wave: 'x...2222x......', data: ['d0[0]', 'd0[1]', 'd0[2]', 'd0[3]']},
-///   ],
-/// ]}
-/// ```
+/// ヒット時のレイテンシ 1 サイクル
 pub module ICacheNonSplitAccess (
     i_clk: input clock,
     i_rst: input reset,
@@ -49,69 +12,148 @@ pub module ICacheNonSplitAccess (
 ) {
     import Config::*;
 
-    var w_set        : ICacheSet ;
-    var w_tag        : ICacheTag ;
-    var w_line_offset: LineOffset;
+    enum State {
+        IDLE,
+        FETCH,
+        READ,
+    }
 
-    var w_line: Line ;
-    var w_hit : logic;
-    var r_addr: Addr ;
+    type Data = logic<32>;
 
-    var w_we        : logic;
-    var w_write_line: Line ;
+    // メモリに対して 32bit ずつ、 $bits(Line)/32bit 回アクセスしてラインを取得する。
+    const BEAT_MAX          : u32 = $bits(Line) / $bits(Data);
+    const BEAT_COUNTER_WIDTH: u32 = $clog2(BEAT_MAX);
+
+    var r_addr_valid: logic;
+    var r_addr      : Addr ;
+    var r_state       : State                    ;
+    var r_beat_counter: logic<BEAT_COUNTER_WIDTH>;
+    var w_miss        : logic                    ;
     var w_stall     : logic;
+
+    var w_ta_set   : ICacheSet;
+    var w_ta_tag   : ICacheTag;
+    var w_ta_we    : logic    ;
+    var w_ta_wvalid: logic    ;
+    var w_ta_hit   : logic    ;
+
+    var w_da_set        : ICacheSet    ;
+    var w_da_line_offset: LineOffset   ;
+    var w_da_we         : logic        ;
+    var w_da_wmask      : logic     <8>;
+    var w_da_wdata      : DoubleData   ;
+    var w_da_rdata      : DoubleData   ;
 
     inst tag_array: TagArray (
         i_clk: i_clk,
         i_rst: i_rst,
 
-        i_set   : w_set,
-        i_tag   : w_tag,
-        i_we    : w_we ,
-        i_wvalid: 1    , // キャッシュの flush 時はこのポートを使って invalidate する
-        o_hit   : w_hit,
+        i_set   : w_ta_set   ,
+        i_tag   : w_ta_tag   ,
+        i_we    : w_ta_we    ,
+        i_wvalid: w_ta_wvalid, // キャッシュの flush 時はこのポートを使って invalidate する
+        o_hit   : w_ta_hit   ,
     );
     inst data_array: DataArray (
         i_clk: i_clk,
         i_rst: i_rst,
 
-        i_set_index: w_set       ,
-        i_we       : w_we        ,
-        i_line     : w_write_line,
-        o_line     : w_line      ,
-    );
-    inst controller: ICacheController (
-        i_clk                   ,
-        i_rst                   ,
-        i_valid   : 1'b1        ,
-        i_hit     : w_hit       ,
-        i_addr    : r_addr      ,
-        o_stall   : w_stall     ,
-        o_array_we: w_we        ,
-        o_line    : w_write_line,
-        mem_if                  ,
+        i_set        : w_da_set        ,
+        i_line_offset: w_da_line_offset,
+        i_we         : w_da_we         ,
+        i_wmask      : w_da_wmask      ,
+        i_wdata      : w_da_wdata      ,
+        o_rdata      : w_da_rdata      ,
     );
 
     always_comb {
-        if w_stall {
-            w_set = GetICacheSet(r_addr);
-            w_tag = GetICacheTag(r_addr);
-        } else {
-            w_set = GetICacheSet(core_if.addr);
-            w_tag = GetICacheTag(core_if.addr);
-        }
-        w_line_offset = GetLineOffset(r_addr);
+        w_miss  = r_addr_valid && !w_ta_hit;
+        w_stall = w_miss | r_state != State::IDLE;
 
-        core_if.instr_valid = !w_stall;
-        core_if.instr       = w_line[{w_line_offset, 3'b0}+:$bits(Inst)];
+        core_if.instr_valid = !w_stall && r_addr_valid;
+        core_if.instr       = w_da_rdata[0+:48];
+
+        w_ta_set         = GetICacheSet(core_if.addr);
+        w_ta_tag         = GetICacheTag(core_if.addr);
+        w_ta_we          = 0;
+        w_ta_wvalid      = 0;
+        w_da_set         = GetICacheSet(core_if.addr);
+        w_da_line_offset = GetLineOffset(core_if.addr);
+        w_da_we          = 0;
+        w_da_wmask       = 0;
+        w_da_wdata       = '0;
+        case (r_state) {
+            State::FETCH: {
+                if mem_if.rvalid && mem_if.rready {
+                    w_da_set         = GetICacheSet(GetLineAddr(r_addr));
+                    w_da_line_offset = r_beat_counter << 2;
+                    w_da_we          = 1;
+                    w_da_wmask       = 8'b1111;
+                    w_da_wdata       = mem_if.rdata as DoubleData;
+                    if mem_if.rlast {
+                        w_ta_set    = GetICacheSet(GetLineAddr(r_addr));
+                        w_ta_tag    = GetICacheTag(GetLineAddr(r_addr));
+                        w_ta_we     = 1;
+                        w_ta_wvalid = 1;
+                    }
+                }
+            }
+            State::READ: {
+                w_ta_set = GetICacheSet(r_addr);
+                w_ta_tag = GetICacheTag(r_addr);
+                w_da_set = GetICacheSet(r_addr);
+                w_da_line_offset = GetLineOffset(r_addr);
+            }
+        }
     }
 
     always_ff (i_clk, i_rst) {
         if_reset {
-            r_addr       = '0;
+            r_addr         = '0;
+            r_addr_valid   = 0;
+            r_state        = State::IDLE;
+            r_beat_counter = '0;
+            mem_if.arvalid = 0;
+            mem_if.araddr  = '0;
+            mem_if.arsize  = 2;
+            // mem_if.arlen   = (BEAT_MAX - 1) as axi_pkg::Len;
+            mem_if.arlen   = '0;
+            mem_if.arburst = axi_pkg::Burst::INCR;
+            mem_if.rready  = 0;
         } else {
             if !w_stall {
-                r_addr = core_if.addr;
+                r_addr       = core_if.addr;
+                r_addr_valid = core_if.addr_valid;
+            }
+            case (r_state) {
+                State::IDLE: {
+                    if w_miss {
+                        r_state = State::FETCH;
+
+                        mem_if.arvalid = 1;
+                        mem_if.araddr  = GetLineAddr(r_addr);
+                        mem_if.arsize  = 2;
+                        mem_if.arlen   = (BEAT_MAX - 1) as axi_pkg::Len;
+                        mem_if.arburst = axi_pkg::Burst::INCR;
+                        mem_if.rready  = 1;
+                        r_beat_counter = '0;
+                    }
+                }
+                State::FETCH: {
+                    if mem_if.arvalid && mem_if.arready {
+                        mem_if.arvalid = 0;
+                    }
+                    if mem_if.rvalid && mem_if.rready {
+                        r_beat_counter += 1;
+                    }
+                    if mem_if.rlast {
+                        mem_if.rready = 0;
+                        r_state       = State::READ;
+                    }
+                }
+                State::READ: {
+                    r_state = State::IDLE;
+                }
             }
         }
     }

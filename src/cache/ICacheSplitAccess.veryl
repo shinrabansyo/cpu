@@ -42,15 +42,18 @@ module ICacheSplitAccess (
     always_comb {
         w_cross_boundary = isCrossBoundary(core_if.addr);
 
+        cache_side_if.addr_valid = 0;
+        cache_side_if.addr       = '0;
         core_if.instr_valid = 0;
         core_if.instr       = '0;
         w_next_instr        = r_instr;
         w_next_state        = r_state;
         case r_state {
             State::IDLE: {
-                cache_side_if.addr  = core_if.addr;
-                core_if.instr_valid = cache_side_if.instr_valid;
-                core_if.instr       = cache_side_if.instr;
+                cache_side_if.addr_valid = core_if.addr_valid;
+                cache_side_if.addr       = core_if.addr;
+                core_if.instr_valid      = cache_side_if.instr_valid;
+                core_if.instr            = cache_side_if.instr;
 
                 // ラインをまたぐ場合は 2ライン目の取得に進む
                 if w_cross_boundary && (cache_side_if.instr_valid || r_first_req) {
@@ -62,15 +65,17 @@ module ICacheSplitAccess (
                 // 1ライン目の取得完了したら
                 // 2ライン目の取得要求を出す
                 if cache_side_if.instr_valid {
-                    w_next_instr       = ('1 >> (8 * (6 - r_remain_bytes))) & cache_side_if.instr;
-                    cache_side_if.addr = r_addr + r_remain_bytes as Addr;
-                    w_next_state       = State::FETCH_SECOND_LINE;
+                    w_next_instr             = ('1 >> (8 * (6 - r_remain_bytes))) & cache_side_if.instr;
+                    cache_side_if.addr_valid = 1;
+                    cache_side_if.addr       = r_addr + r_remain_bytes as Addr;
+                    w_next_state             = State::FETCH_SECOND_LINE;
                 }
             }
             State::FETCH_SECOND_LINE: {
                 // 2ライン目の取得完了したら
                 // 次ラインの取得要求を出す
                 if cache_side_if.instr_valid {
+                    cache_side_if.addr_valid = core_if.addr_valid;
                     cache_side_if.addr  = core_if.addr;
                     core_if.instr_valid = 1;
                     core_if.instr       = (cache_side_if.instr << (8 * r_remain_bytes)) | r_instr;

@@ -1,24 +1,113 @@
+// 6byte 命令を1サイクルで読み出せるように、DoubleData=64bit 幅のSRAMを使う
+// ラインをはみ出すようなアクセスはされない想定
+// はみ出した部分は0が読み出される
+// はみ出した部分への書き込みは無視される
+// 6byte access 時は、2byte align でアクセスされる想定
+// 8byte access 時は、(最低でも)4byte align でアクセスされる想定
+// (8byte access するのはキャッシュコントローラのみなので、実際には8byte align でアクセスされる)
 module DataArray (
     i_clk: input clock,
     i_rst: input reset,
 
-    i_set_index: input  ICacheSet,
-    i_we       : input  logic    ,
-    i_line     : input  Line     ,
-    o_line     : output Line     ,
+    i_set        : input  ICacheSet    ,
+    i_line_offset: input  LineOffset   ,
+    i_we         : input  logic        ,
+    i_wdata      : input  DoubleData   ,
+    i_wmask      : input  logic     <8>,
+    o_rdata      : output DoubleData   ,
 ) {
     import Config::*;
+    // bank 0: 0->(0-3), 1->(8-11) byte
+    // bank 1: 0->(4-7), 1->(12-15) byte
 
-    inst mem: Ram #(
-        DataType: Line     ,
-        AddrType: ICacheSet,
+    type ArrayAddr = logic<$bits(ICacheSet) + $bits(LineOffset)>;
+
+    var w_addr       : ArrayAddr   ;
+    var w_addr_bank0 : ArrayAddr   ;
+    var w_addr_bank1 : ArrayAddr   ;
+    var w_rdata_bank0: Data        ;
+    var w_rdata_bank1: Data        ;
+    var w_wmask      : logic    <8>;
+    var w_wmask_bank0: logic    <4>;
+    var w_wmask_bank1: logic    <4>;
+    var w_wdata : DoubleData   ;
+    var w_wdata_bank0: Data        ;
+    var w_wdata_bank1: Data        ;
+
+    var r_addr    : ArrayAddr ;
+    var w_out_data: DoubleData;
+
+    always_comb {
+        w_addr  = {i_set, i_line_offset};
+        w_wmask = i_wmask << w_addr[1:0];
+        w_wdata = i_wdata << (w_addr[1:0] << 3);
+
+        // if (addr % 8) < 4
+        // bank0: lower byte
+        // bank1: upper byte
+        if w_addr[2] == 1'b0 {
+            w_addr_bank0  = w_addr >> 3;
+            w_addr_bank1  = w_addr >> 3;
+            w_wmask_bank0 = w_wmask[3:0];
+            w_wmask_bank1 = w_wmask[7:4];
+            w_wdata_bank0 = w_wdata[0+:32];
+            w_wdata_bank1 = w_wdata[32+:32];
+        }
+        // bank1: lower byte
+        // bank0: upper byte
+         else {
+            w_addr_bank1  = w_addr >> 3;
+            w_addr_bank0  = (w_addr >> 3) + 1;
+            w_wmask_bank1 = w_wmask[3:0];
+            w_wmask_bank0 = w_wmask[7:4];
+            w_wdata_bank1 = w_wdata[0+:32];
+            w_wdata_bank0 = w_wdata[32+:32];
+        }
+
+        // bank0: lower byte
+        // bank1: upper byte
+        if r_addr[2] == 1'b0 {
+            w_out_data = {w_rdata_bank1, w_rdata_bank0} >> r_addr[1:0];
+        }
+        // bank1: lower byte
+        // bank0: upper byte
+         else {
+            w_out_data = {w_rdata_bank0, w_rdata_bank1} >> r_addr[1:0];
+        }
+        o_rdata[0+:32]  = w_out_data[0+:32];
+        o_rdata[32+:32] = w_out_data[32+:32];
+    }
+
+    always_ff (i_clk, i_rst) {
+        if_reset {
+            r_addr = '0;
+        } else {
+            r_addr = w_addr;
+        }
+    }
+
+    inst mem_bank0: Ram32bit_1rw #(
+        AddrType: ArrayAddr,
     ) (
         i_clk: i_clk,
         i_rst: i_rst,
 
-        i_addr: i_set_index,
-        i_we  : i_we       ,
-        i_data: i_line     ,
-        o_data: o_line     ,
+        i_addr : w_addr_bank0 ,
+        i_we   : i_we         ,
+        i_wstrb: w_wmask_bank0,
+        i_wdata: w_wdata_bank0,
+        o_rdata: w_rdata_bank0,
+    );
+    inst mem_bank1: Ram32bit_1rw #(
+        AddrType: ArrayAddr,
+    ) (
+        i_clk: i_clk,
+        i_rst: i_rst,
+
+        i_addr : w_addr_bank1 ,
+        i_we   : i_we         ,
+        i_wstrb: w_wmask_bank1,
+        i_wdata: w_wdata_bank1,
+        o_rdata: w_rdata_bank1,
     );
 }

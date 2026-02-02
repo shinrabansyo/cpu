@@ -1,0 +1,35 @@
+module Ram32bit_1rw #(
+    param AddrType: type = logic<10>,
+) (
+    i_clk: input clock,
+    i_rst: input reset,
+
+    i_addr : input  AddrType    ,
+    i_we   : input  logic       ,
+    i_wstrb: input  logic   <4> ,
+    i_wdata: input  logic   <32>,
+    o_rdata: output logic   <32>,
+) {
+    var r_data     : logic<32> [1 << $bits(AddrType)];
+    var r_read_data: logic<32>                       ;
+    var w_data     : logic<32>                       ;
+    var w_mask     : logic<32>                       ;
+
+    always_comb {
+        w_mask  = {i_wstrb[3] repeat 8, i_wstrb[2] repeat 8, i_wstrb[1] repeat 8, i_wstrb[0] repeat 8};
+        w_data  = r_data[i_addr] & ~w_mask | i_wdata & w_mask;
+        o_rdata = r_read_data;
+    }
+
+    #[allow(missing_reset_statement)]
+    always_ff (i_clk, i_rst) {
+        if_reset {
+            r_read_data = 0;
+        } else {
+            if (i_we) {
+                r_data[i_addr] = w_data;
+            }
+            r_read_data = r_data[i_addr];
+        }
+    }
+}

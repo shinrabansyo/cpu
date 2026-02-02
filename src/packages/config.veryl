@@ -1,7 +1,9 @@
 package Config {
-    const ADDR_WIDTH: u32               = 32;
-    type Addr       = logic<ADDR_WIDTH>;
-    type Inst       = logic<48>        ;
+    const ADDR_WIDTH: u32                    = 32;
+    type Addr       = logic<ADDR_WIDTH>     ;
+    type Inst       = logic<48>             ;
+    type Data       = logic<32>             ;
+    type DoubleData = logic<$bits(Data) * 2>;
 
     // キャッシュの設定
     const LINE_SIZE_BYTES: u32                            = 32;

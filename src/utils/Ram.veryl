@@ -5,10 +5,11 @@ module Ram #(
     i_clk: input clock,
     i_rst: input reset,
 
-    i_addr: input  AddrType,
-    i_we  : input  logic   ,
-    i_data: input  DataType,
-    o_data: output DataType,
+    i_addr : input  AddrType                           ,
+    i_we   : input  logic                              ,
+    i_wstrb: input  logic   <($bits(DataType) + 7) / 8>,
+    i_data : input  DataType                           ,
+    o_data : output DataType                           ,
 ) {
     var r_data     : DataType [1 << $bits(AddrType)];
     var r_read_data: DataType                       ;

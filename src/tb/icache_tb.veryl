@@ -29,6 +29,7 @@ embed (inline) sv{{{
         \{ ICacheSplitAccessWrapper \} icache(
             .i_clk,
             .i_rst,
+            .core_if_addr_valid (core_if.addr_valid),
             .core_if_addr (core_if.addr),
             .core_if_instr_valid (core_if.instr_valid),
             .core_if_instr (core_if.instr),
@@ -96,6 +97,7 @@ embed (inline) sv{{{
             i_clk = 0;
             i_rst = 1;
 
+            core_if.addr_valid = 0;
             core_if.addr = '0;
             mem_if.arready = 0;
             mem_if.rvalid = 0;
@@ -111,6 +113,7 @@ embed (inline) sv{{{
             $display("reset done");
 
             i_rst = 0;
+            core_if.addr_valid = 1;
             core_if.addr = '0; // miss アクセス
             next_cycle();
             core_if.addr = 4; // hit するアクセス
