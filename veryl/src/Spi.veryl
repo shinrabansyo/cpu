@@ -63,7 +63,7 @@ module Spi #(
         } else if r_busy {
             if r_sclk_counter == 0 {
                 r_is_first_sclk = 0;
-                r_sclk_counter  = (1 >> r_clkshamt) - 1;
+                r_sclk_counter  = (1 << r_clkshamt) - 1;
                 if !(r_bit_counter == 1 && r_sclk == r_cpol && r_cpha) {
                     r_sclk = ~r_sclk;
                 }
