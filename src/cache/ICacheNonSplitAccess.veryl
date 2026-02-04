@@ -24,12 +24,12 @@ pub module ICacheNonSplitAccess (
     const BEAT_MAX          : u32 = $bits(Line) / $bits(Data);
     const BEAT_COUNTER_WIDTH: u32 = $clog2(BEAT_MAX);
 
-    var r_addr_valid: logic;
-    var r_addr      : Addr ;
+    var r_valid       : logic                    ;
+    var r_addr        : Addr                     ;
     var r_state       : State                    ;
     var r_beat_counter: logic<BEAT_COUNTER_WIDTH>;
     var w_miss        : logic                    ;
-    var w_stall     : logic;
+    var w_stall       : logic                    ;
 
     var w_ta_set   : ICacheSet;
     var w_ta_tag   : ICacheTag;
@@ -67,11 +67,11 @@ pub module ICacheNonSplitAccess (
     );
 
     always_comb {
-        w_miss  = r_addr_valid && !w_ta_hit;
+        w_miss  = r_valid && !w_ta_hit;
         w_stall = w_miss | r_state != State::IDLE;
 
-        core_if.instr_valid = !w_stall && r_addr_valid;
-        core_if.instr       = w_da_rdata[0+:48];
+        core_if.ready = !w_stall && r_valid;
+        core_if.instr = w_da_rdata[0+:48];
 
         w_ta_set         = GetICacheSet(core_if.addr);
         w_ta_tag         = GetICacheTag(core_if.addr);
@@ -99,9 +99,9 @@ pub module ICacheNonSplitAccess (
                 }
             }
             State::READ: {
-                w_ta_set = GetICacheSet(r_addr);
-                w_ta_tag = GetICacheTag(r_addr);
-                w_da_set = GetICacheSet(r_addr);
+                w_ta_set         = GetICacheSet(r_addr);
+                w_ta_tag         = GetICacheTag(r_addr);
+                w_da_set         = GetICacheSet(r_addr);
                 w_da_line_offset = GetLineOffset(r_addr);
             }
         }
@@ -110,11 +110,12 @@ pub module ICacheNonSplitAccess (
     always_ff (i_clk, i_rst) {
         if_reset {
             r_addr         = '0;
-            r_addr_valid   = 0;
+            r_valid        = 0;
             r_state        = State::IDLE;
             r_beat_counter = '0;
             mem_if.arvalid = 0;
             mem_if.araddr  = '0;
+            mem_if.arid    = 0;
             mem_if.arsize  = 2;
             // mem_if.arlen   = (BEAT_MAX - 1) as axi_pkg::Len;
             mem_if.arlen   = '0;
@@ -122,8 +123,8 @@ pub module ICacheNonSplitAccess (
             mem_if.rready  = 0;
         } else {
             if !w_stall {
-                r_addr       = core_if.addr;
-                r_addr_valid = core_if.addr_valid;
+                r_addr  = core_if.addr;
+                r_valid = core_if.valid;
             }
             case (r_state) {
                 State::IDLE: {

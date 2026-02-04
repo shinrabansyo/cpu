@@ -1,16 +1,16 @@
 interface core_icache_if {
     import Config::*;
 
-    var addr_valid : logic;
-    var addr       : Addr ;
-    var instr      : Inst ;
-    var instr_valid: logic;
+    var valid: logic;
+    var addr : Addr ;
+    var instr: Inst ;
+    var ready: logic;
 
     modport core {
-        addr_valid : output,
-        addr       : output,
-        instr      : input ,
-        instr_valid: input ,
+        valid: output,
+        addr : output,
+        instr: input ,
+        ready: input ,
     }
 
     modport icache {

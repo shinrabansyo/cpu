@@ -3,10 +3,10 @@ module ICacheSplitAccessWrapper (
     i_rst: input reset,
 
     // read request
-    core_if_addr_valid : input  logic,
-    core_if_addr       : input  Addr ,
-    core_if_instr_valid: output logic,
-    core_if_instr      : output Inst ,
+    core_if_valid: input  logic,
+    core_if_addr : input  Addr ,
+    core_if_ready: output logic,
+    core_if_instr: output Inst ,
 
     // memory interface
     mem_if_arvalid: output logic,
@@ -31,10 +31,10 @@ module ICacheSplitAccessWrapper (
     inst mem_if : axi_read_if;
 
     always_comb {
-        core_if.addr_valid  = core_if_addr_valid;
-        core_if.addr        = core_if_addr;
-        core_if_instr       = core_if.instr;
-        core_if_instr_valid = core_if.instr_valid;
+        core_if.valid = core_if_valid;
+        core_if.addr  = core_if_addr;
+        core_if_instr = core_if.instr;
+        core_if_ready = core_if.ready;
 
         mem_if.arready = mem_if_arready;
         mem_if_arvalid = mem_if.arvalid;

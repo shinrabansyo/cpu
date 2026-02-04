@@ -6,7 +6,7 @@ module Core (
     i_rst: input reset,
 
     // Instruction Memory
-    imem_read_if : modport axi_read_if::master ,
+    imem_read_if: modport axi_read_if::master,
     // imem_write_if: modport axi_write_if::master,
 
     // Data Memory
@@ -34,12 +34,30 @@ module Core (
     o_data   : output 'dvi logic<24>,
 ) {
     import Config::*;
-    // ワイヤ・インタフェース宣言
+    // ワイヤ・インタフェース宣言 ===============================
     // IOBus
     var i_dev_id: logic<32>;
 
     inst if_io_bus_din : Decoupled #( Width: 32 );
     inst if_io_bus_dout: Decoupled #( Width: 32 );
+
+    // デコーダ
+    struct Instructure {
+        opcode    : logic<5> ,
+        opcode_sub: logic<3> ,
+        rd        : logic<5> ,
+        rs1       : logic<5> ,
+        rs1_i     : logic<5> ,
+        rs1_s     : logic<5> ,
+        rs2       : logic<5> ,
+        rs2_s     : logic<5> ,
+        imm       : logic<32>,
+        imm_b     : logic<25>,
+        imm_b_sext: logic<32>,
+    }
+
+    var w_instr: Instructure;
+
 
     // ALU
     var w_command: logic<8> ;
@@ -80,9 +98,9 @@ module Core (
     var w_instr_raw  : logic<48>;
 
     /* verilator lint_off UNSIGNED */
-    let w_is_pc_iram  : logic<1> = w_pc_fetching >= IRAM_BASE && w_pc_fetching <: IRAM_BASE + IRAM_SIZE;
-    let w_is_wout_iram: logic<1> = w_out >= IRAM_BASE && w_out <: IRAM_BASE + IRAM_SIZE;
-    let w_is_pc_irom  : logic<1> = w_pc_fetching >= IROM_BASE;
+    let _w_is_pc_iram  : logic<1> = w_pc_fetching >= IRAM_BASE && w_pc_fetching <: IRAM_BASE + IRAM_SIZE;
+    let _w_is_wout_iram: logic<1> = w_out >= IRAM_BASE && w_out <: IRAM_BASE + IRAM_SIZE;
+    let _w_is_pc_irom  : logic<1> = w_pc_fetching >= IROM_BASE;
     /* verilator lint_on UNSIGNED */
 
     var w_is_dmem  : logic<1> ;
@@ -106,14 +124,6 @@ module Core (
         core_if: icache_if   ,
         mem_if : imem_read_if,
     );
-    always_comb {
-        icache_if.addr = w_pc_fetching;
-        if icache_if.instr_valid {
-            w_instr_raw = icache_if.instr;
-        } else {
-            w_instr_raw = '0;
-        }
-    }
 
     inst m_data_mod: DMemSync #(
         WORD_SIZE: 4096,
@@ -134,6 +144,27 @@ module Core (
     var r_first_fetch : logic<1>;
     var r_load_ready  : logic<1>;
     var w_branch_taken: logic<1>;
+
+    // ====================== ワイヤ・インタフェース宣言 ここまで
+
+    // 実装 =====================================================
+
+    // 命令フェッチ ------
+    always_comb {
+        icache_if.addr = w_pc_fetching;
+        if icache_if.ready {
+            w_instr_raw = icache_if.instr;
+        } else {
+            w_instr_raw = '0;
+        }
+    }
+    always_ff (i_clk, i_rst) {
+        if_reset {
+            icache_if.valid = 0;
+        } else {
+            icache_if.valid = 1;
+        }
+    }
 
     // プログラムカウンタ
     always_comb {
@@ -156,30 +187,14 @@ module Core (
             r_first_fetch = 1'b1;
             r_pc_fetched  = IROM_BASE;
         } else {
-            if icache_if.instr_valid || r_first_fetch {
+            if icache_if.ready || r_first_fetch {
                 r_first_fetch = 1'b0;
                 r_pc_fetched  = w_pc_fetching;
             }
         }
     }
 
-    // 命令デコード
-    struct Instructure {
-        opcode    : logic<5> ,
-        opcode_sub: logic<3> ,
-        rd        : logic<5> ,
-        rs1       : logic<5> ,
-        rs1_i     : logic<5> ,
-        rs1_s     : logic<5> ,
-        rs2       : logic<5> ,
-        rs2_s     : logic<5> ,
-        imm       : logic<32>,
-        imm_b     : logic<25>,
-        imm_b_sext: logic<32>,
-    }
-
-    var w_instr: Instructure;
-
+    // 命令デコード -------
     assign w_instr.opcode     = w_instr_raw[4:0];
     assign w_instr.opcode_sub = w_instr_raw[7:5];
     assign w_instr.rd         = w_instr_raw[12:8];
@@ -192,7 +207,7 @@ module Core (
     assign w_instr.imm_b      = w_instr_raw[47:23];
     assign w_instr.imm_b_sext = {w_instr_raw[47] repeat 7, w_instr_raw[47:23]};
 
-    // 命令実行
+    // OpCode の定義
     const NOP : logic<8> = (8'h0 << 5) | 8'h0;
     const ADD : logic<8> = (8'h1 << 5) | 8'h1;
     const SUB : logic<8> = (8'h2 << 5) | 8'h1;
@@ -301,6 +316,8 @@ module Core (
         SLLI   : 8'h8,
         default: 8'h0,
     };
+
+    // 実行 --------
     assign w_a = case inst_kind {
         InstKind::R: m_regfile[w_instr.rs1],
         InstKind::I: m_regfile[w_instr.rs1_i],
@@ -324,6 +341,7 @@ module Core (
         o_out    : w_out    ,
     );
 
+    // メモリアクセス --------
     always_comb {
         // メモリに書き込むデータを選択
         case {w_instr.opcode_sub, w_instr.opcode} {
@@ -361,7 +379,7 @@ module Core (
         }
     }
 
-    // デバイス読み書き
+    // デバイスアクセス --------
     always_comb {
         i_dev_id = w_out;
 
@@ -383,6 +401,7 @@ module Core (
         };
     }
 
+    // ライトバック --------
     // レジスタアクセス
     always_ff (i_clk, i_rst) {
         if_reset {

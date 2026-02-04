@@ -47,9 +47,10 @@ module TagArray (
         i_clk: i_clk,
         i_rst: i_rst,
 
-        i_addr: w_set       ,
-        i_we  : i_we        ,
-        i_data: w_write_meta,
-        o_data: w_read_meta ,
+        i_addr : w_set       ,
+        i_we   : i_we        ,
+        i_wstrb: '1          ,
+        i_data : w_write_meta,
+        o_data : w_read_meta ,
     );
 }

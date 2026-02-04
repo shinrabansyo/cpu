@@ -29,9 +29,9 @@ embed (inline) sv{{{
         \{ ICacheSplitAccessWrapper \} icache(
             .i_clk,
             .i_rst,
-            .core_if_addr_valid (core_if.addr_valid),
+            .core_if_valid (core_if.valid),
             .core_if_addr (core_if.addr),
-            .core_if_instr_valid (core_if.instr_valid),
+            .core_if_ready (core_if.ready),
             .core_if_instr (core_if.instr),
             .mem_if_arvalid  (mem_if.arvalid),
             .mem_if_arready  (mem_if.arready),
@@ -97,7 +97,7 @@ embed (inline) sv{{{
             i_clk = 0;
             i_rst = 1;
 
-            core_if.addr_valid = 0;
+            core_if.valid = 0;
             core_if.addr = '0;
             mem_if.arready = 0;
             mem_if.rvalid = 0;
@@ -113,23 +113,23 @@ embed (inline) sv{{{
             $display("reset done");
 
             i_rst = 0;
-            core_if.addr_valid = 1;
+            core_if.valid = 1;
             core_if.addr = '0; // miss アクセス
             next_cycle();
             core_if.addr = 4; // hit するアクセス
-            while (!core_if.instr_valid) next_cycle();
+            while (!core_if.ready) next_cycle();
             assert(core_if.instr == {16'hbe00 + 16'h1, 32'hdeadbe00 + 32'h0}) else $error("Instruction0 mismatch!: %h", core_if.instr);
             next_cycle();
 
             core_if.addr = LINE_SIZE_BYTES - 4; // cross boundary なアクセス
-            assert(core_if.instr_valid) else $error("Instruction not valid!");
+            assert(core_if.ready) else $error("Instruction not valid!");
             assert(core_if.instr == {16'hbe00 + 16'h2, 32'hdeadbe00 + 32'h1}) else $error("Instruction1 mismatch!: %h", core_if.instr);
             next_cycle();
 
             // 1ライン目は hit
             next_cycle();
             // 2ライン目を返す
-            while (!core_if.instr_valid) next_cycle();
+            while (!core_if.ready) next_cycle();
             assert(core_if.instr == {16'hbe00 + 16'h8, 32'hdeadbe00 + 32'h7}) else $error("Instruction2 mismatch!: %h", core_if.instr);
 
             next_cycle();

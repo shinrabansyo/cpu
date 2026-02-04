@@ -1,0 +1,25 @@
+interface core_dcache_if {
+    import Config::*;
+
+    var addr_valid: logic        ;
+    var addr      : Addr         ;
+    var wen       : logic        ;
+    var wdata     : logic<32>    ;
+    var wstrb     : logic<32 / 8>;
+    var rdata     : logic<32>    ;
+    var ready     : logic        ;
+
+    modport core {
+        addr_valid: output,
+        addr      : output,
+        wen       : output,
+        wdata     : output,
+        wstrb     : output,
+        rdata     : input ,
+        ready     : input ,
+    }
+
+    modport dcache {
+        ..converse(core)
+    }
+}

@@ -22,17 +22,17 @@ module DataArray (
 
     type ArrayAddr = logic<$bits(ICacheSet) + $bits(LineOffset)>;
 
-    var w_addr       : ArrayAddr   ;
-    var w_addr_bank0 : ArrayAddr   ;
-    var w_addr_bank1 : ArrayAddr   ;
-    var w_rdata_bank0: Data        ;
-    var w_rdata_bank1: Data        ;
-    var w_wmask      : logic    <8>;
-    var w_wmask_bank0: logic    <4>;
-    var w_wmask_bank1: logic    <4>;
-    var w_wdata : DoubleData   ;
-    var w_wdata_bank0: Data        ;
-    var w_wdata_bank1: Data        ;
+    var w_addr       : ArrayAddr    ;
+    var w_addr_bank0 : ArrayAddr    ;
+    var w_addr_bank1 : ArrayAddr    ;
+    var w_rdata_bank0: Data         ;
+    var w_rdata_bank1: Data         ;
+    var w_wmask      : logic     <8>;
+    var w_wmask_bank0: logic     <4>;
+    var w_wmask_bank1: logic     <4>;
+    var w_wdata      : DoubleData   ;
+    var w_wdata_bank0: Data         ;
+    var w_wdata_bank1: Data         ;
 
     var r_addr    : ArrayAddr ;
     var w_out_data: DoubleData;

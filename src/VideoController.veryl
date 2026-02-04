@@ -75,134 +75,37 @@ module VideoControllerColTable #(
     o_data   : output 'dvi logic<24>,
 
 ) {
-    // CPU -> (this module)
-    // カラーテーブルの設定
+    // 変数・モジュール宣言 ==================================
+
+    // カラーテーブル関連
     var r_col_table          : logic<24>                [NUM_TABLE];
     let w_col_table_din_adr  : logic<$clog2(NUM_TABLE)>             = if_col_table_din.bits[24+:$clog2(NUM_TABLE)];
     let w_col_table_din_color: logic<24>                            = if_col_table_din.bits[0+:24];
 
     var r_col_table_din_set_ready: logic;
-    assign if_col_table_din.ready    = r_col_table_din_set_ready;
 
-    always_ff (i_clk, i_rst) {
-        if_reset {
-            r_col_table[0] = 24'h0000FF;
-            r_col_table[1] = 24'h00FF00;
-            r_col_table[2] = 24'hFF0000;
-            for table_id: u32 in 3..NUM_TABLE {
-                r_col_table[table_id] = 24'h000000;
-            }
-            r_col_table_din_set_ready = 1'b0;
-        } else {
-            if if_col_table_din.valid {
-                r_col_table[w_col_table_din_adr] = w_col_table_din_color;
-            }
-
-            if if_col_table_din.valid && !r_col_table_din_set_ready {
-                r_col_table_din_set_ready = 1'b1;
-            } else {
-                r_col_table_din_set_ready = 1'b0;
-            }
-        }
-    }
-
-    // VRAM -> (this module) -> CPU
-    // VRAM 読み出し
-    // var r_vram_read_valid: logic   ;
-    // var w_vram_read_data : logic<8>;
-
-    inst vram_sync: VramSync #(
-        OUT_MODE: 2     ,
-        WIDTH   : WIDTH ,
-        HEIGHT  : HEIGHT,
-    ) (
-        i_clk : i_clk                                ,
-        i_rst : i_rst                                ,
-        i_clr : 0                                    ,
-        i_mea : if_vdata_in.valid                    ,
-        i_wea : if_vdata_in.valid                    ,
-        i_adra: i_vdata_adr[VRAM_ADDRESS_WIDTH - 2:0],
-        i_da  : if_vdata_in.bits[7:0]                ,
-        // i_meb      : 1                    ,
-        // i_adrb     : i_vdata_adr          ,
-        // o_qb       : w_vram_read_data     ,
-        i_clk_video: i_clk_dvi                           ,
-        i_rst_video: i_rst_dvi                           ,
-        i_mev      : 1                                   ,
-        i_adrv     : w_draw_adr[VRAM_ADDRESS_WIDTH - 2:0],
-        o_qv       : w_draw_data                         ,
-    );
-
-    // if_vdata_out に信号が入力されてから valid が立つまで 1 クロック
-    // i_vdata_adr  に信号が入力されてから o_qb にデータが出るまで 1 クロック
-    // -> valid が立つタイミングと有効なデータが出るタイミングは一致
-    // assign if_vdata_out.bits = w_vram_read_data as 32;
-
-    // always_ff (i_clk, i_rst) {
-    //     if_reset {
-    //         r_vram_read_valid = 1'b0;
-    //     } else {
-    //         if if_vdata_out.ready && !r_vram_read_valid {
-    //             r_vram_read_valid = 1'b1;
-    //         } else {
-    //             r_vram_read_valid = 1'b0;
-    //         }
-    //     }
-    // }
-
-    // CPU -> (this module) -> VRAM
-    // VRAM 書き込み
-    var r_vram_write_ready: logic;
-    assign if_vdata_in.ready  = r_vram_write_ready;
-
-    always_ff (i_clk, i_rst) {
-        if_reset {
-            r_vram_write_ready = 1'b0;
-        } else {
-            if if_vdata_in.valid && !r_vram_write_ready {
-                r_vram_write_ready = 1'b1;
-            } else {
-                r_vram_write_ready = 1'b0;
-            }
-        }
-    }
-
-
-
-    // VRAM -> (this module) -> GOWIN DVI TX IP
+    // DVI 関連信号
     var r_vsync: 'dvi logic<1> ;
     var r_hsync: 'dvi logic<1> ;
     var r_de   : 'dvi logic<1> ;
     var r_data : 'dvi logic<24>;
 
-    let w_pre_pre_pixel_counter: 'dvi logic<$clog2(CONFIG.H_TOTAL)> = if r_pixel_counter as 32 + 1 == CONFIG.H_TOTAL - 1 ?
-        0
-    : if r_pixel_counter as 32 == CONFIG.H_TOTAL - 1 ?
-        1
-    :
-        r_pixel_counter + 2
-    ;
-    let w_pre_pixel_counter: 'dvi logic<$clog2(CONFIG.H_TOTAL)> = if r_pixel_counter as 32 == CONFIG.H_TOTAL - 1 ? 0 : r_pixel_counter + 1;
-    var r_pixel_counter    : 'dvi logic<$clog2(CONFIG.H_TOTAL)>;
-    var r_line_counter     : 'dvi logic<$clog2(CONFIG.V_TOTAL)>;
+    var w_pre_pre_pixel_counter: 'dvi logic<$clog2(CONFIG.H_TOTAL)>;
+    var w_pre_pixel_counter    : 'dvi logic<$clog2(CONFIG.H_TOTAL)>;
+    var r_pixel_counter        : 'dvi logic<$clog2(CONFIG.H_TOTAL)>;
+    var r_line_counter         : 'dvi logic<$clog2(CONFIG.V_TOTAL)>;
 
     var r_red  : 'dvi logic<8>;
     var r_green: 'dvi logic<8>;
     var r_blue : 'dvi logic<8>;
-    assign o_data  = {r_red, r_green, r_blue};
 
-    // let w_pixel_adr_flatten : `dvi logic<$clog2(CONFIG.H_ACTIVE * CONFIG.V_ACTIVE)> = YPos(r_line_counter) * CONFIG.H_ACTIVE + XPos(r_pixel_counter);
-    let w_inv_zoom                 : 'dvi logic<VRAM_ADDRESS_WIDTH + 1> = InvZoom(XPos(w_pre_pixel_counter), YPos(r_line_counter));
-    let w_inv_zoom_reading         : 'dvi logic<VRAM_ADDRESS_WIDTH + 1> = InvZoom(XPos(w_pre_pre_pixel_counter), YPos(r_line_counter));
-    let w_pixel_adr_flatten_reading: 'dvi logic<VRAM_ADDRESS_WIDTH>     = w_inv_zoom_reading[VRAM_ADDRESS_WIDTH - 1:0];
-    let w_pixel_adr_flatten        : 'dvi logic<VRAM_ADDRESS_WIDTH>     = w_inv_zoom[VRAM_ADDRESS_WIDTH - 1:0];
-    let w_draw_adr                 : 'dvi logic<VRAM_ADDRESS_WIDTH>     = w_pixel_adr_flatten_reading >> 1;
+    var w_inv_zoom                 : 'dvi logic<VRAM_ADDRESS_WIDTH + 1>;
+    var w_inv_zoom_reading         : 'dvi logic<VRAM_ADDRESS_WIDTH + 1>;
+    var w_pixel_adr_flatten_reading: 'dvi logic<VRAM_ADDRESS_WIDTH>    ;
+    var w_pixel_adr_flatten        : 'dvi logic<VRAM_ADDRESS_WIDTH>    ;
+    var w_draw_adr                 : 'dvi logic<VRAM_ADDRESS_WIDTH>    ;
     var w_draw_data                : 'dvi logic<8>                     ;
-    let w_draw_col_table_adr       : 'dvi logic<TABLE_BITS>             = if w_pixel_adr_flatten[0] ? (w_draw_data >> 4) as TABLE_BITS : w_draw_data as TABLE_BITS; // pixel の番地が奇数のとき、上位 4bit を使う
-
-    // (x, y) = (3, 0) pixel を指していた場合
-    // vram上では vram[1] の上位 4bit が (3, 0) に対応
-    // xxxx ????
+    var w_draw_col_table_adr       : 'dvi logic<TABLE_BITS>            ;
 
     const H_LBORDER_START     : u32 = CONFIG.H_SYNC + CONFIG.H_BACK_PORCH;
     const H_ACTIVE_VIDEO_START: u32 = H_LBORDER_START + CONFIG.H_LBORDER;
@@ -258,6 +161,122 @@ module VideoControllerColTable #(
     var w_draw_red  : 'dvi logic<8>;
     var w_draw_green: 'dvi logic<8>;
     var w_draw_blue : 'dvi logic<8>;
+
+    // VRAM 関連
+    // var r_vram_read_valid: logic   ;
+    // var w_vram_read_data : logic<8>;
+    inst vram_sync: VramSync #(
+        OUT_MODE: 2     ,
+        WIDTH   : WIDTH ,
+        HEIGHT  : HEIGHT,
+    ) (
+        i_clk : i_clk                                ,
+        i_rst : i_rst                                ,
+        i_clr : 0                                    ,
+        i_mea : if_vdata_in.valid                    ,
+        i_wea : if_vdata_in.valid                    ,
+        i_adra: i_vdata_adr[VRAM_ADDRESS_WIDTH - 2:0],
+        i_da  : if_vdata_in.bits[7:0]                ,
+        // i_meb      : 1                    ,
+        // i_adrb     : i_vdata_adr          ,
+        // o_qb       : w_vram_read_data     ,
+        i_clk_video: i_clk_dvi                           ,
+        i_rst_video: i_rst_dvi                           ,
+        i_mev      : 1                                   ,
+        i_adrv     : w_draw_adr[VRAM_ADDRESS_WIDTH - 2:0],
+        o_qv       : w_draw_data                         ,
+    );
+
+    var r_vram_write_ready: logic;
+
+
+    // ========================= 変数・モジュール宣言 ここまで
+    // CPU -> (this module)
+    // カラーテーブルの設定
+    assign if_col_table_din.ready = r_col_table_din_set_ready;
+
+    always_ff (i_clk, i_rst) {
+        if_reset {
+            r_col_table[0] = 24'h0000FF;
+            r_col_table[1] = 24'h00FF00;
+            r_col_table[2] = 24'hFF0000;
+            for table_id: u32 in 3..NUM_TABLE {
+                r_col_table[table_id] = 24'h000000;
+            }
+            r_col_table_din_set_ready = 1'b0;
+        } else {
+            if if_col_table_din.valid {
+                r_col_table[w_col_table_din_adr] = w_col_table_din_color;
+            }
+
+            if if_col_table_din.valid && !r_col_table_din_set_ready {
+                r_col_table_din_set_ready = 1'b1;
+            } else {
+                r_col_table_din_set_ready = 1'b0;
+            }
+        }
+    }
+
+    // VRAM -> (this module) -> CPU
+    // VRAM 読み出し
+    // if_vdata_out に信号が入力されてから valid が立つまで 1 クロック
+    // i_vdata_adr  に信号が入力されてから o_qb にデータが出るまで 1 クロック
+    // -> valid が立つタイミングと有効なデータが出るタイミングは一致
+    // assign if_vdata_out.bits = w_vram_read_data as 32;
+
+    // always_ff (i_clk, i_rst) {
+    //     if_reset {
+    //         r_vram_read_valid = 1'b0;
+    //     } else {
+    //         if if_vdata_out.ready && !r_vram_read_valid {
+    //             r_vram_read_valid = 1'b1;
+    //         } else {
+    //             r_vram_read_valid = 1'b0;
+    //         }
+    //     }
+    // }
+
+    // CPU -> (this module) -> VRAM
+    // VRAM 書き込み
+    assign if_vdata_in.ready = r_vram_write_ready;
+
+    always_ff (i_clk, i_rst) {
+        if_reset {
+            r_vram_write_ready = 1'b0;
+        } else {
+            if if_vdata_in.valid && !r_vram_write_ready {
+                r_vram_write_ready = 1'b1;
+            } else {
+                r_vram_write_ready = 1'b0;
+            }
+        }
+    }
+
+
+
+    // VRAM -> (this module) -> GOWIN DVI TX IP
+    assign w_pre_pre_pixel_counter = if r_pixel_counter as 32 + 1 == CONFIG.H_TOTAL - 1 ?
+        0
+    : if r_pixel_counter as 32 == CONFIG.H_TOTAL - 1 ?
+        1
+    :
+        r_pixel_counter + 2
+    ;
+    assign w_pre_pixel_counter = if r_pixel_counter as 32 == CONFIG.H_TOTAL - 1 ? 0 : r_pixel_counter + 1;
+
+    assign o_data = {r_red, r_green, r_blue};
+
+    // let w_pixel_adr_flatten : `dvi logic<$clog2(CONFIG.H_ACTIVE * CONFIG.V_ACTIVE)> = YPos(r_line_counter) * CONFIG.H_ACTIVE + XPos(r_pixel_counter);
+    assign w_inv_zoom                  = InvZoom(XPos(w_pre_pixel_counter), YPos(r_line_counter));
+    assign w_inv_zoom_reading          = InvZoom(XPos(w_pre_pre_pixel_counter), YPos(r_line_counter));
+    assign w_pixel_adr_flatten_reading = w_inv_zoom_reading[VRAM_ADDRESS_WIDTH - 1:0];
+    assign w_pixel_adr_flatten         = w_inv_zoom[VRAM_ADDRESS_WIDTH - 1:0];
+    assign w_draw_adr                  = w_pixel_adr_flatten_reading >> 1;
+    assign w_draw_col_table_adr        = if w_pixel_adr_flatten[0] ? (w_draw_data >> 4) as TABLE_BITS : w_draw_data as TABLE_BITS; // pixel の番地が奇数のとき、上位 4bit を使う
+
+    // (x, y) = (3, 0) pixel を指していた場合
+    // vram上では vram[1] の上位 4bit が (3, 0) に対応
+    // xxxx ????
 
     unsafe (cdc) {
         assign {w_draw_red, w_draw_green, w_draw_blue} = r_col_table[w_draw_col_table_adr];
