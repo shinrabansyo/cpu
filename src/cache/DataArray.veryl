@@ -5,11 +5,15 @@
 // 6byte access 時は、2byte align でアクセスされる想定
 // 8byte access 時は、(最低でも)4byte align でアクセスされる想定
 // (8byte access するのはキャッシュコントローラのみなので、実際には8byte align でアクセスされる)
-module DataArray (
+module DataArray #(
+    // param type を使うと verilator のバグを踏み抜いたので
+    // 普通の param で回避
+    param SET_WIDTH: u32 = $bits(ICacheSet),
+)(
     i_clk: input clock,
     i_rst: input reset,
 
-    i_set        : input  ICacheSet    ,
+    i_set        : input  logic<SET_WIDTH>    ,
     i_line_offset: input  LineOffset   ,
     i_we         : input  logic        ,
     i_wdata      : input  DoubleData   ,
@@ -20,7 +24,7 @@ module DataArray (
     // bank 0: 0->(0-3), 1->(8-11) byte
     // bank 1: 0->(4-7), 1->(12-15) byte
 
-    type ArrayAddr = logic<$bits(ICacheSet) + $bits(LineOffset)>;
+    type ArrayAddr = logic<SET_WIDTH + LINE_OFFSET_WIDTH>;
 
     var w_addr       : ArrayAddr    ;
     var w_addr_bank0 : ArrayAddr    ;

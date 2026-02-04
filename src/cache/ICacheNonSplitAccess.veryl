@@ -54,7 +54,11 @@ pub module ICacheNonSplitAccess (
         i_wvalid: w_ta_wvalid, // キャッシュの flush 時はこのポートを使って invalidate する
         o_hit   : w_ta_hit   ,
     );
-    inst data_array: DataArray (
+    // SET_WIDTH は default param で指定しているが、
+    // 明示的に指定しないと verilator のバグを踏み抜く
+    inst data_array: DataArray #(
+        SET_WIDTH: $bits(ICacheSet),
+    )(
         i_clk: i_clk,
         i_rst: i_rst,
 

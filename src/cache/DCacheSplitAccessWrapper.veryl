@@ -1,0 +1,99 @@
+module DCacheSplitAccessWrapper (
+    i_clk: input clock,
+    i_rst: input reset,
+
+    // read request
+    core_if_valid: input  logic,
+    core_if_addr : input  Addr ,
+    core_if_wen  : input  logic,
+    core_if_wdata: input  Data    ,
+    core_if_wstrb: input  logic<$bits(Data) / 8>,
+    core_if_rdata: output Data ,
+    core_if_ready: output logic,
+
+    // memory interface
+    mem_read_if_arvalid: output logic,
+    mem_read_if_arready: input  logic,
+    mem_read_if_araddr : output Addr ,
+    mem_read_if_arid   : output Id   ,
+    mem_read_if_arlen  : output Len  ,
+    mem_read_if_arsize : output Size ,
+    mem_read_if_arburst: output Burst,
+
+    mem_read_if_rvalid: input  logic    ,
+    mem_read_if_rready: output logic    ,
+    mem_read_if_rdata : input  logic<32>,
+    mem_read_if_rid   : input  Id       ,
+    mem_read_if_rresp : input  Resp     ,
+    mem_read_if_rlast : input  logic    ,
+
+    mem_write_if_awvalid: output logic,
+    mem_write_if_awready: input  logic,
+    mem_write_if_awaddr : output Addr ,
+    mem_write_if_awid   : output Id   ,
+    mem_write_if_awlen  : output Len  ,
+    mem_write_if_awsize : output Size ,
+    mem_write_if_awburst: output Burst,
+    mem_write_if_wvalid : output logic    ,
+    mem_write_if_wready : input  logic    ,
+    mem_write_if_wdata  : output logic<32>,
+    mem_write_if_wstrb  : output logic<32 / 8>,
+    mem_write_if_wlast  : output logic    ,
+) {
+    import Config::*;
+    import axi_pkg::*;
+
+    inst core_if: core_dcache_if;
+    inst mem_read_if : axi_read_if;
+    inst mem_write_if: axi_write_if;
+
+    always_comb {
+        core_if.valid = core_if_valid;
+        core_if.addr  = core_if_addr;
+        core_if.wen   = core_if_wen;
+        core_if.wdata = core_if_wdata;
+        core_if.wstrb = core_if_wstrb;
+        core_if_rdata = core_if.rdata;
+        core_if_ready = core_if.ready;
+
+        mem_read_if.arready = mem_read_if_arready;
+        mem_read_if_arvalid = mem_read_if.arvalid;
+        mem_read_if_araddr  = mem_read_if.araddr;
+        mem_read_if_arid    = mem_read_if.arid;
+        mem_read_if_arlen   = mem_read_if.arlen;
+        mem_read_if_arsize  = mem_read_if.arsize;
+        mem_read_if_arburst = mem_read_if.arburst;
+
+        mem_read_if.rvalid = mem_read_if_rvalid;
+        mem_read_if_rready = mem_read_if.rready;
+        mem_read_if.rdata  = mem_read_if_rdata;
+        mem_read_if.rid    = mem_read_if_rid;
+        mem_read_if.rresp  = mem_read_if_rresp;
+        mem_read_if.rlast  = mem_read_if_rlast;
+
+        mem_write_if.awready = mem_write_if_awready;
+        mem_write_if_awvalid = mem_write_if.awvalid;
+        mem_write_if_awaddr  = mem_write_if.awaddr;
+        mem_write_if_awid    = mem_write_if.awid;
+        mem_write_if_awlen   = mem_write_if.awlen;
+        mem_write_if_awsize  = mem_write_if.awsize;
+        mem_write_if_awburst = mem_write_if.awburst;
+        mem_write_if.wready  = mem_write_if_wready;
+        mem_write_if_wvalid  = mem_write_if.wvalid;
+        mem_write_if_wdata   = mem_write_if.wdata;
+        mem_write_if_wstrb   = mem_write_if.wstrb;
+        mem_write_if_wlast   = mem_write_if.wlast;
+    }
+
+    inst dcache_split_access: DCacheSplitAccess (
+        i_clk: i_clk,
+        i_rst: i_rst,
+
+        core_if: core_if,
+
+        mem_read_if: mem_read_if,
+        mem_write_if: mem_write_if
+    );
+
+}
+

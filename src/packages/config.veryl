@@ -6,9 +6,10 @@ package Config {
     type DoubleData = logic<$bits(Data) * 2>;
 
     // キャッシュの設定
-    const LINE_SIZE_BYTES: u32                            = 32;
-    type Line            = logic<LINE_SIZE_BYTES * 8>    ;
-    type LineOffset      = logic<$clog2(LINE_SIZE_BYTES)>;
+    const LINE_SIZE_BYTES  : u32                            = 32;
+    const LINE_OFFSET_WIDTH: u32                            = $clog2(LINE_SIZE_BYTES);
+    type Line              = logic<LINE_SIZE_BYTES * 8>    ;
+    type LineOffset        = logic<LINE_OFFSET_WIDTH>    ;
 
     function GetLineOffset (
         addr: input Addr,

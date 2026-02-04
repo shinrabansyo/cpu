@@ -1,0 +1,73 @@
+module DCacheTagArray (
+    i_clk: input clock,
+    i_rst: input reset,
+
+    i_set   : input  DCacheSet,
+    i_tag   : input  DCacheTag,
+    i_we    : input  logic    ,
+    i_wvalid: input  logic    ,
+    i_wdirty: input  logic    ,
+    o_hit   : output logic    ,
+    o_dirty : output logic    ,
+    o_valid : output logic    ,
+    o_tag   : output DCacheTag,
+) {
+    // 通常時は we = false でタグ読み出し。
+    // ミス時はコントローラが we = true にしてタグ書き込み
+    import Config::*;
+
+    var r_dirty_array: logic [1 << $bits(DCacheSet)];
+    var r_valid_array: logic [1 << $bits(DCacheSet)];
+
+    // cycle 0
+    var w_set      : DCacheSet;
+    var w_write_tag: DCacheTag;
+
+    // cycle 1
+    var w_read_tag  : DCacheTag;
+    var r_read_valid: logic    ;
+    var r_read_dirty: logic    ;
+    var r_tag       : DCacheTag;
+
+    always_comb {
+        w_set       = i_set;
+        w_write_tag = i_tag;
+
+        o_hit   = r_read_valid && (w_read_tag == r_tag);
+        o_dirty = r_read_dirty;
+        o_valid = r_read_valid;
+        o_tag   = w_read_tag;
+    }
+
+    #[allow(missing_reset_statement)]
+    always_ff (i_clk, i_rst) {
+        if_reset {
+            r_tag        = '0;
+            r_read_valid = 0;
+            r_read_dirty = 0;
+        } else {
+            r_tag        = i_tag;
+            r_read_valid = r_valid_array[w_set];
+            r_read_dirty = r_dirty_array[w_set];
+
+            if i_we {
+                r_valid_array[w_set] = i_wvalid;
+                r_dirty_array[w_set] = i_wdirty;
+            }
+        }
+    }
+
+    inst meta_array: Ram #(
+        DataType: DCacheTag,
+        AddrType: DCacheSet,
+    ) (
+        i_clk: i_clk,
+        i_rst: i_rst,
+
+        i_addr : w_set      ,
+        i_we   : i_we       ,
+        i_wstrb: '1         ,
+        i_data : w_write_tag,
+        o_data : w_read_tag ,
+    );
+}

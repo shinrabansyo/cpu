@@ -1,0 +1,284 @@
+/// 2ラインの境界をまたがるアクセスに非対応のキャッシュ
+/// ヒット時のレイテンシ 1 サイクル
+pub module DCacheNonSplitAccess (
+    i_clk: input clock,
+    i_rst: input reset,
+
+    // read request
+    core_if: modport core_dcache_if::dcache,
+
+    // memory interface
+    mem_read_if : modport axi_read_if::master ,
+    mem_write_if: modport axi_write_if::master,
+) {
+    import Config::*;
+
+    enum State {
+        IDLE,
+        FETCH,
+        WAIT,
+        WRITEBACK,
+    }
+
+    // メモリに対して 32bit ずつ、 $bits(Line)/32bit 回アクセスしてラインを取得する。
+    const BEAT_MAX          : u32 = $bits(Line) / $bits(Data);
+    const BEAT_COUNTER_WIDTH: u32 = $clog2(BEAT_MAX);
+
+    var r_valid         : logic                    ;
+    var r_wen           : logic                    ;
+    var r_wstrb         : logic<$bits(Data) / 8>   ;
+    var r_wdata         : Data                     ;
+    var r_addr          : Addr                     ;
+    var r_state         : State                    ;
+    var r_beat_counter  : logic<BEAT_COUNTER_WIDTH>;
+    var w_miss          : logic                    ;
+    var w_need_writeback: logic                    ;
+    var w_write_access  : logic                    ;
+    var w_stall         : logic                    ;
+
+    var w_ta_set     : DCacheSet;
+    var w_ta_tag     : DCacheTag;
+    var w_ta_we      : logic    ;
+    var w_ta_wvalid  : logic    ;
+    var w_ta_wdirty  : logic    ;
+    var w_ta_hit     : logic    ;
+    var w_ta_valid   : logic    ;
+    var w_ta_dirty   : logic    ;
+    var w_ta_read_tag: DCacheTag;
+
+    var w_da_set        : DCacheSet    ;
+    var w_da_line_offset: LineOffset   ;
+    var w_da_we         : logic        ;
+    var w_da_wmask      : logic     <8>;
+    var w_da_wdata      : DoubleData   ;
+    var w_da_rdata      : DoubleData   ;
+
+    inst tag_array: DCacheTagArray (
+        i_clk: i_clk,
+        i_rst: i_rst,
+
+        i_set   : w_ta_set     ,
+        i_tag   : w_ta_tag     ,
+        i_we    : w_ta_we      ,
+        i_wvalid: w_ta_wvalid  , // キャッシュの flush 時はこのポートを使って invalidate する
+        i_wdirty: w_ta_wdirty  ,
+        o_hit   : w_ta_hit     ,
+        o_dirty : w_ta_dirty   ,
+        o_valid : w_ta_valid   ,
+        o_tag   : w_ta_read_tag,
+    );
+    inst data_array: DataArray #(
+        SET_WIDTH: $bits(DCacheSet),
+    ) (
+        i_clk: i_clk,
+        i_rst: i_rst,
+
+        i_set        : w_da_set        ,
+        i_line_offset: w_da_line_offset,
+        i_we         : w_da_we         ,
+        i_wmask      : w_da_wmask      ,
+        i_wdata      : w_da_wdata      ,
+        o_rdata      : w_da_rdata      ,
+    );
+
+    // 誤検知により UNOPTFLAT が出るため、always_comb を分離して対処
+    always_comb {
+        w_miss           = r_valid && !w_ta_hit;
+        w_need_writeback = w_ta_valid && w_ta_dirty;
+        w_write_access   = r_valid && r_wen;
+        w_stall          = w_miss | r_state != State::IDLE | w_write_access;
+    }
+
+    always_comb {
+        core_if.ready = !w_stall && r_valid;
+        core_if.rdata = w_da_rdata[0+:32];
+
+        w_ta_set           = GetDCacheSet(core_if.addr);
+        w_ta_tag           = GetDCacheTag(core_if.addr);
+        w_ta_we            = 0;
+        w_ta_wvalid        = 0;
+        w_ta_wdirty        = 0;
+        w_da_set           = GetDCacheSet(core_if.addr);
+        w_da_line_offset   = GetLineOffset(core_if.addr);
+        w_da_we            = 0;
+        w_da_wmask         = 0;
+        w_da_wdata         = '0;
+        mem_write_if.wdata = '0;
+        case (r_state) {
+            State::IDLE: {
+                if w_miss && w_need_writeback {
+                    // writeback 必要
+                    w_da_set         = GetDCacheSet(r_addr);
+                    w_da_line_offset = 0;
+                    w_da_we          = 0;
+                } else if !w_miss && w_write_access {
+                    // write hit
+                    // data array に書き込み
+                    w_da_set         = GetDCacheSet(r_addr);
+                    w_da_line_offset = GetLineOffset(r_addr);
+                    w_da_we          = 1;
+                    w_da_wmask       = {4'b0, r_wstrb};
+                    w_da_wdata       = r_wdata as DoubleData;
+
+                    // dirty bit を立てる
+                    w_ta_set    = GetDCacheSet(r_addr);
+                    w_ta_tag    = GetDCacheTag(r_addr);
+                    w_ta_we     = 1;
+                    w_ta_wvalid = 1;
+                    w_ta_wdirty = 1;
+                }
+            }
+            State::FETCH: {
+                if mem_read_if.rvalid && mem_read_if.rready {
+                    w_da_set         = GetDCacheSet(r_addr);
+                    w_da_line_offset = r_beat_counter << 2;
+                    w_da_we          = 1;
+                    w_da_wmask       = 8'b1111;
+                    w_da_wdata       = mem_read_if.rdata as DoubleData;
+                    if mem_read_if.rlast {
+                        w_ta_set    = GetDCacheSet(r_addr);
+                        w_ta_tag    = GetDCacheTag(r_addr);
+                        w_ta_we     = 1;
+                        w_ta_wvalid = 1;
+                        if !w_write_access {
+                            // read miss
+                            w_ta_wdirty = 0;
+                        } else {
+                            // write miss
+                            w_ta_wdirty      = 1;
+                            w_da_set         = GetDCacheSet(r_addr);
+                            w_da_line_offset = GetLineOffset(r_addr);
+                            w_da_we          = 1;
+                            w_da_wmask       = {4'b0, r_wstrb};
+                            w_da_wdata       = r_wdata as DoubleData;
+                        }
+                    }
+                }
+            }
+            State::WRITEBACK: {
+                w_da_set = GetDCacheSet(r_addr);
+                if mem_write_if.wvalid && mem_write_if.wready {
+                    mem_write_if.wdata = w_da_rdata[0+:32];
+                    w_da_line_offset   = (r_beat_counter as LineOffset + 1) << 2;
+                } else {
+                    w_da_line_offset = r_beat_counter << 2;
+                }
+            }
+            State::WAIT: {
+                w_ta_set         = GetDCacheSet(r_addr);
+                w_ta_tag         = GetDCacheTag(r_addr);
+                w_da_set         = GetDCacheSet(r_addr);
+                w_da_line_offset = GetLineOffset(r_addr);
+            }
+        }
+    }
+
+    always_ff (i_clk, i_rst) {
+        if_reset {
+            r_addr               = '0;
+            r_valid              = 0;
+            r_wen                = 0;
+            r_wdata              = '0;
+            r_wstrb              = 0;
+            r_state              = State::IDLE;
+            r_beat_counter       = '0;
+            mem_read_if.arvalid  = 0;
+            mem_read_if.araddr   = '0;
+            mem_read_if.arid     = 0;
+            mem_read_if.arsize   = 2;
+            mem_read_if.arlen    = '0;
+            mem_read_if.arburst  = axi_pkg::Burst::INCR;
+            mem_read_if.rready   = 0;
+            mem_write_if.awvalid = 0;
+            mem_write_if.awaddr  = '0;
+            mem_write_if.awid    = 0;
+            mem_write_if.awsize  = 2;
+            mem_write_if.awlen   = '0;
+            mem_write_if.awburst = axi_pkg::Burst::INCR;
+            mem_write_if.wvalid  = 0;
+            mem_write_if.wstrb   = 0;
+            mem_write_if.wlast   = 0;
+        } else {
+            if !w_stall {
+                r_addr  = core_if.addr;
+                r_valid = core_if.valid;
+                r_wen   = core_if.wen;
+                r_wdata = core_if.wdata;
+                r_wstrb = core_if.wstrb;
+            }
+            case (r_state) {
+                State::IDLE: {
+                    if w_miss && !w_need_writeback {
+                        // miss & writeback 不要
+                        r_state = State::FETCH;
+
+                        mem_read_if.arvalid = 1;
+                        mem_read_if.araddr  = GetLineAddr(r_addr);
+                        mem_read_if.arsize  = 2;
+                        mem_read_if.arlen   = (BEAT_MAX - 1) as axi_pkg::Len;
+                        mem_read_if.arburst = axi_pkg::Burst::INCR;
+                        mem_read_if.rready  = 1;
+                        r_beat_counter      = '0;
+                    } else if w_miss && w_need_writeback {
+                        // miss & writeback 必要
+                        r_state = State::WRITEBACK;
+
+                        mem_write_if.awvalid = 1;
+                        mem_write_if.awaddr  = {w_ta_read_tag, GetDCacheSet(r_addr), '0 as LineOffset};
+                        mem_write_if.awsize  = 2;
+                        mem_write_if.awlen   = (BEAT_MAX - 1) as axi_pkg::Len;
+                        mem_write_if.awburst = axi_pkg::Burst::INCR;
+                        mem_write_if.wvalid  = 1;
+                        r_beat_counter       = '0;
+                    } else if r_valid && r_wen {
+                        // write hit
+                        // 書き込みのため、1サイクル待つ
+                        r_state = State::WAIT;
+                    }
+                }
+                State::FETCH: {
+                    if mem_read_if.arvalid && mem_read_if.arready {
+                        mem_read_if.arvalid = 0;
+                    }
+                    if mem_read_if.rvalid && mem_read_if.rready {
+                        r_beat_counter += 1;
+                    }
+                    if mem_read_if.rlast {
+                        mem_read_if.rready = 0;
+                        r_state            = State::WAIT;
+                    }
+                }
+                State::WRITEBACK: {
+                    if mem_write_if.wvalid && mem_write_if.wready {
+                        r_beat_counter += 1;
+                        // 次に送信するデータが最後の場合は wlast を立てる
+                        if r_beat_counter == (BEAT_MAX - 1) as BEAT_COUNTER_WIDTH {
+                            mem_write_if.wlast = 1;
+                        }
+                        // 最後のデータの送信が完了したら
+                        // 状態を FETCH に遷移させてラインの取得を開始する
+                        if mem_write_if.wlast {
+                            mem_write_if.wvalid = 0;
+                            mem_write_if.wlast  = 0;
+
+                            mem_read_if.arvalid = 1;
+                            mem_read_if.araddr  = GetLineAddr(r_addr);
+                            mem_read_if.arsize  = 2;
+                            mem_read_if.arlen   = (BEAT_MAX - 1) as axi_pkg::Len;
+                            mem_read_if.arburst = axi_pkg::Burst::INCR;
+                            mem_read_if.rready  = 1;
+                            r_beat_counter      = '0;
+                            r_state             = State::FETCH;
+                        }
+                    }
+                    if mem_write_if.awvalid && mem_write_if.awready {
+                        mem_write_if.awvalid = 0;
+                    }
+                }
+                State::WAIT: {
+                    r_state = State::IDLE;
+                }
+            }
+        }
+    }
+}
