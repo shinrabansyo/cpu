@@ -9,16 +9,16 @@ module DataArray #(
     // param type を使うと verilator のバグを踏み抜いたので
     // 普通の param で回避
     param SET_WIDTH: u32 = $bits(ICacheSet),
-)(
+) (
     i_clk: input clock,
     i_rst: input reset,
 
-    i_set        : input  logic<SET_WIDTH>    ,
-    i_line_offset: input  LineOffset   ,
-    i_we         : input  logic        ,
-    i_wdata      : input  DoubleData   ,
-    i_wmask      : input  logic     <8>,
-    o_rdata      : output DoubleData   ,
+    i_set        : input  logic     <SET_WIDTH>,
+    i_line_offset: input  LineOffset           ,
+    i_we         : input  logic                ,
+    i_wdata      : input  DoubleData           ,
+    i_wmask      : input  logic     <8>        ,
+    o_rdata      : output DoubleData           ,
 ) {
     import Config::*;
     // bank 0: 0->(0-3), 1->(8-11) byte
@@ -71,12 +71,12 @@ module DataArray #(
         // bank0: lower byte
         // bank1: upper byte
         if r_addr[2] == 1'b0 {
-            w_out_data = {w_rdata_bank1, w_rdata_bank0} >> r_addr[1:0];
+            w_out_data = {w_rdata_bank1, w_rdata_bank0} >> (r_addr[1:0] * 8);
         }
         // bank1: lower byte
         // bank0: upper byte
          else {
-            w_out_data = {w_rdata_bank0, w_rdata_bank1} >> r_addr[1:0];
+            w_out_data = {w_rdata_bank0, w_rdata_bank1} >> (r_addr[1:0] * 8);
         }
         o_rdata[0+:32]  = w_out_data[0+:32];
         o_rdata[32+:32] = w_out_data[32+:32];

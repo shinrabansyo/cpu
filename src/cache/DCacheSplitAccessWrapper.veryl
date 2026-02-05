@@ -36,6 +36,7 @@ module DCacheSplitAccessWrapper (
     mem_write_if_awburst: output Burst,
     mem_write_if_wvalid : output logic    ,
     mem_write_if_wready : input  logic    ,
+    mem_write_if_wid   : output Id   ,
     mem_write_if_wdata  : output logic<32>,
     mem_write_if_wstrb  : output logic<32 / 8>,
     mem_write_if_wlast  : output logic    ,
@@ -80,6 +81,7 @@ module DCacheSplitAccessWrapper (
         mem_write_if_awburst = mem_write_if.awburst;
         mem_write_if.wready  = mem_write_if_wready;
         mem_write_if_wvalid  = mem_write_if.wvalid;
+        mem_write_if_wid     = mem_write_if.wid;
         mem_write_if_wdata   = mem_write_if.wdata;
         mem_write_if_wstrb   = mem_write_if.wstrb;
         mem_write_if_wlast   = mem_write_if.wlast;

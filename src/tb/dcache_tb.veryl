@@ -1,0 +1,178 @@
+#[test(dcache_tb)]
+embed (inline) sv{{{
+    module dcache_tb();
+        import \{ Config \}::*;
+        import \{ axi_pkg \}::*;
+
+        localparam int HOLD = 5;
+        localparam int STEP = 20;
+
+        \{ core_dcache_if \} core_if();
+        \{ axi_read_if \} #(
+            .Addr(Addr),
+            .Data(logic[31:0])
+        ) mem_read_if();
+        \{ axi_write_if \} #(
+            .Addr(Addr),
+            .Data(logic[31:0])
+        ) mem_write_if();
+
+
+        logic i_clk;
+        logic i_rst;
+
+        task next_cycle();
+            #(HOLD);
+            @(posedge i_clk);
+            #(HOLD);
+        endtask
+
+        \{ DCacheSplitAccessWrapper \} dcache(
+            .i_clk,
+            .i_rst,
+            .core_if_valid (core_if.valid),
+            .core_if_addr (core_if.addr),
+            .core_if_wen (core_if.wen),
+            .core_if_wdata (core_if.wdata),
+            .core_if_wstrb (core_if.wstrb),
+            .core_if_rdata (core_if.rdata),
+            .core_if_ready (core_if.ready),
+            .mem_read_if_arvalid  (mem_read_if.arvalid),
+            .mem_read_if_arready  (mem_read_if.arready),
+            .mem_read_if_araddr   (mem_read_if.araddr ),
+            .mem_read_if_arid    (mem_read_if.arid   ),
+            .mem_read_if_arlen   (mem_read_if.arlen  ),
+            .mem_read_if_arsize  (mem_read_if.arsize ),
+            .mem_read_if_arburst (mem_read_if.arburst),
+            .mem_read_if_rvalid  (mem_read_if.rvalid ),
+            .mem_read_if_rready  (mem_read_if.rready ),
+            .mem_read_if_rdata   (mem_read_if.rdata  ),
+            .mem_read_if_rid     (mem_read_if.rid    ),
+            .mem_read_if_rresp   (mem_read_if.rresp  ),
+            .mem_read_if_rlast   (mem_read_if.rlast  ),
+            .mem_write_if_awvalid (mem_write_if.awvalid),
+            .mem_write_if_awready (mem_write_if.awready),
+            .mem_write_if_awaddr  (mem_write_if.awaddr ),
+            .mem_write_if_awid    (mem_write_if.awid   ),
+            .mem_write_if_awlen   (mem_write_if.awlen  ),
+            .mem_write_if_awsize  (mem_write_if.awsize ),
+            .mem_write_if_awburst (mem_write_if.awburst),
+            .mem_write_if_wvalid  (mem_write_if.wvalid ),
+            .mem_write_if_wready  (mem_write_if.wready ),
+            .mem_write_if_wid     (mem_write_if.wid    ),
+            .mem_write_if_wdata   (mem_write_if.wdata  ),
+            .mem_write_if_wstrb   (mem_write_if.wstrb  ),
+            .mem_write_if_wlast   (mem_write_if.wlast  )
+        );
+        \{ AxiRam \} axi_ram (
+            .i_clk          (i_clk         ),
+            .i_rst          (i_rst         ),
+            .mem_read_if_arvalid  (mem_read_if.arvalid),
+            .mem_read_if_arready  (mem_read_if.arready),
+            .mem_read_if_araddr   (mem_read_if.araddr ),
+            .mem_read_if_arid    (mem_read_if.arid   ),
+            .mem_read_if_arlen   (mem_read_if.arlen  ),
+            .mem_read_if_arsize  (mem_read_if.arsize ),
+            .mem_read_if_arburst (mem_read_if.arburst),
+            .mem_read_if_rvalid  (mem_read_if.rvalid ),
+            .mem_read_if_rready  (mem_read_if.rready ),
+            .mem_read_if_rdata   (mem_read_if.rdata  ),
+            .mem_read_if_rid     (mem_read_if.rid    ),
+            .mem_read_if_rresp   (mem_read_if.rresp  ),
+            .mem_read_if_rlast   (mem_read_if.rlast  ),
+            .mem_write_if_awvalid(mem_write_if.awvalid),
+            .mem_write_if_awready(mem_write_if.awready),
+            .mem_write_if_awaddr (mem_write_if.awaddr ),
+            .mem_write_if_awid   (mem_write_if.awid   ),
+            .mem_write_if_awlen  (mem_write_if.awlen  ),
+            .mem_write_if_awsize (mem_write_if.awsize ),
+            .mem_write_if_awburst(mem_write_if.awburst),
+            .mem_write_if_wvalid (mem_write_if.wvalid ),
+            .mem_write_if_wready (mem_write_if.wready ),
+            .mem_write_if_wdata  (mem_write_if.wdata  ),
+            .mem_write_if_wstrb  (mem_write_if.wstrb  ),
+            .mem_write_if_wlast  (mem_write_if.wlast  )
+        );
+
+        Id w_id;
+        Resp w_resp;
+        Addr w_addr;
+        Burst w_burst;
+        Size w_size;
+        Len w_len;
+
+        // TODO: miss/hit, cross boundary の全パターンを網羅したテストがあるとGood
+        // | line 1 miss | line 1 cross boundary | line 2 hit | line 2 cross boundary |
+        // +-------------+-----------------------+------------+-----------------------+
+        // | miss | no | miss | no |
+        // | miss | no | miss | yes |
+        // | miss | no | hit | no |
+        // | miss | no | hit | yes |
+        // | miss | yes | miss | no |
+        // | miss | yes | miss | yes |
+        // | miss | yes | hit | no |
+        // | miss | yes | hit | yes |
+        // | hit | no | miss | no |
+        // | hit | no | miss | yes |
+        // | hit | no | hit | no |
+        // | hit | no | hit | yes |
+        // | hit | yes | miss | no |
+        // | hit | yes | miss | yes |
+        // | hit | yes | hit | no |
+        // | hit | yes | hit | yes |
+
+        initial begin
+            $display("Starting test...");
+            i_clk = 0;
+            i_rst = 1;
+
+            core_if.valid = 0;
+            core_if.addr = '0;
+            mem_read_if.arready = 0;
+            mem_read_if.rvalid = 0;
+            mem_read_if.rdata = '0;
+            mem_read_if.rlast = '0;
+            mem_read_if.rresp = Resp_OKAY;
+            mem_read_if.rid = '0;
+            for (int i = 0; i < LINE_SIZE_BYTES/4 * 2; i++) begin
+                axi_ram.r_mem[i] = 32'hdeadbe00 + i;
+            end
+
+            repeat (2) next_cycle();
+            $display("reset done");
+
+            i_rst = 0;
+            core_if.valid = 1;
+            core_if.addr = '0; // miss アクセス
+            next_cycle();
+            core_if.addr = 4; // hit するアクセス
+            while (!core_if.ready) next_cycle();
+            assert(core_if.rdata == 32'hdeadbe00 + 32'h0) else $error("data0 mismatch!: %h", core_if.rdata);
+            next_cycle();
+
+            core_if.addr = LINE_SIZE_BYTES - 2; // cross boundary なアクセス
+            assert(core_if.ready) else $error("rdata not valid!");
+            assert(core_if.rdata == 32'hdeadbe00 + 32'h1) else $error("data1 mismatch!: %h", core_if.rdata);
+            next_cycle();
+
+            // 1ライン目は hit
+            next_cycle();
+            // 2ライン目を返す
+            while (!core_if.ready) next_cycle();
+            assert(core_if.rdata == {16'hbe08, 16'hdead}) else $error("data2 mismatch!: %h", core_if.rdata);
+
+            next_cycle();
+            $display("Test passed!");
+            
+            $finish;
+        end
+
+        always #STEP i_clk = ~i_clk;
+
+        initial begin
+            repeat(1000) @(posedge i_clk);
+            $finish();
+        end
+
+    endmodule
+}}}
