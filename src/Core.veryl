@@ -10,8 +10,8 @@ module Core (
     // imem_write_if: modport axi_write_if::master,
 
     // Data Memory
-    // dmem_read_if : modport axi_read_if::master ,
-    // dmem_write_if: modport axi_write_if::master,
+    dmem_read_if : modport axi_read_if::master ,
+    dmem_write_if: modport axi_write_if::master,
 
     // UART
     o_tx: output logic<1>,
@@ -96,6 +96,7 @@ module Core (
     var w_pc_fetching: logic<32>;
     var r_pc_fetched : logic<32>;
     var w_instr_raw  : logic<48>;
+    var r_last_instr : logic<48>;
 
     /* verilator lint_off UNSIGNED */
     let _w_is_pc_iram  : logic<1> = w_pc_fetching >= IRAM_BASE && w_pc_fetching <: IRAM_BASE + IRAM_SIZE;
@@ -125,19 +126,13 @@ module Core (
         mem_if : imem_read_if,
     );
 
-    inst m_data_mod: DMemSync #(
-        WORD_SIZE: 4096,
-    ) (
-        i_clk : i_clk                   ,
-        i_rst : i_rst                   ,
-        i_clr : 1'h0                    ,
-        i_mea : (|w_wen) & w_is_dmem    ,
-        i_wea : w_wen                   ,
-        i_adra: w_out                   ,
-        i_da  : m_regfile[w_instr.rs2_s],
-        i_meb : w_ren                   ,
-        i_adrb: w_out                   ,
-        o_qb  : w_dmem_read             ,
+    inst dcache_if: core_dcache_if;
+    inst m_dcache_mod: DCacheSplitAccess (
+        i_clk  : i_clk       ,
+        i_rst  : i_rst       ,
+        core_if: dcache_if   ,
+        mem_read_if : dmem_read_if,
+        mem_write_if : dmem_write_if,
     );
 
     // 命令フェッチ
@@ -155,26 +150,31 @@ module Core (
         if icache_if.ready {
             w_instr_raw = icache_if.instr;
         } else {
-            w_instr_raw = '0;
+            w_instr_raw = r_last_instr;
         }
     }
     always_ff (i_clk, i_rst) {
         if_reset {
             icache_if.valid = 0;
+            r_last_instr = '0;
         } else {
             icache_if.valid = 1;
+            if icache_if.ready {
+                r_last_instr = w_instr_raw;
+            }
         }
     }
 
     // プログラムカウンタ
     always_comb {
-        if r_first_fetch {
+        if r_first_fetch && !icache_if.ready {
             w_pc_fetching = 0;
         } else {
             w_pc_fetching = case {w_instr.opcode_sub, w_instr.opcode} {
                 BEQ, BNE, BLT, BLE  : if w_branch_taken ? r_pc_fetched + w_instr.imm_b_sext : r_pc_fetched + 32'h6,
                 JAL                 : w_out,
-                LW, LH, LB, LHU, LBU: if !r_load_ready ? r_pc_fetched : r_pc_fetched + 32'h6,
+                LW, LH, LB, LHU, LBU: if !dcache_if.ready ? r_pc_fetched : r_pc_fetched + 32'h6,
+                SW, SH, SB          : if !dcache_if.ready ? r_pc_fetched : r_pc_fetched + 32'h6,
                 IN                  : if !if_io_bus_din.valid ? r_pc_fetched : r_pc_fetched + 32'h6,
                 OUT                 : if !if_io_bus_dout.ready ? r_pc_fetched : r_pc_fetched + 32'h6,
                 default             : r_pc_fetched + 32'h6,
@@ -185,9 +185,10 @@ module Core (
     always_ff (i_clk, i_rst) {
         if_reset {
             r_first_fetch = 1'b1;
-            r_pc_fetched  = IROM_BASE;
+            r_pc_fetched  = '0;
         } else {
-            if icache_if.ready || r_first_fetch {
+            // ライン境界の命令がロード命令のケースに注意
+            if icache_if.ready {
                 r_first_fetch = 1'b0;
                 r_pc_fetched  = w_pc_fetching;
             }
@@ -356,6 +357,14 @@ module Core (
             LW, LH, LB, LHU, LBU: w_ren = 1'b1;
             default             : w_ren = 1'b0;
         }
+
+        // コアとデータキャッシュの接続
+        dcache_if.valid = ((|w_wen) || w_ren);
+        dcache_if.addr = w_out;
+        dcache_if.wen = |w_wen;
+        dcache_if.wstrb = w_wen;
+        dcache_if.wdata = m_regfile[w_instr.rs2_s];
+        w_dmem_read = dcache_if.rdata;
     }
 
     // 同期読み出しの完了を示すフラグ
@@ -408,7 +417,7 @@ module Core (
             for i: u32 in 0..32 {
                 m_regfile[i] = 32'h0;
             }
-        } else if w_instr.rd != 0 {
+        } else if w_instr.rd != 0 && icache_if.ready {
             m_regfile[w_instr.rd] = case {w_instr.opcode_sub, w_instr.opcode} {
                 BEQ, BNE, BLT, BLE, JAL: r_pc_fetched + 32'h6,
                 LW                     : w_dmem_read,

@@ -27,32 +27,41 @@ module DCacheSplitAccess (
         FETCH_SECOND_LINE,
     }
 
-    var w_next_state: State;
-    var r_state     : State; // 2ライン分をフェッチするための状態
-    var r_addr      : Addr ; // cross boundary アクセス対象のアドレス
-    var r_first_req : logic;
+    var w_next_state : State;
+    var r_state      : State; // 2ライン分をフェッチするための状態
+    var r_addr       : Addr ; // cross boundary アクセス対象のアドレス
+    var r_first_req  : logic;
+    var w_addr_update: logic;
 
     inst cache_side_if: core_dcache_if;
 
     var w_cross_boundary: logic;
 
-    var w_next_data  : Data    ;
-    var r_data       : Data    ; // cross boundary
+    var w_next_data   : Data    ;
+    var r_data        : Data    ; // cross boundary
     var r_remain_bytes: logic<3>;
 
     always_comb {
         w_cross_boundary = isCrossBoundary(core_if.addr);
 
         cache_side_if.valid = 0;
+        cache_side_if.wen   = 0;
+        cache_side_if.wstrb = '0;
+        cache_side_if.wdata = '0;
         cache_side_if.addr  = '0;
         core_if.ready       = 0;
         core_if.rdata       = '0;
-        w_next_data        = r_data;
+        w_next_data         = r_data;
         w_next_state        = r_state;
+        w_addr_update       = 0;
         case r_state {
             State::IDLE: {
+                w_addr_update       = 1;
                 cache_side_if.valid = core_if.valid;
                 cache_side_if.addr  = core_if.addr;
+                cache_side_if.wen   = core_if.wen;
+                cache_side_if.wstrb = core_if.wstrb;
+                cache_side_if.wdata = core_if.wdata;
                 core_if.ready       = cache_side_if.ready;
                 core_if.rdata       = cache_side_if.rdata;
 
@@ -66,9 +75,12 @@ module DCacheSplitAccess (
                 // 1ライン目の取得完了したら
                 // 2ライン目の取得要求を出す
                 if cache_side_if.ready {
-                    w_next_data        = ('1 >> (8 * (4 - r_remain_bytes))) & cache_side_if.rdata;
+                    w_next_data         = ('1 >> (8 * (4 - r_remain_bytes))) & cache_side_if.rdata;
                     cache_side_if.valid = 1;
                     cache_side_if.addr  = r_addr + r_remain_bytes as Addr;
+                    cache_side_if.wen   = core_if.wen;
+                    cache_side_if.wstrb = core_if.wstrb >> r_remain_bytes;
+                    cache_side_if.wdata = core_if.wdata >> (r_remain_bytes * 8);
                     w_next_state        = State::FETCH_SECOND_LINE;
                 }
             }
@@ -77,13 +89,17 @@ module DCacheSplitAccess (
                 // 次ラインの取得要求を出す
                 if cache_side_if.ready {
                     cache_side_if.valid = core_if.valid;
+                    cache_side_if.wen   = core_if.wen;
+                    cache_side_if.wstrb = core_if.wstrb;
+                    cache_side_if.wdata = core_if.wdata;
                     cache_side_if.addr  = core_if.addr;
                     core_if.ready       = 1;
                     core_if.rdata       = (cache_side_if.rdata << (8 * r_remain_bytes)) | r_data;
-                    if !w_cross_boundary {
-                        w_next_state = State::IDLE;
+                    if w_cross_boundary && cache_side_if.valid {
+                        w_addr_update = 1;
+                        w_next_state  = State::FETCH_FIRST_LINE;
                     } else {
-                        w_next_state = State::FETCH_FIRST_LINE;
+                        w_next_state = State::IDLE;
                     }
                 } else {
                     w_cross_boundary = 1;
@@ -96,14 +112,14 @@ module DCacheSplitAccess (
         if_reset {
             r_state        = State::IDLE;
             r_addr         = '0;
-            r_data        = '0;
+            r_data         = '0;
             r_remain_bytes = '0;
             r_first_req    = 1;
         } else {
             r_state = w_next_state;
-            r_data = w_next_data;
+            r_data  = w_next_data;
 
-            if r_state == State::IDLE && core_if.valid || r_first_req {
+            if (w_addr_update && core_if.valid) || r_first_req {
                 r_addr         = core_if.addr;
                 r_remain_bytes = (LINE_SIZE_BYTES - GetLineOffset(core_if.addr)) as 3;
                 r_first_req    = 0;
@@ -119,7 +135,7 @@ module DCacheSplitAccess (
         core_if: cache_side_if,
 
         // memory interface
-        mem_read_if  ,
-        mem_write_if,
+        mem_read_if   ,
+        mem_write_if  ,
     );
 }

@@ -1,6 +1,6 @@
-// シミュレーション用のAXI RAMモジュール
-// 実際に合成するとクソデカRAMが合成される可能性が高いので注意
-module AxiRam #(
+// シミュレーション用のAXI ROMモジュール
+// 実際に合成するとクソデカROMが合成される可能性が高いので注意
+module AxiRom #(
     param DEPTH: u32 = 4096,
 ) (
     i_clk              : input  clock    ,
@@ -18,19 +18,6 @@ module AxiRam #(
     mem_read_if_rid    : output Id       ,
     mem_read_if_rresp  : output Resp     ,
     mem_read_if_rlast  : output logic    ,
-
-    mem_write_if_awvalid: input  logic        ,
-    mem_write_if_awready: output logic        ,
-    mem_write_if_awaddr : input  Addr         ,
-    mem_write_if_awid   : input  Id           ,
-    mem_write_if_awlen  : input  Len          ,
-    mem_write_if_awsize : input  Size         ,
-    mem_write_if_awburst: input  Burst        ,
-    mem_write_if_wvalid : input  logic        ,
-    mem_write_if_wready : output logic        ,
-    mem_write_if_wdata  : input  logic<32>    ,
-    mem_write_if_wstrb  : input  logic<32 / 8>,
-    mem_write_if_wlast  : input  logic        ,
 ) {
     import axi_pkg::*;
     import Config::*;
@@ -44,18 +31,9 @@ module AxiRam #(
     var r_len_cnt: Len                            ;
     var r_addr   : Addr                           ;
 
-    var r_awready : logic;
-    var r_wready  : logic;
-    var r_wlen    : Len  ;
-    var r_wlen_cnt: Len  ;
-    var r_waddr   : Addr ;
-
-    // #[allow(initial_assign)]
-    embed (inline) sv{{{
-        initial begin
-            $readmemh("tmp_data.hex", r_mem);
-        end
-    }}}
+    initial {
+        $readmemh("tmp_inst.hex", r_mem);
+    }
 
     always_comb {
         mem_read_if_arready = r_arready;
@@ -64,9 +42,6 @@ module AxiRam #(
         mem_read_if_rid     = '0;
         mem_read_if_rresp   = Resp::OKAY;
         mem_read_if_rlast   = (r_len == r_len_cnt) && r_rvalid;
-
-        mem_write_if_awready = r_awready;
-        mem_write_if_wready  = r_wready;
     }
 
     #[allow(missing_reset_statement)]
@@ -78,11 +53,6 @@ module AxiRam #(
             r_arready  = 1;
             r_len      = 0;
             r_len_cnt  = 0;
-            r_awready  = 1;
-            r_wready   = 0;
-            r_wlen     = 0;
-            r_wlen_cnt = 0;
-            r_waddr    = 0;
         } else {
             // read interface
             if (mem_read_if_arvalid && r_arready) {
@@ -103,25 +73,7 @@ module AxiRam #(
                 r_len_cnt += 1;
                 r_arready =  1;
             }
-            // write interface
-            if (mem_write_if_awvalid && r_awready) {
-                r_wready = 1;
-                if mem_write_if_awlen != 0 {
-                    r_awready  = 0;
-                    r_wlen     = mem_write_if_awlen;
-                    r_wlen_cnt = 0;
-                    r_waddr    = mem_write_if_awaddr;
-                }
-            }
-            if (mem_write_if_wvalid && r_wready) {
-                r_mem[r_waddr + r_len_cnt as 32] = mem_write_if_wdata;
-                if (mem_write_if_wlast) {
-                    r_wready  = 0;
-                    r_awready = 1;
-                } else {
-                    r_len_cnt += 1;
-                }
-            }
         }
     }
 }
+

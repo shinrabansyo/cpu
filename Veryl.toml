@@ -8,20 +8,11 @@ reset_type = "sync_high"
 expand_inside_operation = true
 
 [test]
-# waveform_format = "fst"
+waveform_format = "fst"
 include_files = [
     "verilator.vlt",
     "test/tmp_inst.hex" ,
-    "test/tmp_inst_bank0.hex",
-    "test/tmp_inst_bank1.hex",
-    "test/tmp_inst_bank2.hex",
-    "test/tmp_inst_bank3.hex",
-    "test/tmp_inst_bank4.hex",
-    "test/tmp_inst_bank5.hex",
-    "test/tmp_data_bank0.hex",
-    "test/tmp_data_bank1.hex",
-    "test/tmp_data_bank2.hex",
-    "test/tmp_data_bank3.hex",
+    "test/tmp_data.hex",
 ]
 
 [test.verilator]

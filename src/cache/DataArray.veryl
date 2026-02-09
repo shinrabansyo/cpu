@@ -44,7 +44,7 @@ module DataArray #(
     always_comb {
         w_addr  = {i_set, i_line_offset};
         w_wmask = i_wmask << w_addr[1:0];
-        w_wdata = i_wdata << (w_addr[1:0] << 3);
+        w_wdata = i_wdata << (w_addr[1:0] * 8);
 
         // if (addr % 8) < 4
         // bank0: lower byte

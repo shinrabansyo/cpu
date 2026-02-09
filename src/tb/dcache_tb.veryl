@@ -128,40 +128,86 @@ embed (inline) sv{{{
 
             core_if.valid = 0;
             core_if.addr = '0;
-            mem_read_if.arready = 0;
-            mem_read_if.rvalid = 0;
-            mem_read_if.rdata = '0;
-            mem_read_if.rlast = '0;
-            mem_read_if.rresp = Resp_OKAY;
-            mem_read_if.rid = '0;
             for (int i = 0; i < LINE_SIZE_BYTES/4 * 2; i++) begin
                 axi_ram.r_mem[i] = 32'hdeadbe00 + i;
             end
 
             repeat (2) next_cycle();
             $display("reset done");
-
+            
+            // read テスト
             i_rst = 0;
             core_if.valid = 1;
             core_if.addr = '0; // miss アクセス
             next_cycle();
-            core_if.addr = 4; // hit するアクセス
+            core_if.valid = 0;
             while (!core_if.ready) next_cycle();
-            assert(core_if.rdata == 32'hdeadbe00 + 32'h0) else $error("data0 mismatch!: %h", core_if.rdata);
-            next_cycle();
+            assert(core_if.rdata == 32'hdeadbe00) else $error("data0 mismatch!: %h != %h", 32'hdeadbe00, core_if.rdata);
 
+            core_if.valid = 1;
             core_if.addr = LINE_SIZE_BYTES - 2; // cross boundary なアクセス
-            assert(core_if.ready) else $error("rdata not valid!");
-            assert(core_if.rdata == 32'hdeadbe00 + 32'h1) else $error("data1 mismatch!: %h", core_if.rdata);
             next_cycle();
-
-            // 1ライン目は hit
-            next_cycle();
-            // 2ライン目を返す
+            core_if.valid = 0;
             while (!core_if.ready) next_cycle();
-            assert(core_if.rdata == {16'hbe08, 16'hdead}) else $error("data2 mismatch!: %h", core_if.rdata);
+            assert(core_if.ready) else $error("rdata not valid!");
+            assert(core_if.rdata == 32'hbe08dead) else $error("data1 mismatch!: %h != %h", 32'hbe08dead, core_if.rdata);
+            next_cycle();
+
+            // TODO: Write テスト
+            // ミスリクエスト / 4byte 書き込み
+            core_if.valid = 1;
+            core_if.wen = 1;
+            core_if.wstrb = 4'b1111;
+            core_if.wdata = 32'hcafebabe;
+            core_if.addr = 64;
+            next_cycle();
+            core_if.valid = 0;
+            while (!core_if.ready) next_cycle();
+            // 書き込み完了後、同じアドレスをリード
+            core_if.valid = 1;
+            core_if.wen = 0;
+            next_cycle();
+            core_if.valid = 0;
+            while (!core_if.ready) next_cycle();
+            assert(core_if.rdata == 32'hcafebabe) else $error("write data0 mismatch!: %h != %h", 32'hcafebabe, core_if.rdata);
+
+            // ヒット / 2byte 書き込み
+            core_if.valid = 1;
+            core_if.wen = 1;
+            core_if.wstrb = 4'b0011;
+            core_if.wdata = 32'h0000beef;
+            core_if.addr = 64;
+            next_cycle();
+            core_if.valid = 0;
+            while (!core_if.ready) next_cycle();
+            // 書き込み完了後、同じアドレスをリード
+            core_if.valid = 1;
+            core_if.wen = 0;
+            next_cycle();
+            core_if.valid = 0;
+            while (!core_if.ready) next_cycle();
+            assert(core_if.rdata == 32'hcafebeef) else $error("write data1 mismatch!: %h != %h", 32'hcafebeef, core_if.rdata);
+
+            // ライン跨ぎ書き込み
+            core_if.valid = 1;
+            core_if.wen = 1;
+            core_if.wstrb = 4'b1111;
+            core_if.wdata = 32'h76543210;
+            core_if.addr = 32*3 - 2;
+            next_cycle();
+            core_if.valid = 0;
+            while (!core_if.ready) next_cycle();
+            core_if.valid = 1;
+            core_if.wen = 0;
+            next_cycle();
+            core_if.valid = 0;
+            while (!core_if.ready) next_cycle();
+            assert(core_if.rdata == 32'h76543210) else $error("write data2 mismatch!: %h != %h", 32'h76543210, core_if.rdata);
 
             next_cycle();
+            next_cycle();
+            next_cycle();
+
             $display("Test passed!");
             
             $finish;
@@ -171,6 +217,7 @@ embed (inline) sv{{{
 
         initial begin
             repeat(1000) @(posedge i_clk);
+            $error("Test Timeout!");
             $finish();
         end
 

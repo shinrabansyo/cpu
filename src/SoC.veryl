@@ -27,6 +27,8 @@ module SoC (
         i_clk,
         i_rst,
         imem_read_if,
+        dmem_read_if,
+        dmem_write_if,
         o_tx,
         i_rx,
         o_sclk,
@@ -43,8 +45,10 @@ module SoC (
 
     // TODO: 命令メモリ用の AXI インターコネクトを作る
     inst imem_read_if: axi_read_if();
+    inst dmem_read_if: axi_read_if();
+    inst dmem_write_if: axi_write_if();
 
-    inst m_axi_ram: AxiRam (
+    inst m_axi_irom: AxiRom (
         i_clk         : i_clk               ,
         i_rst         : i_rst               ,
         mem_read_if_arvalid: imem_read_if.arvalid,
@@ -60,18 +64,34 @@ module SoC (
         mem_read_if_rid    : imem_read_if.rid    ,
         mem_read_if_rresp  : imem_read_if.rresp  ,
         mem_read_if_rlast  : imem_read_if.rlast  ,
-
-        mem_write_if_awvalid: 0,
-        mem_write_if_awready: _,
-        mem_write_if_awaddr : 0,
-        mem_write_if_awid   : 0,
-        mem_write_if_awlen  : 0,
-        mem_write_if_awsize : 0,
-        mem_write_if_awburst: 0,
-        mem_write_if_wvalid : 0,
-        mem_write_if_wready : _,
-        mem_write_if_wdata  : 0,
-        mem_write_if_wstrb  : 0,
-        mem_write_if_wlast  : 0,
+    );
+    inst m_axi_dram: AxiRam(
+        i_clk,
+        i_rst,
+        mem_read_if_arvalid :dmem_read_if.arvalid,
+        mem_read_if_arready :dmem_read_if.arready,
+        mem_read_if_araddr  :dmem_read_if.araddr ,
+        mem_read_if_arid    :dmem_read_if.arid   ,
+        mem_read_if_arlen   :dmem_read_if.arlen  ,
+        mem_read_if_arsize  :dmem_read_if.arsize ,
+        mem_read_if_arburst :dmem_read_if.arburst,
+        mem_read_if_rvalid  :dmem_read_if.rvalid ,
+        mem_read_if_rready  :dmem_read_if.rready ,
+        mem_read_if_rdata   :dmem_read_if.rdata  ,
+        mem_read_if_rid     :dmem_read_if.rid    ,
+        mem_read_if_rresp   :dmem_read_if.rresp  ,
+        mem_read_if_rlast   :dmem_read_if.rlast  ,
+        mem_write_if_awvalid:dmem_write_if.awvalid,
+        mem_write_if_awready:dmem_write_if.awready,
+        mem_write_if_awaddr :dmem_write_if.awaddr ,
+        mem_write_if_awid   :dmem_write_if.awid   ,
+        mem_write_if_awlen  :dmem_write_if.awlen  ,
+        mem_write_if_awsize :dmem_write_if.awsize ,
+        mem_write_if_awburst:dmem_write_if.awburst,
+        mem_write_if_wvalid :dmem_write_if.wvalid ,
+        mem_write_if_wready :dmem_write_if.wready ,
+        mem_write_if_wdata  :dmem_write_if.wdata  ,
+        mem_write_if_wstrb  :dmem_write_if.wstrb  ,
+        mem_write_if_wlast  :dmem_write_if.wlast  ,
     );
 }

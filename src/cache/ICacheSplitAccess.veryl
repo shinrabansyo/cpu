@@ -26,10 +26,11 @@ module ICacheSplitAccess (
         FETCH_SECOND_LINE,
     }
 
-    var w_next_state: State;
-    var r_state     : State; // 2ライン分をフェッチするための状態
-    var r_addr      : Addr ; // cross boundary アクセス対象のアドレス
-    var r_first_req : logic;
+    var w_next_state : State;
+    var r_state      : State; // 2ライン分をフェッチするための状態
+    var r_addr       : Addr ; // cross boundary アクセス対象のアドレス
+    var r_first_req  : logic;
+    var w_addr_update: logic;
 
     inst cache_side_if: core_icache_if;
 
@@ -48,8 +49,10 @@ module ICacheSplitAccess (
         core_if.instr       = '0;
         w_next_instr        = r_instr;
         w_next_state        = r_state;
+        w_addr_update       = 0;
         case r_state {
             State::IDLE: {
+                w_addr_update       = 1;
                 cache_side_if.valid = core_if.valid;
                 cache_side_if.addr  = core_if.addr;
                 core_if.ready       = cache_side_if.ready;
@@ -82,7 +85,8 @@ module ICacheSplitAccess (
                     if !w_cross_boundary {
                         w_next_state = State::IDLE;
                     } else {
-                        w_next_state = State::FETCH_FIRST_LINE;
+                        w_addr_update = 1;
+                        w_next_state  = State::FETCH_FIRST_LINE;
                     }
                 } else {
                     w_cross_boundary = 1;
@@ -102,7 +106,7 @@ module ICacheSplitAccess (
             r_state = w_next_state;
             r_instr = w_next_instr;
 
-            if r_state == State::IDLE && core_if.valid || r_first_req {
+            if (w_addr_update && core_if.valid) || r_first_req {
                 r_addr         = core_if.addr;
                 r_remain_bytes = (LINE_SIZE_BYTES - GetLineOffset(core_if.addr)) as 3;
                 r_first_req    = 0;
