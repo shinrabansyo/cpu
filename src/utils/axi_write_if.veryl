@@ -28,6 +28,9 @@ interface axi_write_if #(
     var bresp : Resp ;
 
     modport master {
+        aw_ack : import,
+        w_ack  : import,
+        b_ack  : import,
         awvalid: output,
         awaddr : output,
         awid   : output,
@@ -48,6 +51,18 @@ interface axi_write_if #(
     }
 
     modport slave {
+        aw_ack: import,
+        w_ack : import,
+        b_ack : import,
         ..converse(master)
+    }
+    function aw_ack () -> logic {
+        return awvalid && awready;
+    }
+    function w_ack () -> logic {
+        return wvalid && wready;
+    }
+    function b_ack () -> logic {
+        return bvalid && bready;
     }
 }

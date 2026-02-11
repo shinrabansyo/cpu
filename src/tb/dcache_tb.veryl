@@ -64,7 +64,7 @@ embed (inline) sv{{{
             .mem_write_if_wstrb   (mem_write_if.wstrb  ),
             .mem_write_if_wlast   (mem_write_if.wlast  )
         );
-        \{ AxiRam \} axi_ram (
+        \{ AxiRamWrapper \} axi_ram (
             .i_clk          (i_clk         ),
             .i_rst          (i_rst         ),
             .mem_read_if_arvalid  (mem_read_if.arvalid),
@@ -129,7 +129,7 @@ embed (inline) sv{{{
             core_if.valid = 0;
             core_if.addr = '0;
             for (int i = 0; i < LINE_SIZE_BYTES/4 * 2; i++) begin
-                axi_ram.r_mem[i] = 32'hdeadbe00 + i;
+                axi_ram.axi_ram.r_mem[i] = 32'hdeadbe00 + i;
             end
 
             repeat (2) next_cycle();

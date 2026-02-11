@@ -230,6 +230,7 @@ pub module DCacheNonSplitAccess (
                         mem_write_if.awlen   = (BEAT_MAX - 1) as axi_pkg::Len;
                         mem_write_if.awburst = axi_pkg::Burst::INCR;
                         mem_write_if.wvalid  = 1;
+                        mem_write_if.bready  = 1;
                         r_beat_counter       = '0;
                     } else if r_valid && r_wen {
                         // write hit
@@ -254,27 +255,30 @@ pub module DCacheNonSplitAccess (
                     }
                 }
                 State::WRITEBACK: {
-                    if mem_write_if.wvalid && mem_write_if.wready {
+                    if mem_write_if.w_ack() {
                         r_beat_counter += 1;
                         // 次に送信するデータが最後の場合は wlast を立てる
                         if r_beat_counter == (BEAT_MAX - 1) as BEAT_COUNTER_WIDTH {
                             mem_write_if.wlast = 1;
                         }
-                        // 最後のデータの送信が完了したら
-                        // 状態を FETCH に遷移させてラインの取得を開始する
+                        // 最後のデータの送信が完了
                         if mem_write_if.wlast {
                             mem_write_if.wvalid = 0;
                             mem_write_if.wlast  = 0;
-
-                            mem_read_if.arvalid = 1;
-                            mem_read_if.araddr  = GetLineAddr(r_addr);
-                            mem_read_if.arsize  = 2;
-                            mem_read_if.arlen   = (BEAT_MAX - 1) as axi_pkg::Len;
-                            mem_read_if.arburst = axi_pkg::Burst::INCR;
-                            mem_read_if.rready  = 1;
-                            r_beat_counter      = '0;
-                            r_state             = State::FETCH;
                         }
+                    }
+                    // 書き込みレスポンスが帰ってきたら
+                    // 状態を FETCH に遷移させてラインの取得を開始する
+                    if mem_write_if.b_ack() {
+                        mem_write_if.bready = 0;
+                        mem_read_if.arvalid = 1;
+                        mem_read_if.araddr  = GetLineAddr(r_addr);
+                        mem_read_if.arsize  = 2;
+                        mem_read_if.arlen   = (BEAT_MAX - 1) as axi_pkg::Len;
+                        mem_read_if.arburst = axi_pkg::Burst::INCR;
+                        mem_read_if.rready  = 1;
+                        r_beat_counter      = '0;
+                        r_state             = State::FETCH;
                     }
                     if mem_write_if.awvalid && mem_write_if.awready {
                         mem_write_if.awvalid = 0;

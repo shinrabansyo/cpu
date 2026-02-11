@@ -1,0 +1,66 @@
+// シミュレーション用のAXI ROMモジュール
+// 実際に合成するとクソデカROMが合成される可能性が高いので注意
+module AxiRom #(
+    param DEPTH: u32 = 4096,
+) (
+    i_clk  : input   clock             ,
+    i_rst  : input   reset             ,
+    read_if: modport axi_read_if::slave,
+) {
+    import axi_pkg::*;
+    import Config::*;
+
+    var r_mem: logic<32> [DEPTH >> 2];
+
+    var r_arready: logic                      ;
+    var r_rvalid : logic                      ;
+    var r_data   : logic<$bits(read_if.rdata)>;
+    var r_len    : Len                        ;
+    var r_len_cnt: Len                        ;
+    var r_addr   : Addr                       ;
+
+    initial {
+        $readmemh("tmp_inst.hex", r_mem);
+    }
+
+    always_comb {
+        read_if.arready = r_arready;
+        read_if.rvalid  = r_rvalid;
+        read_if.rdata   = r_data;
+        read_if.rid     = '0;
+        read_if.rresp   = Resp::OKAY;
+        read_if.rlast   = (r_len == r_len_cnt) && r_rvalid;
+    }
+
+    #[allow(missing_reset_statement)]
+    always_ff (i_clk, i_rst) {
+        if_reset {
+            r_addr    = 0;
+            r_data    = 0;
+            r_rvalid  = 0;
+            r_arready = 1;
+            r_len     = 0;
+            r_len_cnt = 0;
+        } else {
+            // read interface
+            if (read_if.arvalid && r_arready) {
+                r_rvalid = 1;
+                if read_if.arlen != 0 {
+                    r_arready = 0;
+                    r_len     = read_if.arlen;
+                    r_len_cnt = 0;
+                    r_addr    = read_if.araddr;
+                }
+                r_data = r_mem[read_if.araddr as u32 >> 2];
+            }
+            if (read_if.rready && r_rvalid && read_if.rlast) {
+                r_rvalid = read_if.arvalid && r_arready;
+            } else if (read_if.rready && r_rvalid) {
+                r_rvalid  =  1;
+                r_data    =  r_mem[(r_addr as u32 >> 2) + (r_len_cnt as u32 + 1)];
+                r_len_cnt += 1;
+                r_arready =  1;
+            }
+        }
+    }
+}

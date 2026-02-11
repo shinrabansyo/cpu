@@ -1,0 +1,73 @@
+module AxiRamWrapper #(
+    param DEPTH: u32 = 4096,
+) (
+    i_clk              : input  clock    ,
+    i_rst              : input  reset    ,
+    mem_read_if_arvalid: input  logic    ,
+    mem_read_if_arready: output logic    ,
+    mem_read_if_araddr : input  Addr     ,
+    mem_read_if_arid   : input  Id       ,
+    mem_read_if_arlen  : input  Len      ,
+    mem_read_if_arsize : input  Size     ,
+    mem_read_if_arburst: input  Burst    ,
+    mem_read_if_rvalid : output logic    ,
+    mem_read_if_rready : input  logic    ,
+    mem_read_if_rdata  : output logic<32>,
+    mem_read_if_rid    : output Id       ,
+    mem_read_if_rresp  : output Resp     ,
+    mem_read_if_rlast  : output logic    ,
+
+    mem_write_if_awvalid: input  logic        ,
+    mem_write_if_awready: output logic        ,
+    mem_write_if_awaddr : input  Addr         ,
+    mem_write_if_awid   : input  Id           ,
+    mem_write_if_awlen  : input  Len          ,
+    mem_write_if_awsize : input  Size         ,
+    mem_write_if_awburst: input  Burst        ,
+    mem_write_if_wvalid : input  logic        ,
+    mem_write_if_wready : output logic        ,
+    mem_write_if_wdata  : input  logic<32>    ,
+    mem_write_if_wstrb  : input  logic<32 / 8>,
+    mem_write_if_wlast  : input  logic        ,
+) {
+    import axi_pkg::*;
+    import Config::*;
+
+    inst read_if : axi_read_if;
+    inst write_if: axi_write_if;
+    inst axi_ram: AxiRam (
+        i_clk     ,
+        i_rst     ,
+        read_if   ,
+        write_if  ,
+    );
+
+    always_comb {
+        read_if.arvalid     = mem_read_if_arvalid;
+        mem_read_if_arready = read_if.arready;
+        read_if.araddr      = mem_read_if_araddr;
+        read_if.arid        = mem_read_if_arid;
+        read_if.arlen       = mem_read_if_arlen;
+        read_if.arsize      = mem_read_if_arsize;
+        read_if.arburst     = mem_read_if_arburst;
+        mem_read_if_rvalid  = read_if.rvalid;
+        read_if.rready      = mem_read_if_rready;
+        mem_read_if_rdata   = read_if.rdata;
+        mem_read_if_rid     = read_if.rid;
+        mem_read_if_rresp   = read_if.rresp;
+        mem_read_if_rlast   = read_if.rlast;
+
+        write_if.awvalid     = mem_write_if_awvalid;
+        mem_write_if_awready = write_if.awready;
+        write_if.awaddr      = mem_write_if_awaddr;
+        write_if.awid        = mem_write_if_awid;
+        write_if.awlen       = mem_write_if_awlen;
+        write_if.awsize      = mem_write_if_awsize;
+        write_if.awburst     = mem_write_if_awburst;
+        write_if.wvalid      = mem_write_if_wvalid;
+        mem_write_if_wready  = write_if.wready;
+        write_if.wdata       = mem_write_if_wdata;
+        write_if.wstrb       = mem_write_if_wstrb;
+        write_if.wlast       = mem_write_if_wlast;
+    }
+}

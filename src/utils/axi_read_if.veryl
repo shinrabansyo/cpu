@@ -22,6 +22,8 @@ interface axi_read_if #(
     var rlast : logic;
 
     modport master {
+        ar_ack : import,
+        r_ack  : import,
         arvalid: output,
         araddr : output,
         arid   : output,
@@ -38,6 +40,15 @@ interface axi_read_if #(
     }
 
     modport slave {
+        ar_ack: import,
+        r_ack : import,
         ..converse(master)
+    }
+
+    function ar_ack () -> logic {
+        return arvalid && arready;
+    }
+    function r_ack () -> logic {
+        return rvalid && rready;
     }
 }
