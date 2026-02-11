@@ -3,13 +3,13 @@ module DCacheSplitAccessWrapper (
     i_rst: input reset,
 
     // read request
-    core_if_valid: input  logic,
-    core_if_addr : input  Addr ,
-    core_if_wen  : input  logic,
-    core_if_wdata: input  Data    ,
+    core_if_valid: input  logic                 ,
+    core_if_addr : input  Addr                  ,
+    core_if_wen  : input  logic                 ,
+    core_if_wdata: input  Data                  ,
     core_if_wstrb: input  logic<$bits(Data) / 8>,
-    core_if_rdata: output Data ,
-    core_if_ready: output logic,
+    core_if_rdata: output Data                  ,
+    core_if_ready: output logic                 ,
 
     // memory interface
     mem_read_if_arvalid: output logic,
@@ -27,24 +27,24 @@ module DCacheSplitAccessWrapper (
     mem_read_if_rresp : input  Resp     ,
     mem_read_if_rlast : input  logic    ,
 
-    mem_write_if_awvalid: output logic,
-    mem_write_if_awready: input  logic,
-    mem_write_if_awaddr : output Addr ,
-    mem_write_if_awid   : output Id   ,
-    mem_write_if_awlen  : output Len  ,
-    mem_write_if_awsize : output Size ,
-    mem_write_if_awburst: output Burst,
-    mem_write_if_wvalid : output logic    ,
-    mem_write_if_wready : input  logic    ,
-    mem_write_if_wid   : output Id   ,
-    mem_write_if_wdata  : output logic<32>,
+    mem_write_if_awvalid: output logic        ,
+    mem_write_if_awready: input  logic        ,
+    mem_write_if_awaddr : output Addr         ,
+    mem_write_if_awid   : output Id           ,
+    mem_write_if_awlen  : output Len          ,
+    mem_write_if_awsize : output Size         ,
+    mem_write_if_awburst: output Burst        ,
+    mem_write_if_wvalid : output logic        ,
+    mem_write_if_wready : input  logic        ,
+    mem_write_if_wid    : output Id           ,
+    mem_write_if_wdata  : output logic<32>    ,
     mem_write_if_wstrb  : output logic<32 / 8>,
-    mem_write_if_wlast  : output logic    ,
+    mem_write_if_wlast  : output logic        ,
 ) {
     import Config::*;
     import axi_pkg::*;
 
-    inst core_if: core_dcache_if;
+    inst core_if     : core_dcache_if;
     inst mem_read_if : axi_read_if;
     inst mem_write_if: axi_write_if;
 
@@ -93,9 +93,8 @@ module DCacheSplitAccessWrapper (
 
         core_if: core_if,
 
-        mem_read_if: mem_read_if,
-        mem_write_if: mem_write_if
+        mem_read_if : mem_read_if ,
+        mem_write_if: mem_write_if,
     );
 
 }
-

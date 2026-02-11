@@ -58,7 +58,7 @@ pub module ICacheNonSplitAccess (
     // 明示的に指定しないと verilator のバグを踏み抜く
     inst data_array: DataArray #(
         SET_WIDTH: $bits(ICacheSet),
-    )(
+    ) (
         i_clk: i_clk,
         i_rst: i_rst,
 

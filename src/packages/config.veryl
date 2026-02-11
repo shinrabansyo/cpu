@@ -1,5 +1,5 @@
 package Config {
-    const TRACE_DUMP: u32 = 1;
+    const TRACE_DUMP: u32                    = 1;
     const ADDR_WIDTH: u32                    = 32;
     type Addr       = logic<ADDR_WIDTH>     ;
     type Inst       = logic<48>             ;
@@ -7,10 +7,10 @@ package Config {
     type DoubleData = logic<$bits(Data) * 2>;
 
     // キャッシュの設定
-    const LINE_SIZE_BYTES  : u32                            = 32;
-    const LINE_OFFSET_WIDTH: u32                            = $clog2(LINE_SIZE_BYTES);
-    type Line              = logic<LINE_SIZE_BYTES * 8>    ;
-    type LineOffset        = logic<LINE_OFFSET_WIDTH>    ;
+    const LINE_SIZE_BYTES  : u32                        = 32;
+    const LINE_OFFSET_WIDTH: u32                        = $clog2(LINE_SIZE_BYTES);
+    type Line              = logic<LINE_SIZE_BYTES * 8>;
+    type LineOffset        = logic<LINE_OFFSET_WIDTH>  ;
 
     function GetLineOffset (
         addr: input Addr,
