@@ -34,6 +34,10 @@ module Core (
     o_data   : output 'dvi logic<24>,
 ) {
     import Config::*;
+    // ログ用信号
+    var w_log_valid: logic           ;
+    var w_log      : log_pkg::InstLog;
+
     // ワイヤ・インタフェース宣言 ===============================
     // IOBus
     var i_dev_id: logic<32>;
@@ -91,7 +95,8 @@ module Core (
     );
 
     // メモリ
-    var m_regfile: logic<32> [32];
+    var w_reg_write_data: logic<32>     ;
+    var m_regfile       : logic<32> [32];
 
     var w_pc_fetching: logic<32>;
     var r_pc_fetched : logic<32>;
@@ -128,11 +133,11 @@ module Core (
 
     inst dcache_if: core_dcache_if;
     inst m_dcache_mod: DCacheSplitAccess (
-        i_clk  : i_clk       ,
-        i_rst  : i_rst       ,
-        core_if: dcache_if   ,
-        mem_read_if : dmem_read_if,
-        mem_write_if : dmem_write_if,
+        i_clk       : i_clk        ,
+        i_rst       : i_rst        ,
+        core_if     : dcache_if    ,
+        mem_read_if : dmem_read_if ,
+        mem_write_if: dmem_write_if,
     );
 
     // 命令フェッチ
@@ -152,11 +157,12 @@ module Core (
         } else {
             w_instr_raw = r_last_instr;
         }
+        w_log.instr = w_instr_raw;
     }
     always_ff (i_clk, i_rst) {
         if_reset {
             icache_if.valid = 0;
-            r_last_instr = '0;
+            r_last_instr    = '0;
         } else {
             icache_if.valid = 1;
             if icache_if.ready {
@@ -179,6 +185,62 @@ module Core (
                 OUT                 : if !if_io_bus_dout.ready ? r_pc_fetched : r_pc_fetched + 32'h6,
                 default             : r_pc_fetched + 32'h6,
             };
+        }
+        // log
+        w_log.pc = r_pc_fetched;
+        case {w_instr.opcode_sub, w_instr.opcode} {
+            LW, LH, LB, LHU, LBU: {
+                w_log_valid     = icache_if.ready && dcache_if.ready;
+                w_log.inst_type = log_pkg::InstType::MEM_READ;
+                w_log.addr      = w_out;
+                w_log.data      = w_reg_write_data;
+                w_log.dest_reg  = w_instr.rd;
+            }
+            SW, SH, SB: {
+                w_log_valid     = icache_if.ready && dcache_if.ready;
+                w_log.inst_type = log_pkg::InstType::MEM_WRITE;
+                w_log.addr      = w_out;
+                w_log.data      = dcache_if.wdata & {
+                    dcache_if.wstrb[3] repeat 8,
+                    dcache_if.wstrb[2] repeat 8,
+                    dcache_if.wstrb[1] repeat 8,
+                    dcache_if.wstrb[0] repeat 8
+                };
+                w_log.dest_reg = '0;
+            }
+            ISB: { // 仮置き
+                w_log_valid     = icache_if.ready;
+                w_log.inst_type = log_pkg::InstType::IMEM_WRITE;
+                w_log.addr      = w_out;
+                w_log.data      = dcache_if.wdata & {
+                    dcache_if.wstrb[3] repeat 8,
+                    dcache_if.wstrb[2] repeat 8,
+                    dcache_if.wstrb[1] repeat 8,
+                    dcache_if.wstrb[0] repeat 8
+                };
+                w_log.dest_reg = '0;
+            }
+            IN: {
+                w_log_valid     = icache_if.ready && if_io_bus_din.valid;
+                w_log.inst_type = log_pkg::InstType::DEV_READ;
+                w_log.addr      = i_dev_id;
+                w_log.data      = if_io_bus_din.bits;
+                w_log.dest_reg  = w_instr.rd;
+            }
+            OUT: {
+                w_log_valid     = icache_if.ready && if_io_bus_dout.ready;
+                w_log.inst_type = log_pkg::InstType::DEV_WRITE;
+                w_log.addr      = i_dev_id;
+                w_log.data      = if_io_bus_dout.bits;
+                w_log.dest_reg  = '0;
+            }
+            default: {
+                w_log_valid     = icache_if.ready;
+                w_log.inst_type = log_pkg::InstType::REG_WRITE;
+                w_log.addr      = '0;
+                w_log.data      = w_reg_write_data;
+                w_log.dest_reg  = w_instr.rd;
+            }
         }
     }
 
@@ -360,11 +422,11 @@ module Core (
 
         // コアとデータキャッシュの接続
         dcache_if.valid = ((|w_wen) || w_ren);
-        dcache_if.addr = w_out;
-        dcache_if.wen = |w_wen;
+        dcache_if.addr  = w_out;
+        dcache_if.wen   = |w_wen;
         dcache_if.wstrb = w_wen;
         dcache_if.wdata = m_regfile[w_instr.rs2_s];
-        w_dmem_read = dcache_if.rdata;
+        w_dmem_read     = dcache_if.rdata;
     }
 
     // 同期読み出しの完了を示すフラグ
@@ -412,24 +474,50 @@ module Core (
 
     // ライトバック --------
     // レジスタアクセス
+    always_comb {
+        w_reg_write_data = case {w_instr.opcode_sub, w_instr.opcode} {
+            BEQ, BNE, BLT, BLE, JAL: r_pc_fetched + 32'h6,
+            LW                     : w_dmem_read,
+            LH                     : {w_dmem_read[15] repeat 16, w_dmem_read[0+:16]},
+            LHU                    : {16'b0, w_dmem_read[0+:16]},
+            LB                     : {w_dmem_read[7] repeat 24, w_dmem_read[0+:8]},
+            LBU                    : {24'b0, w_dmem_read[0+:8]},
+            SW, SH, SB, ISB        : m_regfile[w_instr.rd],
+            IN                     : if if_io_bus_din.valid ? if_io_bus_din.bits : m_regfile[w_instr.rd],
+            OUT                    : m_regfile[w_instr.rd],
+            default                : w_out,
+        };
+    }
     always_ff (i_clk, i_rst) {
         if_reset {
             for i: u32 in 0..32 {
                 m_regfile[i] = 32'h0;
             }
         } else if w_instr.rd != 0 && icache_if.ready {
-            m_regfile[w_instr.rd] = case {w_instr.opcode_sub, w_instr.opcode} {
-                BEQ, BNE, BLT, BLE, JAL: r_pc_fetched + 32'h6,
-                LW                     : w_dmem_read,
-                LH                     : {w_dmem_read[15] repeat 16, w_dmem_read[0+:16]},
-                LHU                    : {16'b0, w_dmem_read[0+:16]},
-                LB                     : {w_dmem_read[7] repeat 24, w_dmem_read[0+:8]},
-                LBU                    : {24'b0, w_dmem_read[0+:8]},
-                SW, SH, SB, ISB        : m_regfile[w_instr.rd],
-                IN                     : if if_io_bus_din.valid ? if_io_bus_din.bits : m_regfile[w_instr.rd],
-                OUT                    : m_regfile[w_instr.rd],
-                default                : w_out,
-            };
+            m_regfile[w_instr.rd] = w_reg_write_data;
+        }
+    }
+
+    // ログ出力
+    if TRACE_DUMP == 1 :l_trace_dump {
+        var fd: u32;
+        embed (inline) sv{{{
+            initial begin
+                // veryl は実行時に生成したファイルを一時ディレクトリに置き、
+                // 一時ディレクトリは実行後に削除される。
+                // 削除されない場所に出力するため、絶対パスで出力先を指定する。
+                fd = $fopen("/tmp/trace.log", "w");
+                $fwrite(fd, "");
+                $fclose(fd);
+                fd = $fopen("/tmp/trace.log", "a");
+            end
+        }}}
+        always_ff (i_clk, i_rst) {
+            if_reset {} else {
+                if w_log_valid {
+                    $fdisplay(fd, "%s", log_pkg::to_log_string(w_log));
+                }
+            }
         }
     }
 }

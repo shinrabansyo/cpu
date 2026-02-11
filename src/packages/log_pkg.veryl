@@ -1,0 +1,36 @@
+package log_pkg {
+    enum InstType {
+        REG_WRITE,
+        MEM_READ,
+        MEM_WRITE,
+        IMEM_READ,
+        IMEM_WRITE,
+        DEV_READ,
+        DEV_WRITE,
+    }
+    struct InstLog {
+        pc       : logic   <32>,
+        instr    : logic   <48>,
+        inst_type: InstType    ,
+        addr     : logic   <32>,
+        data     : logic   <32>,
+        dest_reg : logic   <5> ,
+    }
+
+    function to_log_string (
+        log: input InstLog,
+    ) -> string {
+        let type_str: string = case log.inst_type {
+            InstType::REG_WRITE : "R_WR",
+            InstType::MEM_READ  : "M_RD",
+            InstType::MEM_WRITE : "M_WR",
+            InstType::IMEM_READ : "I_RD",
+            InstType::IMEM_WRITE: "I_WR",
+            InstType::DEV_READ  : "D_RD",
+            InstType::DEV_WRITE : "D_WR",
+            default             : "UNKN",
+        };
+
+        return $sformatf("PC:%08h INST:%012h TYPE:%s ADDR:%08h VAL:%08h, DST:%02d", log.pc, log.instr, type_str, log.addr, log.data, log.dest_reg);
+    }
+}

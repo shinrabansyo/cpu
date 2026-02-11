@@ -17,3 +17,5 @@ include_files = [
 
 [test.verilator]
 compile_args = ["-j", "8", "verilator.vlt"]
+# 実行トレースを生成するときは引数に以下を指定
+# compile_args = ["-j", "8", "verilator.vlt", "--top-module", "top"]

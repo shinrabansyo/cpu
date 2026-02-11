@@ -1,4 +1,5 @@
 package Config {
+    const TRACE_DUMP: u32 = 1;
     const ADDR_WIDTH: u32                    = 32;
     type Addr       = logic<ADDR_WIDTH>     ;
     type Inst       = logic<48>             ;
