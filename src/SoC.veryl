@@ -45,6 +45,7 @@ module SoC (
 
     // TODO: 命令メモリ用の AXI インターコネクトを作る
     inst imem_read_if : axi_read_if;
+    inst imem_write_if: axi_write_if;
     inst dmem_read_if : axi_read_if;
     inst dmem_write_if: axi_write_if;
 
@@ -63,10 +64,23 @@ module SoC (
         i_clk                                ,
         i_rst                                ,
         read_if_master : imem_read_if        ,
-        write_if_master: dmem_write_if       ,
+        write_if_master: imem_write_if       ,
         read_if_slaves : imem_read_if_slaves ,
         write_if_slaves: imem_write_if_slaves,
     );
+    always_comb {
+        imem_write_if.awvalid = 0;
+        imem_write_if.awaddr  = 0;
+        imem_write_if.awid    = 0;
+        imem_write_if.awlen   = 0;
+        imem_write_if.awsize  = 0;
+        imem_write_if.awburst = 0 as axi_pkg::Burst;
+        imem_write_if.wvalid  = 0;
+        imem_write_if.wdata   = 0;
+        imem_write_if.wstrb   = 0;
+        imem_write_if.wlast   = 0;
+        imem_write_if.bready  = 0;
+    }
 
     inst m_axi_irom: AxiRom (
         i_clk  : i_clk                 ,

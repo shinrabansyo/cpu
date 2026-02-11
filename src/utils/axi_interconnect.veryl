@@ -22,13 +22,16 @@ module axi_interconnect #(
     // アドレスデコード用の関数
     function decode_slave_index (
         addr: input logic<32>,
+        valid: output logic,
     ) -> SlaveIdx {
         for i: u32 in 0..NUM_SLAVE {
             if addr >= MEM_MAP_BASE[i] && addr <: (MEM_MAP_BASE[i] + MEM_MAP_SIZE[i]) {
+                valid = 1;
                 return i as SlaveIdx;
             }
         }
-        return 'x as SlaveIdx; // 無効なアドレス
+        valid = 0;
+        return 0 as SlaveIdx; // 無効なアドレス
     }
 
     enum ReadState {
@@ -47,118 +50,203 @@ module axi_interconnect #(
     var r_read_state : ReadState ;
     var r_write_state: WriteState;
 
-    var r_araddr       : Addr    ;
-    var r_arid         : Id      ;
-    var r_arlen        : Len     ;
-    var r_arsize       : Size    ;
-    var r_arburst      : Burst   ;
     var r_read_slv_idx : SlaveIdx;
     var r_write_slv_idx: SlaveIdx;
 
-    var w_read_slv_idx  : SlaveIdx            ;
-    var w_read_slv_acks : logic    [NUM_SLAVE];
-    var w_write_slv_idx : SlaveIdx            ;
-    var w_write_slv_acks: logic    [NUM_SLAVE];
+    var w_read_slv_idx : SlaveIdx            ;
+    var w_read_slv_valid: logic              ;
+    var w_read_slv_acks: logic    [NUM_SLAVE];
+    var w_write_slv_idx: SlaveIdx            ;
+    var w_write_slv_valid: logic             ;
+
+    // Slave -> Master の信号
+    // interface配列はconst添え字しか使えないので、ワイヤ配列で一旦受け取る
+    var w_slv_arready: logic [NUM_SLAVE];
+    var w_slv_rvalid : logic [NUM_SLAVE];
+    var w_slv_rdata  : Data  [NUM_SLAVE];
+    var w_slv_rid    : Id    [NUM_SLAVE];
+    var w_slv_rresp  : Resp  [NUM_SLAVE];
+    var w_slv_rlast  : logic [NUM_SLAVE];
+
+    var w_slv_awready: logic [NUM_SLAVE];
+    var w_slv_wready : logic [NUM_SLAVE];
+    var w_slv_bvalid : logic [NUM_SLAVE];
+    var w_slv_bid    : Id    [NUM_SLAVE];
+    var w_slv_bresp  : Resp  [NUM_SLAVE];
+
     always_comb {
-        w_read_slv_idx  = decode_slave_index(read_if_master.araddr);
-        w_write_slv_idx = decode_slave_index(write_if_master.awaddr);
+        w_read_slv_idx  = decode_slave_index(read_if_master.araddr, w_read_slv_valid);
+        w_write_slv_idx = decode_slave_index(write_if_master.awaddr, w_write_slv_valid);
+
+        case r_read_state {
+            ReadState::IDLE: {
+                read_if_master.rvalid = 0;
+                read_if_master.arready  = w_slv_arready[w_read_slv_idx];
+                read_if_master.rdata    = w_slv_rdata[w_read_slv_idx];
+                read_if_master.rid      = w_slv_rid[w_read_slv_idx];
+                read_if_master.rresp    = w_slv_rresp[w_read_slv_idx];
+                read_if_master.rlast    = w_slv_rlast[w_read_slv_idx];
+            }
+            ReadState::WAIT_RESP: {
+                read_if_master.arready = 0;
+                read_if_master.rvalid   = w_slv_rvalid[r_read_slv_idx];
+                read_if_master.rdata    = w_slv_rdata[r_read_slv_idx];
+                read_if_master.rid      = w_slv_rid[r_read_slv_idx];
+                read_if_master.rresp    = w_slv_rresp[r_read_slv_idx];
+                read_if_master.rlast    = w_slv_rlast[r_read_slv_idx];
+            }
+        }
+        case r_write_state {
+            WriteState::IDLE: {
+                write_if_master.wready = 0;
+                write_if_master.bvalid = 0;
+                write_if_master.awready = w_slv_awready[w_write_slv_idx];
+                write_if_master.bid     = w_slv_bid[w_write_slv_idx];
+                write_if_master.bresp   = w_slv_bresp[w_write_slv_idx];
+            }
+            WriteState::WAIT_WDATA: {
+                write_if_master.awready = 0;
+                write_if_master.bvalid  = 0;
+                write_if_master.wready  = w_slv_wready[r_write_slv_idx];
+                write_if_master.bid     = w_slv_bid[r_write_slv_idx];
+                write_if_master.bresp   = w_slv_bresp[r_write_slv_idx];
+            }
+            WriteState::WAIT_RESP: {
+                write_if_master.awready = 0;
+                write_if_master.wready  = 0;
+                write_if_master.bvalid  = w_slv_bvalid[r_write_slv_idx];
+                write_if_master.bid     = w_slv_bid[r_write_slv_idx];
+                write_if_master.bresp   = w_slv_bresp[r_write_slv_idx];
+            }
+        }
+
+        // 無効なアドレスの場合
+        if !w_read_slv_valid {
+            read_if_master.arready = 0;
+            read_if_master.rvalid  = 0;
+            read_if_master.rdata   = '0;
+            read_if_master.rresp   = '0 as Resp;
+            read_if_master.rid     = '0;
+            read_if_master.rlast   = 0;
+        }
+        if !w_write_slv_valid {
+            write_if_master.awready = 0;
+            write_if_master.wready  = 0;
+            write_if_master.bvalid  = 0;
+            write_if_master.bresp   = '0 as Resp;
+            write_if_master.bid     = '0;
+        }
     }
 
     for slv in 0..NUM_SLAVE :l_slv_loop {
         always_comb {
-            w_read_slv_acks[slv]  = read_if_slaves[slv].r_ack() && read_if_slaves[slv].rlast;
-            w_write_slv_acks[slv] = read_if_slaves[slv].r_ack() && read_if_slaves[slv].rlast;
+            w_read_slv_acks[slv] = read_if_slaves[slv].r_ack() && read_if_slaves[slv].rlast;
+
+            w_slv_arready[slv] = read_if_slaves[slv].arready;
+            w_slv_rvalid[slv]  = read_if_slaves[slv].rvalid;
+            w_slv_rdata[slv]   = read_if_slaves[slv].rdata;
+            w_slv_rid[slv]     = read_if_slaves[slv].rid;
+            w_slv_rresp[slv]   = read_if_slaves[slv].rresp;
+            w_slv_rlast[slv]   = read_if_slaves[slv].rlast;
+            w_slv_awready[slv] = write_if_slaves[slv].awready;
+            w_slv_wready[slv]  = write_if_slaves[slv].wready;
+            w_slv_bvalid[slv]  = write_if_slaves[slv].bvalid;
+            w_slv_bid[slv]     = write_if_slaves[slv].bid;
+            w_slv_bresp[slv]   = write_if_slaves[slv].bresp;
         }
         always_comb {
+            read_if_slaves[slv].arvalid = '0;
+            read_if_slaves[slv].araddr  = '0;
+            read_if_slaves[slv].arid    = '0;
+            read_if_slaves[slv].arlen   = '0;
+            read_if_slaves[slv].arsize  = '0;
+            read_if_slaves[slv].arburst = '0 as Burst;
+            read_if_slaves[slv].rready  = '0;
             case r_read_state {
                 ReadState::IDLE: {
                     if slv == w_read_slv_idx {
-                        read_if_slaves[slv]   <> read_if_master;
-                        read_if_master.rvalid =  0;
-                    } else {
-                        read_if_slaves[slv].arvalid = '0;
-                        read_if_slaves[slv].araddr  = '0;
-                        read_if_slaves[slv].arid    = '0;
-                        read_if_slaves[slv].arlen   = '0;
-                        read_if_slaves[slv].arsize  = '0;
-                        read_if_slaves[slv].arburst = '0 as Burst;
-                        read_if_slaves[slv].rready  = '0;
+                        read_if_slaves[slv].arvalid = read_if_master.arvalid;
+                        read_if_slaves[slv].araddr  = read_if_master.araddr;
+                        read_if_slaves[slv].arid    = read_if_master.arid;
+                        read_if_slaves[slv].arlen   = read_if_master.arlen;
+                        read_if_slaves[slv].arsize  = read_if_master.arsize;
+                        read_if_slaves[slv].arburst = read_if_master.arburst;
+                        read_if_slaves[slv].rready  = read_if_master.rready;
                     }
                 }
                 ReadState::WAIT_RESP: {
                     if slv == r_read_slv_idx {
-                        read_if_slaves[slv]    <> read_if_master;
-                        read_if_master.arready =  0;
-                    } else {
-                        read_if_slaves[slv].arvalid = '0;
-                        read_if_slaves[slv].araddr  = '0;
-                        read_if_slaves[slv].arid    = '0;
-                        read_if_slaves[slv].arlen   = '0;
-                        read_if_slaves[slv].arsize  = '0;
-                        read_if_slaves[slv].arburst = '0 as Burst;
-                        read_if_slaves[slv].rready  = '0;
+                        read_if_slaves[slv].arvalid = read_if_master.arvalid;
+                        read_if_slaves[slv].araddr  = read_if_master.araddr;
+                        read_if_slaves[slv].arid    = read_if_master.arid;
+                        read_if_slaves[slv].arlen   = read_if_master.arlen;
+                        read_if_slaves[slv].arsize  = read_if_master.arsize;
+                        read_if_slaves[slv].arburst = read_if_master.arburst;
+                        read_if_slaves[slv].rready  = read_if_master.rready;
                     }
                 }
             }
+        }
+        always_comb {
+            write_if_slaves[slv].awvalid = '0;
+            write_if_slaves[slv].awaddr  = '0;
+            write_if_slaves[slv].awid    = '0;
+            write_if_slaves[slv].awlen   = '0;
+            write_if_slaves[slv].awsize  = '0;
+            write_if_slaves[slv].awburst = '0 as Burst;
+            write_if_slaves[slv].wvalid  = '0;
+            write_if_slaves[slv].wid     = '0;
+            write_if_slaves[slv].wdata   = '0;
+            write_if_slaves[slv].wstrb   = '0;
+            write_if_slaves[slv].wlast   = '0;
+            write_if_slaves[slv].bready  = '0;
             case r_write_state {
                 WriteState::IDLE: {
                     if slv == w_write_slv_idx {
-                        write_if_slaves[slv]   <> write_if_master;
-                        write_if_master.wready =  0;
-                        write_if_master.bvalid =  0;
-                    } else {
-                        write_if_slaves[slv].awvalid = '0;
-                        write_if_slaves[slv].awaddr  = '0;
-                        write_if_slaves[slv].awid    = '0;
-                        write_if_slaves[slv].awlen   = '0;
-                        write_if_slaves[slv].awsize  = '0;
-                        write_if_slaves[slv].awburst = '0 as Burst;
-                        write_if_slaves[slv].wvalid  = '0;
-                        write_if_slaves[slv].wid     = '0;
-                        write_if_slaves[slv].wdata   = '0;
-                        write_if_slaves[slv].wstrb   = '0;
-                        write_if_slaves[slv].wlast   = '0;
-                        write_if_slaves[slv].bready  = '0;
+                        write_if_slaves[slv].awvalid = write_if_master.awvalid;
+                        write_if_slaves[slv].awaddr  = write_if_master.awaddr;
+                        write_if_slaves[slv].awid    = write_if_master.awid;
+                        write_if_slaves[slv].awlen   = write_if_master.awlen;
+                        write_if_slaves[slv].awsize  = write_if_master.awsize;
+                        write_if_slaves[slv].awburst = write_if_master.awburst;
+                        write_if_slaves[slv].wvalid  = write_if_master.wvalid;
+                        write_if_slaves[slv].wid     = write_if_master.wid;
+                        write_if_slaves[slv].wdata   = write_if_master.wdata;
+                        write_if_slaves[slv].wstrb   = write_if_master.wstrb;
+                        write_if_slaves[slv].wlast   = write_if_master.wlast;
+                        write_if_slaves[slv].bready  = write_if_master.bready;
                     }
                 }
                 WriteState::WAIT_WDATA: {
                     if slv == r_write_slv_idx {
-                        write_if_slaves[slv]    <> write_if_master;
-                        write_if_master.awready =  0;
-                        write_if_master.bvalid  =  0;
-                    } else {
-                        write_if_slaves[slv].awvalid = '0;
-                        write_if_slaves[slv].awaddr  = '0;
-                        write_if_slaves[slv].awid    = '0;
-                        write_if_slaves[slv].awlen   = '0;
-                        write_if_slaves[slv].awsize  = '0;
-                        write_if_slaves[slv].awburst = '0 as Burst;
-                        write_if_slaves[slv].wvalid  = '0;
-                        write_if_slaves[slv].wid     = '0;
-                        write_if_slaves[slv].wdata   = '0;
-                        write_if_slaves[slv].wstrb   = '0;
-                        write_if_slaves[slv].wlast   = '0;
-                        write_if_slaves[slv].bready  = '0;
+                        write_if_slaves[slv].awvalid = write_if_master.awvalid;
+                        write_if_slaves[slv].awaddr  = write_if_master.awaddr;
+                        write_if_slaves[slv].awid    = write_if_master.awid;
+                        write_if_slaves[slv].awlen   = write_if_master.awlen;
+                        write_if_slaves[slv].awsize  = write_if_master.awsize;
+                        write_if_slaves[slv].awburst = write_if_master.awburst;
+                        write_if_slaves[slv].wvalid  = write_if_master.wvalid;
+                        write_if_slaves[slv].wid     = write_if_master.wid;
+                        write_if_slaves[slv].wdata   = write_if_master.wdata;
+                        write_if_slaves[slv].wstrb   = write_if_master.wstrb;
+                        write_if_slaves[slv].wlast   = write_if_master.wlast;
+                        write_if_slaves[slv].bready  = write_if_master.bready;
                     }
                 }
                 WriteState::WAIT_RESP: {
                     if slv == r_write_slv_idx {
-                        write_if_slaves[slv]    <> write_if_master;
-                        write_if_master.awready =  0;
-                        write_if_master.wready  =  0;
-                    } else {
-                        write_if_slaves[slv].awvalid = '0;
-                        write_if_slaves[slv].awaddr  = '0;
-                        write_if_slaves[slv].awid    = '0;
-                        write_if_slaves[slv].awlen   = '0;
-                        write_if_slaves[slv].awsize  = '0;
-                        write_if_slaves[slv].awburst = '0 as Burst;
-                        write_if_slaves[slv].wvalid  = '0;
-                        write_if_slaves[slv].wid     = '0;
-                        write_if_slaves[slv].wdata   = '0;
-                        write_if_slaves[slv].wstrb   = '0;
-                        write_if_slaves[slv].wlast   = '0;
-                        write_if_slaves[slv].bready  = '0;
+                        write_if_slaves[slv].awvalid = write_if_master.awvalid;
+                        write_if_slaves[slv].awaddr  = write_if_master.awaddr;
+                        write_if_slaves[slv].awid    = write_if_master.awid;
+                        write_if_slaves[slv].awlen   = write_if_master.awlen;
+                        write_if_slaves[slv].awsize  = write_if_master.awsize;
+                        write_if_slaves[slv].awburst = write_if_master.awburst;
+                        write_if_slaves[slv].wvalid  = write_if_master.wvalid;
+                        write_if_slaves[slv].wid     = write_if_master.wid;
+                        write_if_slaves[slv].wdata   = write_if_master.wdata;
+                        write_if_slaves[slv].wstrb   = write_if_master.wstrb;
+                        write_if_slaves[slv].wlast   = write_if_master.wlast;
+                        write_if_slaves[slv].bready  = write_if_master.bready;
                     }
                 }
             }
@@ -168,8 +256,10 @@ module axi_interconnect #(
 
     always_ff (i_clk, i_rst) {
         if_reset {
-            r_read_state  = ReadState::IDLE;
-            r_write_state = WriteState::IDLE;
+            r_read_state    = ReadState::IDLE;
+            r_write_state   = WriteState::IDLE;
+            r_read_slv_idx  = '0;
+            r_write_slv_idx = '0;
         } else {
             case (r_read_state) {
                 ReadState::IDLE: {
