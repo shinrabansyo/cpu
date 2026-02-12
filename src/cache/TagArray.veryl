@@ -2,11 +2,15 @@ module TagArray (
     i_clk: input clock,
     i_rst: input reset,
 
-    i_set   : input  ICacheSet,
-    i_tag   : input  ICacheTag,
-    i_we    : input  logic    ,
-    i_wvalid: input  logic    ,
-    o_hit   : output logic    ,
+    // fetch 用ポート
+    i_set: input  ICacheSet,
+    i_tag: input  ICacheTag,
+    i_we : input  logic    ,
+    o_hit: output logic    ,
+
+    // flush 用ポート
+    i_do_flush : input logic    ,
+    i_flush_set: input ICacheSet,
 ) {
     // 通常時は we = false でタグ読み出し。
     // ミス時はコントローラが we = true にしてタグ書き込み
@@ -16,41 +20,59 @@ module TagArray (
         valid: logic    ,
         tag  : ICacheTag,
     }
-    // cycle 0
-    var w_set       : ICacheSet;
-    var w_write_meta: Meta     ;
 
     // cycle 1
-    var w_read_meta: Meta     ;
-    var r_tag      : ICacheTag;
+    var r_valid_array: logic     [1 << $bits(ICacheSet)];
+    var w_read_tag   : ICacheTag                        ;
+    var r_read_valid : logic                            ;
+    var r_tag        : ICacheTag                        ;
 
     always_comb {
-        w_set              = i_set;
-        w_write_meta.valid = i_wvalid;
-        w_write_meta.tag   = i_tag;
-
-        o_hit = w_read_meta.valid && (w_read_meta.tag == r_tag);
+        o_hit = r_read_valid && (w_read_tag == r_tag);
     }
 
     always_ff (i_clk, i_rst) {
         if_reset {
-            r_tag = '0;
+            r_tag        = '0;
+            r_read_valid = 0;
+            for i: u32 in 0..(1 << $bits(ICacheSet)) {
+                r_valid_array[i] = 0;
+            }
         } else {
             r_tag = i_tag;
+            // 同時に同じセットへの flush と read が来た場合は flush を優先する
+            if i_do_flush && i_flush_set == i_set {
+                r_read_valid = 0;
+            } else {
+                r_read_valid = r_valid_array[i_set];
+            }
+            // 同一サイクルで we と flush が立った場合は flush を優先する
+            if i_we && i_do_flush {
+                if i_set == i_flush_set {
+                    r_valid_array[i_set] = 0;
+                } else {
+                    r_valid_array[i_set]       = 1;
+                    r_valid_array[i_flush_set] = 0;
+                }
+            } else if i_we {
+                r_valid_array[i_set] = 1;
+            } else if i_do_flush {
+                r_valid_array[i_flush_set] = 0;
+            }
         }
     }
 
     inst meta_array: Ram #(
-        DataType: Meta     ,
+        DataType: ICacheTag,
         AddrType: ICacheSet,
     ) (
         i_clk: i_clk,
         i_rst: i_rst,
 
-        i_addr : w_set       ,
-        i_we   : i_we        ,
-        i_wstrb: '1          ,
-        i_data : w_write_meta,
-        o_data : w_read_meta ,
+        i_addr : i_set     ,
+        i_we   : i_we      ,
+        i_wstrb: '1        ,
+        i_data : i_tag     ,
+        o_data : w_read_tag,
     );
 }

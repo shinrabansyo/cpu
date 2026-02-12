@@ -62,7 +62,11 @@ embed (inline) sv{{{
             .mem_write_if_wid     (mem_write_if.wid    ),
             .mem_write_if_wdata   (mem_write_if.wdata  ),
             .mem_write_if_wstrb   (mem_write_if.wstrb  ),
-            .mem_write_if_wlast   (mem_write_if.wlast  )
+            .mem_write_if_wlast   (mem_write_if.wlast  ),
+            .mem_write_if_bvalid  (mem_write_if.bvalid ),
+            .mem_write_if_bready  (mem_write_if.bready ),
+            .mem_write_if_bid     (mem_write_if.bid    ),
+            .mem_write_if_bresp   (mem_write_if.bresp  )
         );
         \{ AxiRamWrapper \} axi_ram (
             .i_clk          (i_clk         ),
@@ -91,7 +95,11 @@ embed (inline) sv{{{
             .mem_write_if_wready (mem_write_if.wready ),
             .mem_write_if_wdata  (mem_write_if.wdata  ),
             .mem_write_if_wstrb  (mem_write_if.wstrb  ),
-            .mem_write_if_wlast  (mem_write_if.wlast  )
+            .mem_write_if_wlast  (mem_write_if.wlast  ),
+            .mem_write_if_bvalid (mem_write_if.bvalid ),
+            .mem_write_if_bready (mem_write_if.bready ),
+            .mem_write_if_bid    (mem_write_if.bid    ),
+            .mem_write_if_bresp  (mem_write_if.bresp  )
         );
 
         Id w_id;

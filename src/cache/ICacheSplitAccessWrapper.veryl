@@ -3,62 +3,106 @@ module ICacheSplitAccessWrapper (
     i_rst: input reset,
 
     // read request
-    core_if_valid: input  logic,
-    core_if_addr : input  Addr ,
-    core_if_ready: output logic,
-    core_if_instr: output Inst ,
+    fetch_if_valid: input  logic,
+    fetch_if_addr : input  Addr ,
+    fetch_if_ready: output logic,
+    fetch_if_instr: output Inst ,
+    // write request
+    core_write_if_wvalid: input  logic                 ,
+    core_write_if_waddr : input  Addr                  ,
+    core_write_if_wdata : input  Data                  ,
+    core_write_if_wstrb : input  logic<$bits(Data) / 8>,
+    core_write_if_wready: output logic                 ,
 
     // memory interface
-    mem_if_arvalid: output logic,
-    mem_if_arready: input  logic,
-    mem_if_araddr : output Addr ,
-    mem_if_arid   : output Id   ,
-    mem_if_arlen  : output Len  ,
-    mem_if_arsize : output Size ,
-    mem_if_arburst: output Burst,
+    read_if_arvalid: output logic,
+    read_if_arready: input  logic,
+    read_if_araddr : output Addr ,
+    read_if_arid   : output Id   ,
+    read_if_arlen  : output Len  ,
+    read_if_arsize : output Size ,
+    read_if_arburst: output Burst,
 
-    mem_if_rvalid: input  logic    ,
-    mem_if_rready: output logic    ,
-    mem_if_rdata : input  logic<32>,
-    mem_if_rid   : input  Id       ,
-    mem_if_rresp : input  Resp     ,
-    mem_if_rlast : input  logic    ,
+    read_if_rvalid: input  logic    ,
+    read_if_rready: output logic    ,
+    read_if_rdata : input  logic<32>,
+    read_if_rid   : input  Id       ,
+    read_if_rresp : input  Resp     ,
+    read_if_rlast : input  logic    ,
+
+    write_if_awvalid: output logic,
+    write_if_awready: input  logic,
+    write_if_awaddr : output Addr ,
+    write_if_awid   : output Id   ,
+    write_if_awlen  : output Len  ,
+    write_if_awsize : output Size ,
+    write_if_awburst: output Burst,
+    write_if_wvalid : output logic    ,
+    write_if_wready : input  logic    ,
+    write_if_wdata  : output logic<32>,
+    write_if_wstrb  : output logic<32 / 8>,
+    write_if_wlast  : output logic    ,
+    write_if_bvalid : input  logic    ,
+    write_if_bready : output logic    ,
+    write_if_bid    : input  Id       ,
+    write_if_bresp  : input  Resp     ,
 ) {
     import Config::*;
     import axi_pkg::*;
 
     inst core_if: core_icache_if;
-    inst mem_if : axi_read_if;
+    inst read_if : axi_read_if;
+    inst write_if: axi_write_if;
 
     always_comb {
-        core_if.valid = core_if_valid;
-        core_if.addr  = core_if_addr;
-        core_if_instr = core_if.instr;
-        core_if_ready = core_if.ready;
+        core_if.valid = fetch_if_valid;
+        core_if.addr  = fetch_if_addr;
+        fetch_if_instr = core_if.instr;
+        fetch_if_ready = core_if.ready;
 
-        mem_if.arready = mem_if_arready;
-        mem_if_arvalid = mem_if.arvalid;
-        mem_if_araddr  = mem_if.araddr;
-        mem_if_arid    = mem_if.arid;
-        mem_if_arlen   = mem_if.arlen;
-        mem_if_arsize  = mem_if.arsize;
-        mem_if_arburst = mem_if.arburst;
+        read_if.arready = read_if_arready;
+        read_if_arvalid = read_if.arvalid;
+        read_if_araddr  = read_if.araddr;
+        read_if_arid    = read_if.arid;
+        read_if_arlen   = read_if.arlen;
+        read_if_arsize  = read_if.arsize;
+        read_if_arburst = read_if.arburst;
 
-        mem_if.rvalid = mem_if_rvalid;
-        mem_if_rready = mem_if.rready;
-        mem_if.rdata  = mem_if_rdata;
-        mem_if.rid    = mem_if_rid;
-        mem_if.rresp  = mem_if_rresp;
-        mem_if.rlast  = mem_if_rlast;
+        read_if.rvalid = read_if_rvalid;
+        read_if_rready = read_if.rready;
+        read_if.rdata  = read_if_rdata;
+        read_if.rid    = read_if_rid;
+        read_if.rresp  = read_if_rresp;
+        read_if.rlast  = read_if_rlast;
+
+        write_if_awvalid = write_if.awvalid;
+        write_if.awready = write_if_awready;
+        write_if_awaddr  = write_if.awaddr;
+        write_if_awid    = write_if.awid;
+        write_if_awlen   = write_if.awlen;
+        write_if_awsize  = write_if.awsize;
+        write_if_awburst = write_if.awburst;
+        write_if_wvalid  = write_if.wvalid;
+        write_if.wready  = write_if_wready;
+        write_if_wdata   = write_if.wdata;
+        write_if_wstrb   = write_if.wstrb;
+        write_if_wlast   = write_if.wlast;
+
+        write_if.bvalid  = write_if_bvalid;
+        write_if_bready  = write_if.bready;
+        write_if.bid     = write_if_bid;
+        write_if.bresp   = write_if_bresp;
     }
 
     inst icache_split_access: ICacheSplitAccess (
         i_clk: i_clk,
         i_rst: i_rst,
 
-        core_if: core_if,
+        fetch_if: core_if,
+        core_write_if: core_if,
 
-        mem_if: mem_if,
+        read_if,
+        write_if,
     );
 
 }

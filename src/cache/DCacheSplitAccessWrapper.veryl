@@ -40,6 +40,10 @@ module DCacheSplitAccessWrapper (
     mem_write_if_wdata  : output logic<32>    ,
     mem_write_if_wstrb  : output logic<32 / 8>,
     mem_write_if_wlast  : output logic        ,
+    mem_write_if_bvalid : input  logic        ,
+    mem_write_if_bready : output logic        ,
+    mem_write_if_bid    : input  Id           ,
+    mem_write_if_bresp  : input  Resp         ,
 ) {
     import Config::*;
     import axi_pkg::*;
@@ -85,6 +89,10 @@ module DCacheSplitAccessWrapper (
         mem_write_if_wdata   = mem_write_if.wdata;
         mem_write_if_wstrb   = mem_write_if.wstrb;
         mem_write_if_wlast   = mem_write_if.wlast;
+        mem_write_if.bvalid  = mem_write_if_bvalid;
+        mem_write_if_bready  = mem_write_if.bready;
+        mem_write_if.bid     = mem_write_if_bid;
+        mem_write_if.bresp   = mem_write_if_bresp;
     }
 
     inst dcache_split_access: DCacheSplitAccess (

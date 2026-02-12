@@ -29,6 +29,10 @@ module AxiRamWrapper #(
     mem_write_if_wdata  : input  logic<32>    ,
     mem_write_if_wstrb  : input  logic<32 / 8>,
     mem_write_if_wlast  : input  logic        ,
+    mem_write_if_bvalid : output logic        ,
+    mem_write_if_bready : input  logic        ,
+    mem_write_if_bid    : output Id           ,
+    mem_write_if_bresp  : output Resp         ,
 ) {
     import axi_pkg::*;
     import Config::*;
@@ -69,5 +73,9 @@ module AxiRamWrapper #(
         write_if.wdata       = mem_write_if_wdata;
         write_if.wstrb       = mem_write_if_wstrb;
         write_if.wlast       = mem_write_if_wlast;
+        mem_write_if_bvalid  = write_if.bvalid;
+        write_if.bready      = mem_write_if_bready;
+        mem_write_if_bid     = write_if.bid;
+        mem_write_if_bresp   = write_if.bresp;
     }
 }

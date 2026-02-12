@@ -3,11 +3,14 @@ module ICacheSplitAccess (
     i_clk: input clock,
     i_rst: input reset,
 
-    // read request
-    core_if: modport core_icache_if::icache,
+    // fetch request
+    fetch_if: modport core_icache_if::icache_fetch,
+    // write request
+    core_write_if: modport core_icache_if::icache_write,
 
     // memory interface
-    mem_if: modport axi_read_if::master,
+    read_if: modport axi_read_if::master,
+    write_if: modport axi_write_if::master,
 ) {
     import Config::*;
     // ライン境界をまたぐかの判定
@@ -41,22 +44,22 @@ module ICacheSplitAccess (
     var r_remain_bytes: logic<3>;
 
     always_comb {
-        w_cross_boundary = isCrossBoundary(core_if.addr);
+        w_cross_boundary = isCrossBoundary(fetch_if.addr);
 
         cache_side_if.valid = 0;
         cache_side_if.addr  = '0;
-        core_if.ready       = 0;
-        core_if.instr       = '0;
+        fetch_if.ready       = 0;
+        fetch_if.instr       = '0;
         w_next_instr        = r_instr;
         w_next_state        = r_state;
         w_addr_update       = 0;
         case r_state {
             State::IDLE: {
                 w_addr_update       = 1;
-                cache_side_if.valid = core_if.valid;
-                cache_side_if.addr  = core_if.addr;
-                core_if.ready       = cache_side_if.ready;
-                core_if.instr       = cache_side_if.instr;
+                cache_side_if.valid = fetch_if.valid;
+                cache_side_if.addr  = fetch_if.addr;
+                fetch_if.ready       = cache_side_if.ready;
+                fetch_if.instr       = cache_side_if.instr;
 
                 // ラインをまたぐ場合は 2ライン目の取得に進む
                 if w_cross_boundary && (cache_side_if.valid || r_first_req) {
@@ -78,10 +81,10 @@ module ICacheSplitAccess (
                 // 2ライン目の取得完了したら
                 // 次ラインの取得要求を出す
                 if cache_side_if.ready {
-                    cache_side_if.valid = core_if.valid;
-                    cache_side_if.addr  = core_if.addr;
-                    core_if.ready       = 1;
-                    core_if.instr       = (cache_side_if.instr << (8 * r_remain_bytes)) | r_instr;
+                    cache_side_if.valid = fetch_if.valid;
+                    cache_side_if.addr  = fetch_if.addr;
+                    fetch_if.ready       = 1;
+                    fetch_if.instr       = (cache_side_if.instr << (8 * r_remain_bytes)) | r_instr;
                     if !w_cross_boundary {
                         w_next_state = State::IDLE;
                     } else {
@@ -106,9 +109,9 @@ module ICacheSplitAccess (
             r_state = w_next_state;
             r_instr = w_next_instr;
 
-            if (w_addr_update && core_if.valid) || r_first_req {
-                r_addr         = core_if.addr;
-                r_remain_bytes = (LINE_SIZE_BYTES - GetLineOffset(core_if.addr)) as 3;
+            if (w_addr_update && fetch_if.valid) || r_first_req {
+                r_addr         = fetch_if.addr;
+                r_remain_bytes = (LINE_SIZE_BYTES - GetLineOffset(fetch_if.addr)) as 3;
                 r_first_req    = 0;
             }
         }
@@ -119,9 +122,11 @@ module ICacheSplitAccess (
         i_rst  ,
 
         // read request
-        core_if: cache_side_if,
+        fetch_if: cache_side_if,
+        core_write_if,
 
         // memory interface
-        mem_if  ,
+        read_if,
+        write_if,
     );
 }

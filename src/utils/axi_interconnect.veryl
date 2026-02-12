@@ -120,20 +120,20 @@ module axi_interconnect #(
             }
         }
 
-        // 無効なアドレスの場合
+        // 無効なアドレスの場合はDECERRを返す
         if !w_read_slv_valid {
-            read_if_master.arready = 0;
-            read_if_master.rvalid  = 0;
+            read_if_master.arready = 1;
+            read_if_master.rvalid  = 1;
             read_if_master.rdata   = '0;
-            read_if_master.rresp   = '0 as Resp;
+            read_if_master.rresp   = Resp::DECERR;
             read_if_master.rid     = '0;
             read_if_master.rlast   = 0;
         }
         if !w_write_slv_valid {
-            write_if_master.awready = 0;
-            write_if_master.wready  = 0;
-            write_if_master.bvalid  = 0;
-            write_if_master.bresp   = '0 as Resp;
+            write_if_master.awready = 1;
+            write_if_master.wready  = 1;
+            write_if_master.bvalid  = 1;
+            write_if_master.bresp   = Resp::DECERR;
             write_if_master.bid     = '0;
         }
     }

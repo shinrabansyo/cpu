@@ -6,14 +6,33 @@ interface core_icache_if {
     var instr: Inst ;
     var ready: logic;
 
-    modport core {
+    // isb 命令用
+    var wvalid: logic                 ;
+    var waddr : Addr                  ;
+    var wdata : Data                  ;
+    var wstrb : logic<$bits(Data) / 8>;
+    var wready: logic                 ;
+
+    modport core_fetch {
         valid: output,
         addr : output,
         instr: input ,
         ready: input ,
     }
 
-    modport icache {
-        ..converse(core)
+    modport core_write {
+        wvalid: output,
+        waddr : output,
+        wdata : output,
+        wstrb : output,
+        wready: input ,
+    }
+
+    modport icache_fetch {
+        ..converse(core_fetch)
+    }
+
+    modport icache_write {
+        ..converse(core_write)
     }
 }

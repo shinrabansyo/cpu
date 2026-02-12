@@ -5,10 +5,13 @@ pub module ICacheNonSplitAccess (
     i_rst: input reset,
 
     // read request
-    core_if: modport core_icache_if::icache,
+    fetch_if: modport core_icache_if::icache_fetch,
+    // write request
+    core_write_if: modport core_icache_if::icache_write,
 
     // memory interface
-    mem_if: modport axi_read_if::master,
+    read_if : modport axi_read_if::master ,
+    write_if: modport axi_write_if::master,
 ) {
     import Config::*;
 
@@ -48,11 +51,14 @@ pub module ICacheNonSplitAccess (
         i_clk: i_clk,
         i_rst: i_rst,
 
+        // fetch 用ポート
         i_set   : w_ta_set   ,
         i_tag   : w_ta_tag   ,
         i_we    : w_ta_we    ,
-        i_wvalid: w_ta_wvalid, // キャッシュの flush 時はこのポートを使って invalidate する
         o_hit   : w_ta_hit   ,
+        // flush 用ポート
+        i_do_flush : core_write_if.wvalid, 
+        i_flush_set: GetICacheSet(core_write_if.waddr),
     );
     // SET_WIDTH は default param で指定しているが、
     // 明示的に指定しないと verilator のバグを踏み抜く
@@ -74,27 +80,27 @@ pub module ICacheNonSplitAccess (
         w_miss  = r_valid && !w_ta_hit;
         w_stall = w_miss | r_state != State::IDLE;
 
-        core_if.ready = !w_stall && r_valid;
-        core_if.instr = w_da_rdata[0+:48];
+        fetch_if.ready = !w_stall && r_valid;
+        fetch_if.instr = w_da_rdata[0+:48];
 
-        w_ta_set         = GetICacheSet(core_if.addr);
-        w_ta_tag         = GetICacheTag(core_if.addr);
+        w_ta_set         = GetICacheSet(fetch_if.addr);
+        w_ta_tag         = GetICacheTag(fetch_if.addr);
         w_ta_we          = 0;
         w_ta_wvalid      = 0;
-        w_da_set         = GetICacheSet(core_if.addr);
-        w_da_line_offset = GetLineOffset(core_if.addr);
+        w_da_set         = GetICacheSet(fetch_if.addr);
+        w_da_line_offset = GetLineOffset(fetch_if.addr);
         w_da_we          = 0;
         w_da_wmask       = 0;
         w_da_wdata       = '0;
         case (r_state) {
             State::FETCH: {
-                if mem_if.rvalid && mem_if.rready {
+                if read_if.rvalid && read_if.rready {
                     w_da_set         = GetICacheSet(GetLineAddr(r_addr));
                     w_da_line_offset = r_beat_counter << 2;
                     w_da_we          = 1;
                     w_da_wmask       = 8'b1111;
-                    w_da_wdata       = mem_if.rdata as DoubleData;
-                    if mem_if.rlast {
+                    w_da_wdata       = read_if.rdata as DoubleData;
+                    if read_if.rlast {
                         w_ta_set    = GetICacheSet(GetLineAddr(r_addr));
                         w_ta_tag    = GetICacheTag(GetLineAddr(r_addr));
                         w_ta_we     = 1;
@@ -113,47 +119,47 @@ pub module ICacheNonSplitAccess (
 
     always_ff (i_clk, i_rst) {
         if_reset {
-            r_addr         = '0;
-            r_valid        = 0;
-            r_state        = State::IDLE;
-            r_beat_counter = '0;
-            mem_if.arvalid = 0;
-            mem_if.araddr  = '0;
-            mem_if.arid    = 0;
-            mem_if.arsize  = 2;
-            // mem_if.arlen   = (BEAT_MAX - 1) as axi_pkg::Len;
-            mem_if.arlen   = '0;
-            mem_if.arburst = axi_pkg::Burst::INCR;
-            mem_if.rready  = 0;
+            r_addr          = '0;
+            r_valid         = 0;
+            r_state         = State::IDLE;
+            r_beat_counter  = '0;
+            read_if.arvalid = 0;
+            read_if.araddr  = '0;
+            read_if.arid    = 0;
+            read_if.arsize  = 2;
+            // read_if.arlen   = (BEAT_MAX - 1) as axi_pkg::Len;
+            read_if.arlen   = '0;
+            read_if.arburst = axi_pkg::Burst::INCR;
+            read_if.rready  = 0;
         } else {
             if !w_stall {
-                r_addr  = core_if.addr;
-                r_valid = core_if.valid;
+                r_addr  = fetch_if.addr;
+                r_valid = fetch_if.valid;
             }
             case (r_state) {
                 State::IDLE: {
                     if w_miss {
                         r_state = State::FETCH;
 
-                        mem_if.arvalid = 1;
-                        mem_if.araddr  = GetLineAddr(r_addr);
-                        mem_if.arsize  = 2;
-                        mem_if.arlen   = (BEAT_MAX - 1) as axi_pkg::Len;
-                        mem_if.arburst = axi_pkg::Burst::INCR;
-                        mem_if.rready  = 1;
-                        r_beat_counter = '0;
+                        read_if.arvalid = 1;
+                        read_if.araddr  = GetLineAddr(r_addr);
+                        read_if.arsize  = 2;
+                        read_if.arlen   = (BEAT_MAX - 1) as axi_pkg::Len;
+                        read_if.arburst = axi_pkg::Burst::INCR;
+                        read_if.rready  = 1;
+                        r_beat_counter  = '0;
                     }
                 }
                 State::FETCH: {
-                    if mem_if.arvalid && mem_if.arready {
-                        mem_if.arvalid = 0;
+                    if read_if.arvalid && read_if.arready {
+                        read_if.arvalid = 0;
                     }
-                    if mem_if.rvalid && mem_if.rready {
+                    if read_if.rvalid && read_if.rready {
                         r_beat_counter += 1;
                     }
-                    if mem_if.rlast {
-                        mem_if.rready = 0;
-                        r_state       = State::READ;
+                    if read_if.rlast {
+                        read_if.rready = 0;
+                        r_state        = State::READ;
                     }
                 }
                 State::READ: {

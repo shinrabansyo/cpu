@@ -14,7 +14,11 @@ embed (inline) sv{{{
         \{ axi_read_if \} #(
             .Addr(Addr),
             .Data(logic[31:0])
-        ) mem_if();
+        ) read_if();
+        \{ axi_write_if \} #(
+            .Addr(Addr),
+            .Data(logic[31:0])
+        ) write_if();
 
 
         logic i_clk;
@@ -29,52 +33,77 @@ embed (inline) sv{{{
         \{ ICacheSplitAccessWrapper \} icache(
             .i_clk,
             .i_rst,
-            .core_if_valid (core_if.valid),
-            .core_if_addr (core_if.addr),
-            .core_if_ready (core_if.ready),
-            .core_if_instr (core_if.instr),
-            .mem_if_arvalid  (mem_if.arvalid),
-            .mem_if_arready  (mem_if.arready),
-            .mem_if_araddr   (mem_if.araddr ),
-            .mem_if_arid    (mem_if.arid   ),
-            .mem_if_arlen   (mem_if.arlen  ),
-            .mem_if_arsize  (mem_if.arsize ),
-            .mem_if_arburst (mem_if.arburst),
-            .mem_if_rvalid  (mem_if.rvalid ),
-            .mem_if_rready  (mem_if.rready ),
-            .mem_if_rdata   (mem_if.rdata  ),
-            .mem_if_rid     (mem_if.rid    ),
-            .mem_if_rresp   (mem_if.rresp  ),
-            .mem_if_rlast   (mem_if.rlast  )
+            .fetch_if_valid (core_if.valid),
+            .fetch_if_addr (core_if.addr),
+            .fetch_if_ready (core_if.ready),
+            .fetch_if_instr (core_if.instr),
+            .core_write_if_wvalid (core_if.wvalid),
+            .core_write_if_waddr (core_if.waddr),
+            .core_write_if_wdata (core_if.wdata),
+            .core_write_if_wstrb (core_if.wstrb),
+            .core_write_if_wready (core_if.wready),
+            .read_if_arvalid  (read_if.arvalid),
+            .read_if_arready  (read_if.arready),
+            .read_if_araddr   (read_if.araddr ),
+            .read_if_arid    (read_if.arid   ),
+            .read_if_arlen   (read_if.arlen  ),
+            .read_if_arsize  (read_if.arsize ),
+            .read_if_arburst (read_if.arburst),
+            .read_if_rvalid  (read_if.rvalid ),
+            .read_if_rready  (read_if.rready ),
+            .read_if_rdata   (read_if.rdata  ),
+            .read_if_rid     (read_if.rid    ),
+            .read_if_rresp   (read_if.rresp  ),
+            .read_if_rlast   (read_if.rlast  ),
+            .write_if_awvalid(write_if.awvalid),
+            .write_if_awready(write_if.awready),
+            .write_if_awaddr (write_if.awaddr ),
+            .write_if_awid   (write_if.awid   ),
+            .write_if_awlen  (write_if.awlen  ),
+            .write_if_awsize (write_if.awsize ),
+            .write_if_awburst(write_if.awburst),
+            .write_if_wvalid (write_if.wvalid ),
+            .write_if_wready (write_if.wready ),
+            .write_if_wdata  (write_if.wdata  ),
+            .write_if_wstrb  (write_if.wstrb  ),
+            .write_if_wlast  (write_if.wlast  ),
+            .write_if_bvalid (write_if.bvalid ),
+            .write_if_bready (write_if.bready ),
+            .write_if_bid    (write_if.bid    ),
+            .write_if_bresp  (write_if.bresp  )
         );
         \{ AxiRamWrapper \} axi_ram (
             .i_clk          (i_clk         ),
             .i_rst          (i_rst         ),
-            .mem_read_if_arvalid  (mem_if.arvalid),
-            .mem_read_if_arready  (mem_if.arready),
-            .mem_read_if_araddr   (mem_if.araddr ),
-            .mem_read_if_arid    (mem_if.arid   ),
-            .mem_read_if_arlen   (mem_if.arlen  ),
-            .mem_read_if_arsize  (mem_if.arsize ),
-            .mem_read_if_arburst (mem_if.arburst),
-            .mem_read_if_rvalid  (mem_if.rvalid ),
-            .mem_read_if_rready  (mem_if.rready ),
-            .mem_read_if_rdata   (mem_if.rdata  ),
-            .mem_read_if_rid     (mem_if.rid    ),
-            .mem_read_if_rresp   (mem_if.rresp  ),
-            .mem_read_if_rlast   (mem_if.rlast  ),
-            .mem_write_if_awvalid(0),
-            .mem_write_if_awready(),
-            .mem_write_if_awaddr (0),
-            .mem_write_if_awid   (0),
-            .mem_write_if_awlen  (0),
-            .mem_write_if_awsize (0),
-            .mem_write_if_awburst(0),
-            .mem_write_if_wvalid (0),
-            .mem_write_if_wready (),
-            .mem_write_if_wdata  (0),
-            .mem_write_if_wstrb  (0),
-            .mem_write_if_wlast  (0)
+            .mem_read_if_arvalid  (read_if.arvalid),
+            .mem_read_if_arready  (read_if.arready),
+            .mem_read_if_araddr   (read_if.araddr ),
+            .mem_read_if_arid    (read_if.arid   ),
+            .mem_read_if_arlen   (read_if.arlen  ),
+            .mem_read_if_arsize  (read_if.arsize ),
+            .mem_read_if_arburst (read_if.arburst),
+            .mem_read_if_rvalid  (read_if.rvalid ),
+            .mem_read_if_rready  (read_if.rready ),
+            .mem_read_if_rdata   (read_if.rdata  ),
+            .mem_read_if_rid     (read_if.rid    ),
+            .mem_read_if_rresp   (read_if.rresp  ),
+            .mem_read_if_rlast   (read_if.rlast  ),
+            .mem_write_if_awvalid(write_if.awvalid),
+            .mem_write_if_awready(write_if.awready),
+            .mem_write_if_awaddr (write_if.awaddr ),
+            .mem_write_if_awid   (write_if.awid   ),
+            .mem_write_if_awlen  (write_if.awlen  ),
+            .mem_write_if_awsize (write_if.awsize ),
+            .mem_write_if_awburst(write_if.awburst),
+            .mem_write_if_wvalid (write_if.wvalid ),
+            .mem_write_if_wready (write_if.wready ),
+            .mem_write_if_wdata  (write_if.wdata  ),
+            .mem_write_if_wstrb  (write_if.wstrb  ),
+            .mem_write_if_wlast  (write_if.wlast  ),
+            .mem_write_if_bvalid (write_if.bvalid ),
+            .mem_write_if_bready (write_if.bready ),
+            .mem_write_if_bid    (write_if.bid    ),
+            .mem_write_if_bresp  (write_if.bresp  )
         );
 
         Id w_id;
@@ -111,12 +140,12 @@ embed (inline) sv{{{
 
             core_if.valid = 0;
             core_if.addr = '0;
-            mem_if.arready = 0;
-            mem_if.rvalid = 0;
-            mem_if.rdata = '0;
-            mem_if.rlast = '0;
-            mem_if.rresp = Resp_OKAY;
-            mem_if.rid = '0;
+            read_if.arready = 0;
+            read_if.rvalid = 0;
+            read_if.rdata = '0;
+            read_if.rlast = '0;
+            read_if.rresp = Resp_OKAY;
+            read_if.rid = '0;
             for (int i = 0; i < LINE_SIZE_BYTES/4 * 2; i++) begin
                 axi_ram.axi_ram.r_mem[i] = 32'hdeadbe00 + i;
             end

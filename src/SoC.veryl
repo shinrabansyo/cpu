@@ -27,6 +27,7 @@ module SoC (
         i_clk          ,
         i_rst          ,
         imem_read_if   ,
+        imem_write_if  ,
         dmem_read_if   ,
         dmem_write_if  ,
         o_tx           ,
@@ -69,17 +70,11 @@ module SoC (
         write_if_slaves: imem_write_if_slaves,
     );
     always_comb {
-        imem_write_if.awvalid = 0;
-        imem_write_if.awaddr  = 0;
-        imem_write_if.awid    = 0;
-        imem_write_if.awlen   = 0;
-        imem_write_if.awsize  = 0;
-        imem_write_if.awburst = 0 as axi_pkg::Burst;
-        imem_write_if.wvalid  = 0;
-        imem_write_if.wdata   = 0;
-        imem_write_if.wstrb   = 0;
-        imem_write_if.wlast   = 0;
-        imem_write_if.bready  = 0;
+        imem_write_if_slaves[0].awready = 1;
+        imem_write_if_slaves[0].wready  = 1;
+        imem_write_if_slaves[0].bvalid  = 1;
+        imem_write_if_slaves[0].bid     = 0;
+        imem_write_if_slaves[0].bresp   = axi_pkg::Resp::SLVERR; // ROM への書き込みはエラー
     }
 
     inst m_axi_irom: AxiRom (

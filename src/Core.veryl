@@ -7,7 +7,7 @@ module Core (
 
     // Instruction Memory
     imem_read_if: modport axi_read_if::master,
-    // imem_write_if: modport axi_write_if::master,
+    imem_write_if: modport axi_write_if::master,
 
     // Data Memory
     dmem_read_if : modport axi_read_if::master ,
@@ -127,8 +127,10 @@ module Core (
     inst m_icache_mod: ICacheSplitAccess (
         i_clk  : i_clk       ,
         i_rst  : i_rst       ,
-        core_if: icache_if   ,
-        mem_if : imem_read_if,
+        fetch_if: icache_if   ,
+        core_write_if: icache_if,
+        read_if : imem_read_if,
+        write_if: imem_write_if,
     );
 
     inst dcache_if: core_dcache_if;
