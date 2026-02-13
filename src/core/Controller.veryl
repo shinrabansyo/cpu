@@ -1,0 +1,116 @@
+module Controller (
+    // fetch stage
+    o_branch_miss: output logic,
+
+    // decode stage
+    i_d_pc: input Addr,
+    i_d_rs1: input logic<5>,
+    i_d_rs2: input logic<5>,
+    o_wd_rs1_forward: output logic,
+    o_wd_rs2_forward: output logic,
+
+    // execute stage
+    i_branch_instr: input logic,
+    i_pc_target: input Addr,
+    i_e_rs1: input logic<5>,
+    i_e_rs2: input logic<5>,
+    i_e_rd : input logic<5>,
+    i_e_load_instr: input logic,
+    o_me_rs1_forward: output logic,
+    o_me_rs2_forward: output logic,
+    o_we_rs1_forward: output logic,
+    o_we_rs2_forward: output logic,
+
+    // mem access stage
+    i_m_rd: input logic<5>,
+    i_m_rs2: input logic<5>,
+    o_wm_rs2_forward: output logic,
+    i_m_instr_valid: input logic,
+    // memory
+    i_m_dmem_access: input logic,
+    i_m_dmem_wen   : input logic,
+    i_dmem_ready : input logic,
+    i_m_imem_wen   : input logic,
+    i_imem_ready : input logic,
+    // device
+    i_m_io_access    : input logic,
+    i_m_io_wen       : input logic,
+    i_io_din_valid : input logic,
+    i_io_dout_ready: input logic,
+
+    // writeback stage
+    i_w_rd: input logic<5>,
+    i_w_load_instr: input logic,
+    i_dmem_rdata_valid: input logic,
+
+    o_fd_flush: output logic,
+    o_de_flush: output logic,
+    o_em_flush: output logic,
+    o_mw_flush: output logic,
+    o_f_stall: output logic,
+    o_d_stall: output logic,
+    o_e_stall: output logic,
+    o_m_stall: output logic,
+) {
+    import Config::*;
+
+    var w_dmem_req_stall: logic;
+    var w_dmem_resp_stall: logic;
+    var w_imem_stall: logic;
+    var w_io_stall  : logic;
+    var w_load_hazard: logic;
+    always_comb {
+        w_dmem_req_stall = i_m_dmem_access && !i_dmem_ready;
+        w_dmem_resp_stall = i_w_load_instr && !i_dmem_rdata_valid;
+        if !i_m_imem_wen {
+            w_imem_stall = 0;
+        } else {
+            // imem は 書き込みが終わるまでストール
+            // pipeline flush --> 再fetch も必要
+            w_imem_stall = !i_imem_ready;
+        }
+
+        if !i_m_io_access {
+            w_io_stall = 0;
+        } else {
+            // read / write が完了するまでストール
+            if i_m_io_wen {
+                w_io_stall = !i_io_dout_ready;
+            } else {
+                w_io_stall = !i_io_din_valid;
+            }
+        }
+
+        o_wm_rs2_forward = i_w_rd == i_m_rs2; // store 命令
+        // b->c
+        o_me_rs1_forward = i_m_rd == i_e_rs1;
+        o_me_rs2_forward = i_m_rd == i_e_rs2;
+        // r1 = r0 + r0 : a
+        // r1 = r0 - r0 : b
+        // r2 = r0 + r1 : c
+        // r3 = r0 & r1 : d
+        // みたいな命令列が来た場合、
+        // a->c / b->c の2通りの forward が考えられる
+        // 最新の命令のデータが優先なので、この場合は b->c を forward する
+        // a->c
+        o_we_rs1_forward = i_w_rd == i_e_rs1 && !o_me_rs1_forward; // not b->c
+        o_we_rs2_forward = i_w_rd == i_e_rs2 && !o_me_rs2_forward; // not b->c
+        // a->d
+        o_wd_rs1_forward = i_w_rd == i_d_rs1;
+        o_wd_rs2_forward = i_w_rd == i_d_rs2;
+
+        // branch
+        o_branch_miss = i_branch_instr && (i_d_pc != i_pc_target);
+
+        w_load_hazard = i_e_load_instr && (i_e_rd == i_d_rs1 || i_e_rd == i_d_rs2);
+        o_m_stall = w_dmem_resp_stall || w_imem_stall || w_io_stall;
+        o_e_stall = o_m_stall || w_dmem_req_stall;
+        o_d_stall = o_e_stall || w_load_hazard;
+        o_f_stall = o_d_stall || w_load_hazard;
+
+        o_mw_flush = w_dmem_req_stall;
+        o_em_flush = 0;
+        o_de_flush = w_load_hazard || o_branch_miss;
+        o_fd_flush = o_branch_miss;
+    }
+}

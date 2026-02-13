@@ -1,0 +1,33 @@
+module Writeback (
+    i_dev_din_data: input Data,
+    i_load_data : input  Data    ,
+    i_load_width: input  logic<2>,
+    i_load_sext : input  logic   ,
+    i_alu_out   : input  Data    ,
+    i_pc: input Addr,
+    i_wb_type: input WbType,
+    o_reg_wdata : output Data    ,
+) {
+    import Config::*;
+    import PipelinePkg::*;
+
+    var w_load_data: Data;
+
+    always_comb {
+        // 0: 1 byte
+        // 1: 2 byte
+        // 2: 4 byte
+        w_load_data = case i_load_width {
+            2'd0   : {(i_load_data[7] & i_load_sext) repeat ($bits(Data) - 8), i_load_data[0+:8]},
+            2'd1   : {(i_load_data[15] & i_load_sext) repeat ($bits(Data) - 16), i_load_data[0+:16]},
+            2'd2   : i_load_data,
+            default: 0,
+        };
+        o_reg_wdata = case i_wb_type {
+            WbType::LD: w_load_data,
+            WbType::IN: i_dev_din_data,
+            WbType::BR: i_pc + 6 as Addr,
+            default: i_alu_out,
+        };
+    }
+}

@@ -1,10 +1,11 @@
 interface core_icache_if {
     import Config::*;
 
-    var valid: logic;
-    var addr : Addr ;
-    var instr: Inst ;
-    var ready: logic;
+    var valid      : logic; // fetch req
+    var ready      : logic; // fetch req 受付可能
+    var addr       : Addr ;
+    var instr      : Inst ;
+    var instr_valid: logic; // instr 有効
 
     // isb 命令用
     var wvalid: logic                 ;
@@ -14,10 +15,11 @@ interface core_icache_if {
     var wready: logic                 ;
 
     modport core_fetch {
-        valid: output,
-        addr : output,
-        instr: input ,
-        ready: input ,
+        valid      : output,
+        ready      : input ,
+        addr       : output,
+        instr      : input ,
+        instr_valid: input ,
     }
 
     modport core_write {

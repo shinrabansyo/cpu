@@ -1,0 +1,28 @@
+package PipelinePkg {
+    enum AluCmd {
+        ADD,
+        SUB,
+        AND,
+        OR,
+        XOR,
+        SRL,
+        SRA,
+        SLL,
+        UNKNOWN,
+    }
+    // reset 時 0 -> NONE にする
+    enum BranchType {
+        NONE,
+        BEQ,
+        BNE,
+        BLT,
+        BLE,
+        JAL,
+    }
+    enum WbType {
+        REG,
+        LD,
+        IN,
+        BR,
+    }
+}

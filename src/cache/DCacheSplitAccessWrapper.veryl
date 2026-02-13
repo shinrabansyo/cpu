@@ -4,12 +4,13 @@ module DCacheSplitAccessWrapper (
 
     // read request
     core_if_valid: input  logic                 ,
+    core_if_ready: output logic                 ,
     core_if_addr : input  Addr                  ,
     core_if_wen  : input  logic                 ,
     core_if_wdata: input  Data                  ,
     core_if_wstrb: input  logic<$bits(Data) / 8>,
+    core_if_rdata_valid: output logic                  ,
     core_if_rdata: output Data                  ,
-    core_if_ready: output logic                 ,
 
     // memory interface
     mem_read_if_arvalid: output logic,
@@ -54,12 +55,13 @@ module DCacheSplitAccessWrapper (
 
     always_comb {
         core_if.valid = core_if_valid;
+        core_if_ready = core_if.ready;
         core_if.addr  = core_if_addr;
         core_if.wen   = core_if_wen;
         core_if.wdata = core_if_wdata;
         core_if.wstrb = core_if_wstrb;
+        core_if_rdata_valid = core_if.rdata_valid;
         core_if_rdata = core_if.rdata;
-        core_if_ready = core_if.ready;
 
         mem_read_if.arready = mem_read_if_arready;
         mem_read_if_arvalid = mem_read_if.arvalid;

@@ -60,6 +60,12 @@ module ICacheSplitAccessWrapper (
         fetch_if_instr = core_if.instr;
         fetch_if_ready = core_if.ready;
 
+        core_if.wvalid = core_write_if_wvalid;
+        core_if.waddr = core_write_if_waddr;
+        core_if.wdata = core_write_if_wdata;
+        core_if.wstrb = core_write_if_wstrb;
+        core_write_if_wready = core_if.wready;
+
         read_if.arready = read_if_arready;
         read_if_arvalid = read_if.arvalid;
         read_if_araddr  = read_if.araddr;

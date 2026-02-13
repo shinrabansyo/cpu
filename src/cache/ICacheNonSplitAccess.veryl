@@ -15,10 +15,14 @@ pub module ICacheNonSplitAccess (
 ) {
     import Config::*;
 
-    enum State {
+    enum FetchState {
         IDLE,
         FETCH,
         READ,
+    }
+    enum WriteState {
+        IDLE,
+        WAIT_RESP,
     }
 
     type Data = logic<32>;
@@ -27,18 +31,21 @@ pub module ICacheNonSplitAccess (
     const BEAT_MAX          : u32 = $bits(Line) / $bits(Data);
     const BEAT_COUNTER_WIDTH: u32 = $clog2(BEAT_MAX);
 
-    var r_valid       : logic                    ;
-    var r_addr        : Addr                     ;
-    var r_state       : State                    ;
-    var r_beat_counter: logic<BEAT_COUNTER_WIDTH>;
-    var w_miss        : logic                    ;
-    var w_stall       : logic                    ;
+    var r_valid       : logic                         ;
+    var r_addr        : Addr                          ;
+    var r_fetch_state : FetchState                    ;
+    var r_beat_counter: logic     <BEAT_COUNTER_WIDTH>;
+    var w_miss        : logic                         ;
+    var w_stall       : logic                         ;
 
-    var w_ta_set   : ICacheSet;
-    var w_ta_tag   : ICacheTag;
-    var w_ta_we    : logic    ;
-    var w_ta_wvalid: logic    ;
-    var w_ta_hit   : logic    ;
+    var r_write_state: WriteState;
+
+    var w_ta_set      : ICacheSet;
+    var w_ta_tag      : ICacheTag;
+    var w_ta_we       : logic    ;
+    var w_ta_hit      : logic    ;
+    var w_ta_do_flush : logic    ;
+    var w_ta_flush_set: ICacheSet;
 
     var w_da_set        : ICacheSet    ;
     var w_da_line_offset: LineOffset   ;
@@ -52,13 +59,13 @@ pub module ICacheNonSplitAccess (
         i_rst: i_rst,
 
         // fetch 用ポート
-        i_set   : w_ta_set   ,
-        i_tag   : w_ta_tag   ,
-        i_we    : w_ta_we    ,
-        o_hit   : w_ta_hit   ,
+        i_set: w_ta_set,
+        i_tag: w_ta_tag,
+        i_we : w_ta_we ,
+        o_hit: w_ta_hit,
         // flush 用ポート
-        i_do_flush : core_write_if.wvalid, 
-        i_flush_set: GetICacheSet(core_write_if.waddr),
+        i_do_flush : w_ta_do_flush ,
+        i_flush_set: w_ta_flush_set,
     );
     // SET_WIDTH は default param で指定しているが、
     // 明示的に指定しないと verilator のバグを踏み抜く
@@ -76,24 +83,83 @@ pub module ICacheNonSplitAccess (
         o_rdata      : w_da_rdata      ,
     );
 
+    // write 制御
+    always_comb {
+        w_ta_do_flush  = core_write_if.wvalid;
+        w_ta_flush_set = GetICacheSet(core_write_if.waddr);
+    }
+    always_ff (i_clk, i_rst) {
+        if_reset {
+            r_write_state    = WriteState::IDLE;
+            core_write_if.wready = 0;
+            write_if.awvalid = 0;
+            write_if.awaddr  = '0;
+            write_if.awid    = 0;
+            write_if.awlen   = 0;
+            write_if.awsize  = 0;
+            write_if.awburst = 0 as axi_pkg::Burst;
+            write_if.wvalid  = 0;
+            write_if.wdata   = '0;
+            write_if.wstrb   = '0;
+            write_if.wlast   = 0;
+            write_if.bready  = 0;
+        } else {
+            case (r_write_state) {
+                WriteState::IDLE: {
+                    if core_write_if.wvalid {
+                        core_write_if.wready = 0;
+                        r_write_state        = WriteState::WAIT_RESP;
+                        write_if.awvalid     = 1;
+                        write_if.awaddr      = core_write_if.waddr;
+                        write_if.awid        = 0;
+                        write_if.awlen       = 0;
+                        write_if.awsize      = 2; // 4 バイトアクセス
+                        write_if.awburst     = 0 as axi_pkg::Burst; // 固定
+                        write_if.wvalid      = 1;
+                        write_if.wdata       = core_write_if.wdata;
+                        write_if.wstrb       = core_write_if.wstrb;
+                        write_if.wlast       = 1; // 1 ビートで完了する
+                        write_if.bready      = 1;
+                    } else {
+                        core_write_if.wready = 1;
+                    }
+                }
+                WriteState::WAIT_RESP: {
+                    if write_if.aw_ack() {
+                        write_if.awvalid = 0;
+                    }
+                    if write_if.w_ack() {
+                        write_if.wvalid = 0;
+                    }
+                    if write_if.b_ack() {
+                        write_if.bready      = 0;
+                        core_write_if.wready = 1;
+                        r_write_state        = WriteState::IDLE;
+                    }
+                }
+            }
+        }
+    }
+
+    // fetch 制御
     always_comb {
         w_miss  = r_valid && !w_ta_hit;
-        w_stall = w_miss | r_state != State::IDLE;
+        w_stall = w_miss | r_fetch_state != FetchState::IDLE;
 
-        fetch_if.ready = !w_stall && r_valid;
-        fetch_if.instr = w_da_rdata[0+:48];
+        fetch_if.ready       = !w_stall;
+        fetch_if.instr_valid = !w_stall && r_valid;
+        fetch_if.instr       = w_da_rdata[0+:48];
 
         w_ta_set         = GetICacheSet(fetch_if.addr);
         w_ta_tag         = GetICacheTag(fetch_if.addr);
         w_ta_we          = 0;
-        w_ta_wvalid      = 0;
         w_da_set         = GetICacheSet(fetch_if.addr);
         w_da_line_offset = GetLineOffset(fetch_if.addr);
         w_da_we          = 0;
         w_da_wmask       = 0;
         w_da_wdata       = '0;
-        case (r_state) {
-            State::FETCH: {
+        case (r_fetch_state) {
+            FetchState::FETCH: {
                 if read_if.rvalid && read_if.rready {
                     w_da_set         = GetICacheSet(GetLineAddr(r_addr));
                     w_da_line_offset = r_beat_counter << 2;
@@ -101,14 +167,13 @@ pub module ICacheNonSplitAccess (
                     w_da_wmask       = 8'b1111;
                     w_da_wdata       = read_if.rdata as DoubleData;
                     if read_if.rlast {
-                        w_ta_set    = GetICacheSet(GetLineAddr(r_addr));
-                        w_ta_tag    = GetICacheTag(GetLineAddr(r_addr));
-                        w_ta_we     = 1;
-                        w_ta_wvalid = 1;
+                        w_ta_set = GetICacheSet(GetLineAddr(r_addr));
+                        w_ta_tag = GetICacheTag(GetLineAddr(r_addr));
+                        w_ta_we  = 1;
                     }
                 }
             }
-            State::READ: {
+            FetchState::READ: {
                 w_ta_set         = GetICacheSet(r_addr);
                 w_ta_tag         = GetICacheTag(r_addr);
                 w_da_set         = GetICacheSet(r_addr);
@@ -121,7 +186,7 @@ pub module ICacheNonSplitAccess (
         if_reset {
             r_addr          = '0;
             r_valid         = 0;
-            r_state         = State::IDLE;
+            r_fetch_state   = FetchState::IDLE;
             r_beat_counter  = '0;
             read_if.arvalid = 0;
             read_if.araddr  = '0;
@@ -132,14 +197,16 @@ pub module ICacheNonSplitAccess (
             read_if.arburst = axi_pkg::Burst::INCR;
             read_if.rready  = 0;
         } else {
-            if !w_stall {
-                r_addr  = fetch_if.addr;
+            if fetch_if.ready {
                 r_valid = fetch_if.valid;
             }
-            case (r_state) {
-                State::IDLE: {
+            if fetch_if.valid && fetch_if.ready {
+                r_addr  = fetch_if.addr;
+            }
+            case (r_fetch_state) {
+                FetchState::IDLE: {
                     if w_miss {
-                        r_state = State::FETCH;
+                        r_fetch_state = FetchState::FETCH;
 
                         read_if.arvalid = 1;
                         read_if.araddr  = GetLineAddr(r_addr);
@@ -150,7 +217,7 @@ pub module ICacheNonSplitAccess (
                         r_beat_counter  = '0;
                     }
                 }
-                State::FETCH: {
+                FetchState::FETCH: {
                     if read_if.arvalid && read_if.arready {
                         read_if.arvalid = 0;
                     }
@@ -159,11 +226,11 @@ pub module ICacheNonSplitAccess (
                     }
                     if read_if.rlast {
                         read_if.rready = 0;
-                        r_state        = State::READ;
+                        r_fetch_state  = FetchState::READ;
                     }
                 }
-                State::READ: {
-                    r_state = State::IDLE;
+                FetchState::READ: {
+                    r_fetch_state = FetchState::IDLE;
                 }
             }
         }

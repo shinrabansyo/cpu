@@ -1,0 +1,103 @@
+module Fetch (
+    i_clk: input clock,
+    i_rst: input reset,
+
+    // cache interface
+    fetch_if: modport core_icache_if::core_fetch,
+
+    // decode stage
+    o_instr_valid: output logic,
+    o_pc         : output Addr ,
+    o_instr      : output Inst ,
+
+    // execute stage
+    i_pc_target : input Addr,
+    i_branch_miss: input logic,
+
+    // controller
+    i_f_stall: input logic,
+    i_fd_flush: input logic,
+) {
+    import Config::*;
+    var w_pc_fetching: Addr ;
+    var r_pc_fetched : Addr ;
+    var r_fd_flush   : logic;
+    var r_first_fetch : logic;
+    var w_fetch_ack: logic;
+    var r_miss_branch_reqed: logic;
+
+    enum MissState {
+        IDLE,
+        REQ,
+        REQED,
+    }
+    var r_miss_state: MissState;
+
+    always_comb {
+        w_fetch_ack = fetch_if.valid && fetch_if.ready;
+        // 分岐ミス時やること
+        // - icache に i_pc_target を要求する
+        //   - i_branch_miss && w_fetch_ack なら要求完了
+        //   - i_branch_miss && !w_fetch_ack なら要求できず
+        // - 要求完了ならフェッチ完了まで待つ
+        //   - w_fetch_ack でフェッチ完了
+        // - 要求できずなら再度要求
+        //   - w_fetch_ack で要求完了
+
+        // 最初のフェッチ・分岐ミス時のフェッチが完了するまで
+        // w_pc_fetching を固定
+        if i_f_stall || 
+           r_first_fetch ||
+           r_miss_state == MissState::REQ || 
+           (r_miss_state == MissState::REQED && !w_fetch_ack) {
+            w_pc_fetching = r_pc_fetched;
+        } else {
+            if i_branch_miss {
+                w_pc_fetching = i_pc_target;
+            } else {
+                // 常に分岐不成立と予測
+                w_pc_fetching = r_pc_fetched + 6 as Addr;
+            }
+        }
+        fetch_if.valid = 1;
+        fetch_if.addr  = w_pc_fetching;
+        o_instr_valid = fetch_if.instr_valid && r_miss_state != MissState::REQ;
+        o_instr       = if o_instr_valid ? fetch_if.instr : 0;
+        o_pc          = if o_instr_valid ? r_pc_fetched : 0;
+    }
+
+    always_ff (i_clk, i_rst) {
+        if_reset {
+            r_fd_flush   = 0;
+            r_pc_fetched = 0;
+            r_first_fetch = 1;
+            r_miss_state = 0 as MissState;
+        } else {
+            case r_miss_state {
+                MissState::IDLE: {
+                    if i_branch_miss {
+                        if w_fetch_ack {
+                            r_miss_state = MissState::REQED;
+                        } else {
+                            r_miss_state = MissState::REQ;
+                        }
+                    } 
+                }
+                MissState::REQ: {
+                    if w_fetch_ack {
+                        r_miss_state = MissState::REQED;
+                    }
+                }
+                MissState::REQED: {
+                    if w_fetch_ack {
+                        r_miss_state = MissState::IDLE;
+                    }
+                }
+            }
+            if w_fetch_ack || i_branch_miss && !i_f_stall {
+                r_first_fetch = 0;
+                r_pc_fetched = w_pc_fetching;
+            }
+        }
+    }
+}

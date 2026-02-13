@@ -1,0 +1,287 @@
+module Decode (
+    i_clk: input clock,
+    i_rst: input reset,
+    // log output
+    o_log: output log_pkg::InstLog,
+
+    // fetch stage
+    i_instr_valid: input logic,
+    i_pc         : input Addr ,
+    i_instr      : input Inst ,
+
+    // execute stage
+    o_rs1     : output logic <5>,
+    o_rs2     : output logic <5>,
+    o_imm     : output Data     ,
+    o_src2_reg: output logic    ,
+    o_alu_cmd : output AluCmd   ,
+    o_load_instr: output logic, // for controll
+    o_branch_type: output BranchType,
+    o_branch_instr: output logic,
+
+    // mem access
+    o_dmem_access: output logic                 ,
+    o_dmem_wen   : output logic                 ,
+    o_imem_wen   : output logic                 ,
+    o_mem_wstrb  : output logic<$bits(Data) / 8>,
+
+    // dev access
+    o_io_access: output logic,
+    o_io_wen   : output logic,
+
+    // writeback
+    o_rd        : output logic<5>,
+    o_reg_wen   : output logic   ,
+    o_load_en   : output logic   ,
+    o_load_width: output logic<2>,
+    o_load_sext : output logic   ,
+    o_wb_type: output WbType,
+) {
+    import Config::*;
+    import PipelinePkg::*;
+
+    struct Instruction {
+        opcode    : logic<5> ,
+        opcode_sub: logic<3> ,
+        rd        : logic<5> ,
+        rs1       : logic<5> ,
+        rs1_i     : logic<5> ,
+        rs1_s     : logic<5> ,
+        rs2       : logic<5> ,
+        rs2_s     : logic<5> ,
+        imm       : logic<32>,
+        imm_b     : logic<25>,
+        imm_b_sext: logic<32>,
+    }
+
+    enum InstKind: logic<3> {
+        R = 3'h0,
+        I = 3'h1,
+        B = 3'h2,
+        S = 3'h3,
+        Nop = 3'h7,
+    }
+
+    // OpCode の定義
+    const NOP : logic<8> = (8'h0 << 5) | 8'h0;
+    const ADD : logic<8> = (8'h1 << 5) | 8'h1;
+    const SUB : logic<8> = (8'h2 << 5) | 8'h1;
+    const ADDI: logic<8> = (8'h1 << 5) | 8'h2;
+    const SUBI: logic<8> = (8'h2 << 5) | 8'h2;
+    const BEQ : logic<8> = (8'h0 << 5) | 8'h3;
+    const BNE : logic<8> = (8'h1 << 5) | 8'h3;
+    const BLT : logic<8> = (8'h2 << 5) | 8'h3;
+    const BLE : logic<8> = (8'h3 << 5) | 8'h3;
+    const JAL : logic<8> = (8'h4 << 5) | 8'h3;
+    const LW  : logic<8> = (8'h0 << 5) | 8'h4;
+    const LH  : logic<8> = (8'h1 << 5) | 8'h4;
+    const LB  : logic<8> = (8'h2 << 5) | 8'h4;
+    const LHU : logic<8> = (8'h3 << 5) | 8'h4;
+    const LBU : logic<8> = (8'h4 << 5) | 8'h4;
+    const SW  : logic<8> = (8'h0 << 5) | 8'h5;
+    const SH  : logic<8> = (8'h1 << 5) | 8'h5;
+    const SB  : logic<8> = (8'h2 << 5) | 8'h5;
+    const ISB : logic<8> = (8'h3 << 5) | 8'h5;
+    const IN  : logic<8> = (8'h0 << 5) | 8'h6;
+    const OUT : logic<8> = (8'h1 << 5) | 8'h6;
+    const AND : logic<8> = (8'h0 << 5) | 8'h7;
+    const OR  : logic<8> = (8'h1 << 5) | 8'h7;
+    const XOR : logic<8> = (8'h2 << 5) | 8'h7;
+    const SRL : logic<8> = (8'h3 << 5) | 8'h7;
+    const SRA : logic<8> = (8'h4 << 5) | 8'h7;
+    const SLL : logic<8> = (8'h5 << 5) | 8'h7;
+    const ANDI: logic<8> = (8'h0 << 5) | 8'h8;
+    const ORI : logic<8> = (8'h1 << 5) | 8'h8;
+    const XORI: logic<8> = (8'h2 << 5) | 8'h8;
+    const SRLI: logic<8> = (8'h3 << 5) | 8'h8;
+    const SRAI: logic<8> = (8'h4 << 5) | 8'h8;
+    const SLLI: logic<8> = (8'h5 << 5) | 8'h8;
+
+    var w_instr    : Instruction   ;
+    var w_inst_kind: InstKind      ;
+    var w_opcode   : logic      <8>;
+
+    always_comb {
+        // フィールドの切り出し
+        w_instr.opcode     = i_instr[4:0];
+        w_instr.opcode_sub = i_instr[7:5];
+        w_instr.rd         = i_instr[12:8];
+        w_instr.rs1        = i_instr[17:13];
+        w_instr.rs1_i      = {2'b0, i_instr[15:13]};
+        w_instr.rs1_s      = {2'b0, i_instr[15:13]};
+        w_instr.rs2        = i_instr[22:18];
+        w_instr.rs2_s      = i_instr[12:8];
+        w_instr.imm        = i_instr[47:16];
+        w_instr.imm_b      = i_instr[47:23];
+        w_instr.imm_b_sext = {i_instr[47] repeat 7, i_instr[47:23]};
+
+        w_opcode = {w_instr.opcode_sub, w_instr.opcode};
+
+        w_inst_kind = case w_instr.opcode {
+            1: InstKind::R,
+            2: InstKind::I,
+            3: case w_instr.opcode_sub {
+                0, 1, 2, 3: InstKind::B, // Branch 系
+                4         : InstKind::I, // Jump 系
+                default   : InstKind::Nop,
+            },
+            4: InstKind::I,
+            5: InstKind::S,
+            6: case w_instr.opcode_sub {
+                0      : InstKind::I, // in
+                1      : InstKind::S, // out
+                default: InstKind::Nop,
+            },
+            7      : InstKind::R,
+            8      : InstKind::I,
+            default: InstKind::Nop,
+        };
+    }
+    // log
+    always_comb {
+        o_log.instr = i_instr;
+        o_log.pc = i_pc;
+        o_log.addr      = 0;
+        o_log.data      = 0;
+        case w_opcode {
+            LW, LH, LB, LHU, LBU: {
+                o_log.inst_type = log_pkg::InstType::MEM_READ;
+                o_log.dest_reg  = w_instr.rd;
+            }
+            SW, SH, SB: {
+                o_log.inst_type = log_pkg::InstType::MEM_WRITE;
+                o_log.dest_reg = '0;
+            }
+            ISB: { // 仮置き
+                o_log.inst_type = log_pkg::InstType::IMEM_WRITE;
+                o_log.dest_reg = '0;
+            }
+            IN: {
+                o_log.inst_type = log_pkg::InstType::DEV_READ;
+                o_log.dest_reg  = w_instr.rd;
+            }
+            OUT: {
+                o_log.inst_type = log_pkg::InstType::DEV_WRITE;
+                o_log.dest_reg  = '0;
+            }
+            default: {
+                o_log.inst_type = log_pkg::InstType::REG_WRITE;
+                o_log.dest_reg  = w_instr.rd;
+            }
+        }
+    }
+    // execute
+    always_comb {
+        o_alu_cmd = case w_opcode {
+            ADD, ADDI, JAL, LW, LH, LB, LHU, LBU, SW, SH, SB, ISB, IN, OUT: AluCmd::ADD,
+            SUB, SUBI, BEQ, BNE, BLT, BLE                                 : AluCmd::SUB,
+            AND, ANDI                                                     : AluCmd::AND,
+            OR, ORI                                                       : AluCmd::OR,
+            XOR, XORI                                                     : AluCmd::XOR,
+            SRL, SRLI                                                     : AluCmd::SRL,
+            SRA, SRAI                                                     : AluCmd::SRA,
+            SLL, SLLI                                                     : AluCmd::SLL,
+            default                                                       : AluCmd::UNKNOWN,
+        };
+        o_rs1 = case w_inst_kind {
+            InstKind::S: w_instr.rs1_s,
+            InstKind::I: w_instr.rs1_i,
+            default    : w_instr.rs1,
+        };
+        o_rs2 = case w_inst_kind {
+            InstKind::S: w_instr.rs2_s,
+            default    : w_instr.rs2,
+        };
+        o_imm = case w_inst_kind {
+            InstKind::I, InstKind::S: w_instr.imm,
+            InstKind::B: w_instr.imm_b_sext,
+            default    : 0,
+        };
+        o_src2_reg = case w_inst_kind {
+            InstKind::I, InstKind::S: 0,
+            default: 1,
+        };
+        o_load_instr = case w_opcode {
+            LW, LH, LB, LHU, LBU, IN: 1,
+            default: 0,
+        };
+        o_branch_type = case w_opcode {
+            BEQ: BranchType::BEQ,
+            BNE: BranchType::BNE,
+            BLT: BranchType::BLT,
+            BLE: BranchType::BLE,
+            JAL: BranchType::JAL,
+            default: BranchType::NONE
+        };
+        o_branch_instr = o_branch_type != BranchType::NONE;
+    }
+    // mem access
+    always_comb {
+        case w_opcode {
+            LW, LH, LB, LHU, LBU: {
+                o_dmem_access = 1;
+                o_dmem_wen    = 0;
+            }
+            SW, SH, SB: {
+                o_dmem_access = 1;
+                o_dmem_wen    = 1;
+            }
+            default: {
+                o_dmem_access = 0;
+                o_dmem_wen    = 0;
+            }
+        }
+        o_imem_wen = case w_opcode {
+            ISB    : 1,
+            default: 0,
+        };
+        o_mem_wstrb = case w_opcode {
+            SW     : 4'b1111,
+            SH     : 4'b0011,
+            SB, ISB: 4'b0001,
+            default: 4'b0000,
+        };
+    }
+    // device access
+    always_comb {
+        case w_opcode {
+            IN: {
+                o_io_access = 1;
+                o_io_wen    = 0;
+            }
+            OUT: {
+                o_io_access = 1;
+                o_io_wen    = 1;
+            }
+            default: {
+                o_io_access = 0;
+                o_io_wen    = 0;
+            }
+        }
+    }
+    // writeback
+    always_comb {
+        o_rd      = w_instr.rd;
+        o_reg_wen = (o_rd != 0) && !(o_dmem_access && o_dmem_wen);
+        o_load_en = case w_opcode {
+            LW, LH, LB, LHU, LBU: 1,
+            default             : 0,
+        };
+        o_load_width = case w_opcode {
+            LW     : 2,
+            LH, LHU: 1,
+            LB, LBU: 0,
+            default: 0,
+        };
+        o_load_sext = case w_opcode {
+            LH, LB : 1,
+            default: 0,
+        };
+        o_wb_type = case w_opcode {
+            LW, LH, LB, LHU, LBU: WbType::LD,
+            IN: WbType::IN,
+            BEQ, BNE, BLT, BLE, JAL: WbType::BR,
+            default: WbType::REG,
+        };
+    }
+}

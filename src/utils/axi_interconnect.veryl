@@ -166,7 +166,7 @@ module axi_interconnect #(
                 ReadState::IDLE: {
                     if slv == w_read_slv_idx {
                         read_if_slaves[slv].arvalid = read_if_master.arvalid;
-                        read_if_slaves[slv].araddr  = read_if_master.araddr;
+                        read_if_slaves[slv].araddr  = read_if_master.araddr - MEM_MAP_BASE[slv];
                         read_if_slaves[slv].arid    = read_if_master.arid;
                         read_if_slaves[slv].arlen   = read_if_master.arlen;
                         read_if_slaves[slv].arsize  = read_if_master.arsize;
@@ -177,7 +177,7 @@ module axi_interconnect #(
                 ReadState::WAIT_RESP: {
                     if slv == r_read_slv_idx {
                         read_if_slaves[slv].arvalid = read_if_master.arvalid;
-                        read_if_slaves[slv].araddr  = read_if_master.araddr;
+                        read_if_slaves[slv].araddr  = read_if_master.araddr - MEM_MAP_BASE[slv];
                         read_if_slaves[slv].arid    = read_if_master.arid;
                         read_if_slaves[slv].arlen   = read_if_master.arlen;
                         read_if_slaves[slv].arsize  = read_if_master.arsize;
@@ -204,7 +204,7 @@ module axi_interconnect #(
                 WriteState::IDLE: {
                     if slv == w_write_slv_idx {
                         write_if_slaves[slv].awvalid = write_if_master.awvalid;
-                        write_if_slaves[slv].awaddr  = write_if_master.awaddr;
+                        write_if_slaves[slv].awaddr  = write_if_master.awaddr - MEM_MAP_BASE[slv];
                         write_if_slaves[slv].awid    = write_if_master.awid;
                         write_if_slaves[slv].awlen   = write_if_master.awlen;
                         write_if_slaves[slv].awsize  = write_if_master.awsize;
@@ -220,7 +220,7 @@ module axi_interconnect #(
                 WriteState::WAIT_WDATA: {
                     if slv == r_write_slv_idx {
                         write_if_slaves[slv].awvalid = write_if_master.awvalid;
-                        write_if_slaves[slv].awaddr  = write_if_master.awaddr;
+                        write_if_slaves[slv].awaddr  = write_if_master.awaddr - MEM_MAP_BASE[slv];
                         write_if_slaves[slv].awid    = write_if_master.awid;
                         write_if_slaves[slv].awlen   = write_if_master.awlen;
                         write_if_slaves[slv].awsize  = write_if_master.awsize;
@@ -236,7 +236,7 @@ module axi_interconnect #(
                 WriteState::WAIT_RESP: {
                     if slv == r_write_slv_idx {
                         write_if_slaves[slv].awvalid = write_if_master.awvalid;
-                        write_if_slaves[slv].awaddr  = write_if_master.awaddr;
+                        write_if_slaves[slv].awaddr  = write_if_master.awaddr - MEM_MAP_BASE[slv];
                         write_if_slaves[slv].awid    = write_if_master.awid;
                         write_if_slaves[slv].awlen   = write_if_master.awlen;
                         write_if_slaves[slv].awsize  = write_if_master.awsize;

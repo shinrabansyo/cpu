@@ -50,6 +50,7 @@ module ICacheSplitAccess (
         cache_side_if.addr  = '0;
         fetch_if.ready       = 0;
         fetch_if.instr       = '0;
+        fetch_if.instr_valid = 0;
         w_next_instr        = r_instr;
         w_next_state        = r_state;
         w_addr_update       = 0;
@@ -60,6 +61,7 @@ module ICacheSplitAccess (
                 cache_side_if.addr  = fetch_if.addr;
                 fetch_if.ready       = cache_side_if.ready;
                 fetch_if.instr       = cache_side_if.instr;
+                fetch_if.instr_valid = cache_side_if.instr_valid;
 
                 // ラインをまたぐ場合は 2ライン目の取得に進む
                 if w_cross_boundary && (cache_side_if.valid || r_first_req) {
@@ -85,6 +87,7 @@ module ICacheSplitAccess (
                     cache_side_if.addr  = fetch_if.addr;
                     fetch_if.ready       = 1;
                     fetch_if.instr       = (cache_side_if.instr << (8 * r_remain_bytes)) | r_instr;
+                    fetch_if.instr_valid = 1;
                     if !w_cross_boundary {
                         w_next_state = State::IDLE;
                     } else {

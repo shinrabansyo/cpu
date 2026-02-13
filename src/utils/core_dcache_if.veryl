@@ -2,21 +2,23 @@ interface core_dcache_if {
     import Config::*;
 
     var valid: logic        ;
+    var ready: logic        ;
     var addr : Addr         ;
     var wen  : logic        ;
     var wdata: logic<32>    ;
     var wstrb: logic<32 / 8>;
     var rdata: logic<32>    ;
-    var ready: logic        ;
+    var rdata_valid : logic;
 
     modport core {
         valid: output,
+        ready: input ,
         addr : output,
         wen  : output,
         wdata: output,
         wstrb: output,
         rdata: input ,
-        ready: input ,
+        rdata_valid: input,
     }
 
     modport dcache {

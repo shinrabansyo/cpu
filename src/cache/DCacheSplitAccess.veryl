@@ -50,6 +50,7 @@ module DCacheSplitAccess (
         cache_side_if.wdata = '0;
         cache_side_if.addr  = '0;
         core_if.ready       = 0;
+        core_if.rdata_valid = 0;
         core_if.rdata       = '0;
         w_next_data         = r_data;
         w_next_state        = r_state;
@@ -63,6 +64,7 @@ module DCacheSplitAccess (
                 cache_side_if.wstrb = core_if.wstrb;
                 cache_side_if.wdata = core_if.wdata;
                 core_if.ready       = cache_side_if.ready;
+                core_if.rdata_valid = cache_side_if.rdata_valid;
                 core_if.rdata       = cache_side_if.rdata;
 
                 // ラインをまたぐ場合は 2ライン目の取得に進む
@@ -94,6 +96,7 @@ module DCacheSplitAccess (
                     cache_side_if.wdata = core_if.wdata;
                     cache_side_if.addr  = core_if.addr;
                     core_if.ready       = 1;
+                    core_if.rdata_valid = 1;
                     core_if.rdata       = (cache_side_if.rdata << (8 * r_remain_bytes)) | r_data;
                     if w_cross_boundary && cache_side_if.valid {
                         w_addr_update = 1;
