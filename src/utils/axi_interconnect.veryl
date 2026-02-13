@@ -100,7 +100,7 @@ module axi_interconnect #(
                 read_if_master.arready = 0;
                 read_if_master.rdata   = 0;
                 read_if_master.rid     = 0;
-                read_if_master.rresp   = 0;
+                read_if_master.rresp   = Resp::DECERR;
                 read_if_master.rlast   = 0;
             }
         }
@@ -131,7 +131,7 @@ module axi_interconnect #(
                 write_if_master.wready  = 0;
                 write_if_master.bvalid  = 0;
                 write_if_master.bid     = 0;
-                write_if_master.bresp   = 0;
+                write_if_master.bresp   = Resp::DECERR;
             }
         }
 

@@ -14,6 +14,10 @@ module Fetch (
     i_pc_target  : input Addr ,
     i_branch_miss: input logic,
 
+    // mem access stage
+    i_pc_refetch  : input Addr ,
+    i_imem_changed: input logic,
+
     // controller
     i_f_stall : input logic,
     i_fd_flush: input logic,
@@ -21,7 +25,6 @@ module Fetch (
     import Config::*;
     var w_pc_fetching: Addr ;
     var r_pc_fetched : Addr ;
-    var r_fd_flush   : logic;
     var r_first_fetch: logic;
     var w_fetch_ack  : logic;
 
@@ -43,17 +46,17 @@ module Fetch (
         // - 要求できずなら再度要求
         //   - w_fetch_ack で要求完了
 
-        // 最初のフェッチ・分岐ミス時のフェッチが完了するまで
-        // w_pc_fetching を固定
-        if i_f_stall || r_first_fetch || r_miss_state == MissState::REQ || (r_miss_state == MissState::REQED && !w_fetch_ack) {
+        if i_imem_changed {
+            w_pc_fetching = i_pc_refetch;
+        } else if i_branch_miss {
+            w_pc_fetching = i_pc_target;
+        } else if i_f_stall || r_first_fetch || r_miss_state == MissState::REQ || (r_miss_state == MissState::REQED && !w_fetch_ack) {
+            // 最初のフェッチ・分岐ミス時のフェッチが完了するまで
+            // w_pc_fetching を固定
             w_pc_fetching = r_pc_fetched;
         } else {
-            if i_branch_miss {
-                w_pc_fetching = i_pc_target;
-            } else {
-                // 常に分岐不成立と予測
-                w_pc_fetching = r_pc_fetched + 6 as Addr;
-            }
+            // 常に分岐不成立と予測
+            w_pc_fetching = r_pc_fetched + 6 as Addr;
         }
         fetch_if.valid = 1;
         fetch_if.addr  = w_pc_fetching;
@@ -64,14 +67,13 @@ module Fetch (
 
     always_ff (i_clk, i_rst) {
         if_reset {
-            r_fd_flush    = 0;
             r_pc_fetched  = 0;
             r_first_fetch = 1;
             r_miss_state  = 0 as MissState;
         } else {
             case r_miss_state {
                 MissState::IDLE: {
-                    if i_branch_miss {
+                    if i_branch_miss || i_imem_changed {
                         if w_fetch_ack {
                             r_miss_state = MissState::REQED;
                         } else {
@@ -85,12 +87,14 @@ module Fetch (
                     }
                 }
                 MissState::REQED: {
-                    if w_fetch_ack {
+                    if i_imem_changed && !w_fetch_ack {
+                        r_miss_state = MissState::REQ;
+                    } else if w_fetch_ack {
                         r_miss_state = MissState::IDLE;
                     }
                 }
             }
-            if w_fetch_ack || i_branch_miss && !i_f_stall {
+            if w_fetch_ack || i_branch_miss || i_imem_changed {
                 r_first_fetch = 0;
                 r_pc_fetched  = w_pc_fetching;
             }

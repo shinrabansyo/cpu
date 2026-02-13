@@ -116,6 +116,7 @@ module PipelineCore (
     var r_mw_alu_out    : Data               ;
     var r_mw_rd         : logic           <5>;
     var r_mw_reg_wen    : logic              ;
+    var r_mw_imem_wen   : logic              ;
     var r_mw_load_en    : logic              ;
     var r_mw_load_width : logic           <2>;
     var r_mw_load_sext  : logic              ;
@@ -188,6 +189,7 @@ module PipelineCore (
 
         // writeback
         i_dmem_rdata_valid: dcache_if.rdata_valid,
+        i_w_imem_wen      : r_mw_imem_wen        ,
         i_w_load_instr    : r_mw_load_instr      ,
         i_w_rd            : r_mw_rd              ,
 
@@ -211,16 +213,18 @@ module PipelineCore (
         write_if     : imem_write_if,
     );
     inst fetch_stage: Fetch (
-        i_clk                          ,
-        i_rst                          ,
-        fetch_if     : icache_if       ,
-        o_instr_valid: w_fd_instr_valid,
-        o_pc         : w_fd_pc         ,
-        o_instr      : w_fd_instr      ,
-        i_pc_target  : w_ef_pc_target  ,
-        i_branch_miss: w_f_branch_miss ,
-        i_f_stall    : w_f_stall       ,
-        i_fd_flush   : w_fd_flush      ,
+        i_clk                              ,
+        i_rst                              ,
+        fetch_if      : icache_if          ,
+        o_instr_valid : w_fd_instr_valid   ,
+        o_pc          : w_fd_pc            ,
+        o_instr       : w_fd_instr         ,
+        i_pc_target   : w_ef_pc_target     ,
+        i_branch_miss : w_f_branch_miss    ,
+        i_pc_refetch  : r_mw_pc + 6 as Addr,
+        i_imem_changed: r_mw_imem_wen      ,
+        i_f_stall     : w_f_stall          ,
+        i_fd_flush    : w_fd_flush         ,
     );
 
     // Decode Stage ------------------
@@ -302,8 +306,8 @@ module PipelineCore (
                 r_de_instr        = w_fd_instr;
                 r_de_rs1          = w_d_rs1;
                 r_de_rs2          = w_d_rs2;
-                r_de_reg_rs1      = r_regfile[w_d_rs1];
-                r_de_reg_rs2      = r_regfile[w_d_rs2];
+                r_de_reg_rs1      = if !w_wd_rs1_forward ? r_regfile[w_d_rs1] : w_w_reg_wdata;
+                r_de_reg_rs2      = if !w_wd_rs2_forward ? r_regfile[w_d_rs2] : w_w_reg_wdata;
                 r_de_imm          = w_d_imm;
                 r_de_src2_reg     = w_d_src2_reg;
                 r_de_alu_cmd      = w_d_alu_cmd;
@@ -404,7 +408,7 @@ module PipelineCore (
             r_em_load_instr  = 0;
             r_em_wb_type     = 0 as WbType;
         } else {
-            if !w_e_stall {
+            if !w_e_stall && !w_em_flush {
                 r_em_log         = r_de_log;
                 r_em_instr_valid = r_de_instr_valid;
                 r_em_pc          = r_de_pc;
@@ -417,7 +421,7 @@ module PipelineCore (
                 r_em_mem_wstrb   = r_de_mem_wstrb;
                 r_em_io_access   = r_de_io_access;
                 r_em_io_wen      = r_de_io_wen;
-                r_em_reg_rs2     = r_de_reg_rs2;
+                r_em_reg_rs2     = if !w_we_rs2_forward ? r_de_reg_rs2 : w_w_reg_wdata;
                 r_em_rs2         = r_de_rs2;
                 r_em_rd          = r_de_rd;
                 r_em_reg_wen     = r_de_reg_wen;
@@ -426,6 +430,28 @@ module PipelineCore (
                 r_em_load_sext   = r_de_load_sext;
                 r_em_load_instr  = r_de_load_instr;
                 r_em_wb_type     = r_de_wb_type;
+            } else if w_em_flush {
+                r_em_log         = '0;
+                r_em_instr_valid = 0;
+                r_em_pc          = 0;
+                r_em_instr       = 0;
+                r_em_alu_out     = 0;
+                r_em_alu_zero    = 0;
+                r_em_dmem_access = 0;
+                r_em_dmem_wen    = 0;
+                r_em_imem_wen    = 0;
+                r_em_mem_wstrb   = 0;
+                r_em_io_access   = 0;
+                r_em_io_wen      = 0;
+                r_em_reg_rs2     = 0;
+                r_em_rs2         = 0;
+                r_em_rd          = 0;
+                r_em_reg_wen     = 0;
+                r_em_load_en     = 0;
+                r_em_load_width  = 0;
+                r_em_load_sext   = 0;
+                r_em_load_instr  = 0;
+                r_em_wb_type     = 0 as WbType;
             }
         }
     }
@@ -441,15 +467,20 @@ module PipelineCore (
         mem_write_if: dmem_write_if,
     );
     always_comb {
-        o_dev_id        = r_em_alu_out as Addr;
-        dcache_if.valid = r_em_dmem_access && r_em_instr_valid;
-        dcache_if.addr  = r_em_alu_out;
-        dcache_if.wen   = r_em_dmem_wen;
-        dcache_if.wstrb = r_em_mem_wstrb;
+        o_dev_id         = r_em_alu_out as Addr;
+        dcache_if.valid  = r_em_dmem_access && r_em_instr_valid;
+        dcache_if.addr   = r_em_alu_out;
+        dcache_if.wen    = r_em_dmem_wen;
+        dcache_if.wstrb  = r_em_mem_wstrb;
+        icache_if.wvalid = r_em_imem_wen && r_em_instr_valid;
+        icache_if.waddr  = r_em_alu_out;
+        icache_if.wstrb  = 4'b0001; // isb 固定
         if w_wm_rs2_forward {
             dcache_if.wdata = w_w_reg_wdata;
+            icache_if.wdata = w_w_reg_wdata;
         } else {
             dcache_if.wdata = r_em_reg_rs2;
+            icache_if.wdata = r_em_reg_rs2;
         }
         w_mw_read_data = dcache_if.rdata;
     }
@@ -462,6 +493,7 @@ module PipelineCore (
             r_mw_alu_out     = 0;
             r_mw_rd          = 0;
             r_mw_reg_wen     = 0;
+            r_mw_imem_wen    = 0;
             r_mw_load_en     = 0;
             r_mw_load_width  = 0;
             r_mw_load_sext   = 0;
@@ -493,6 +525,7 @@ module PipelineCore (
                 r_mw_alu_out     = r_em_alu_out;
                 r_mw_rd          = r_em_rd;
                 r_mw_reg_wen     = r_em_reg_wen;
+                r_mw_imem_wen    = r_em_imem_wen;
                 r_mw_load_en     = r_em_load_en;
                 r_mw_load_width  = r_em_load_width;
                 r_mw_load_sext   = r_em_load_sext;
@@ -506,6 +539,7 @@ module PipelineCore (
                 r_mw_alu_out     = 0;
                 r_mw_rd          = 0;
                 r_mw_reg_wen     = 0;
+                r_mw_imem_wen    = 0;
                 r_mw_load_en     = 0;
                 r_mw_load_width  = 0;
                 r_mw_load_sext   = 0;

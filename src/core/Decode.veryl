@@ -262,7 +262,6 @@ module Decode (
     // writeback
     always_comb {
         o_rd      = w_instr.rd;
-        o_reg_wen = (o_rd != 0) && !(o_dmem_access && o_dmem_wen);
         o_load_en = case w_opcode {
             LW, LH, LB, LHU, LBU: 1,
             default             : 0,
@@ -283,5 +282,6 @@ module Decode (
             BEQ, BNE, BLT, BLE, JAL: WbType::BR,
             default                : WbType::REG,
         };
+        o_reg_wen = (o_rd != 0) && !o_dmem_wen && !o_imem_wen && !o_io_wen;
     }
 }

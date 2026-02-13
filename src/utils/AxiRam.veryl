@@ -35,6 +35,10 @@ module AxiRam #(
     var r_bid   : Id   ;
     var r_bresp : Resp ;
 
+    var r_ram_0: Data;
+    var r_ram_1: Data;
+    var r_ram_2: Data;
+
     // #[allow(initial_assign)]
     embed (inline) sv{{{
         initial begin
@@ -59,8 +63,7 @@ module AxiRam #(
             write_if.wstrb[1] repeat 8,
             write_if.wstrb[0] repeat 8
         };
-        w_mask       = w_mask << (r_waddr[1:0] * 8);
-        w_write_data = (r_mem[r_waddr[$bits(Addr) - 1:2] as Index + r_wlen_cnt as Index] & ~w_mask) | ((write_if.wdata << (r_waddr[1:0] * 8)) & w_mask);
+        w_write_data = (r_mem[r_waddr[$bits(Addr) - 1:2] as Index + r_wlen_cnt as Index] & ~w_mask) | (write_if.wdata & w_mask);
     }
 
     #[allow(missing_reset_statement)]
@@ -78,6 +81,9 @@ module AxiRam #(
             r_wlen_cnt = 0;
             r_waddr    = 0;
         } else {
+            r_ram_0 = r_mem[0];
+            r_ram_1 = r_mem[1];
+            r_ram_2 = r_mem[2];
             // read interface
             if read_if.ar_ack() {
                 r_rvalid = 1;
@@ -101,11 +107,11 @@ module AxiRam #(
             if write_if.aw_ack() {
                 r_wready = 1;
                 r_awid   = write_if.awid;
+                r_waddr  = write_if.awaddr;
                 if write_if.awlen != 0 {
                     r_awready  = 0;
                     r_wlen     = write_if.awlen;
                     r_wlen_cnt = 0;
-                    r_waddr    = write_if.awaddr;
                 }
             }
             if write_if.w_ack() {

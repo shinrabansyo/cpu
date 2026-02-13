@@ -110,14 +110,14 @@ pub module ICacheNonSplitAccess (
                         core_write_if.wready = 0;
                         r_write_state        = WriteState::WAIT_RESP;
                         write_if.awvalid     = 1;
-                        write_if.awaddr      = core_write_if.waddr;
+                        write_if.awaddr      = {core_write_if.waddr[$bits(Addr) - 1:2], 2'b00};
                         write_if.awid        = 0;
                         write_if.awlen       = 0;
                         write_if.awsize      = 2; // 4 バイトアクセス
                         write_if.awburst     = 0 as axi_pkg::Burst; // 固定
                         write_if.wvalid      = 1;
-                        write_if.wdata       = core_write_if.wdata;
-                        write_if.wstrb       = core_write_if.wstrb;
+                        write_if.wdata       = core_write_if.wdata << (core_write_if.waddr[1:0] * 8);
+                        write_if.wstrb       = core_write_if.wstrb << core_write_if.waddr[1:0];
                         write_if.wlast       = 1; // 1 ビートで完了する
                         write_if.bready      = 1;
                     } else {

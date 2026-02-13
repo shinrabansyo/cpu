@@ -1,5 +1,5 @@
 module SoC #(
-    param PIPELINE: u32 = 0,
+    param PIPELINE: u32 = 1,
 ) (
     // クロック・リセット
     i_clk: input clock,
