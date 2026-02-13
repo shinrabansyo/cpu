@@ -90,19 +90,19 @@ pub module ICacheNonSplitAccess (
     }
     always_ff (i_clk, i_rst) {
         if_reset {
-            r_write_state    = WriteState::IDLE;
+            r_write_state        = WriteState::IDLE;
             core_write_if.wready = 0;
-            write_if.awvalid = 0;
-            write_if.awaddr  = '0;
-            write_if.awid    = 0;
-            write_if.awlen   = 0;
-            write_if.awsize  = 0;
-            write_if.awburst = 0 as axi_pkg::Burst;
-            write_if.wvalid  = 0;
-            write_if.wdata   = '0;
-            write_if.wstrb   = '0;
-            write_if.wlast   = 0;
-            write_if.bready  = 0;
+            write_if.awvalid     = 0;
+            write_if.awaddr      = '0;
+            write_if.awid        = 0;
+            write_if.awlen       = 0;
+            write_if.awsize      = 0;
+            write_if.awburst     = 0 as axi_pkg::Burst;
+            write_if.wvalid      = 0;
+            write_if.wdata       = '0;
+            write_if.wstrb       = '0;
+            write_if.wlast       = 0;
+            write_if.bready      = 0;
         } else {
             case (r_write_state) {
                 WriteState::IDLE: {
@@ -201,7 +201,7 @@ pub module ICacheNonSplitAccess (
                 r_valid = fetch_if.valid;
             }
             if fetch_if.valid && fetch_if.ready {
-                r_addr  = fetch_if.addr;
+                r_addr = fetch_if.addr;
             }
             case (r_fetch_state) {
                 FetchState::IDLE: {

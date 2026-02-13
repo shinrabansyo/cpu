@@ -11,20 +11,19 @@ module Fetch (
     o_instr      : output Inst ,
 
     // execute stage
-    i_pc_target : input Addr,
+    i_pc_target  : input Addr ,
     i_branch_miss: input logic,
 
     // controller
-    i_f_stall: input logic,
+    i_f_stall : input logic,
     i_fd_flush: input logic,
 ) {
     import Config::*;
     var w_pc_fetching: Addr ;
     var r_pc_fetched : Addr ;
     var r_fd_flush   : logic;
-    var r_first_fetch : logic;
-    var w_fetch_ack: logic;
-    var r_miss_branch_reqed: logic;
+    var r_first_fetch: logic;
+    var w_fetch_ack  : logic;
 
     enum MissState {
         IDLE,
@@ -46,10 +45,7 @@ module Fetch (
 
         // 最初のフェッチ・分岐ミス時のフェッチが完了するまで
         // w_pc_fetching を固定
-        if i_f_stall || 
-           r_first_fetch ||
-           r_miss_state == MissState::REQ || 
-           (r_miss_state == MissState::REQED && !w_fetch_ack) {
+        if i_f_stall || r_first_fetch || r_miss_state == MissState::REQ || (r_miss_state == MissState::REQED && !w_fetch_ack) {
             w_pc_fetching = r_pc_fetched;
         } else {
             if i_branch_miss {
@@ -61,17 +57,17 @@ module Fetch (
         }
         fetch_if.valid = 1;
         fetch_if.addr  = w_pc_fetching;
-        o_instr_valid = fetch_if.instr_valid && r_miss_state != MissState::REQ;
-        o_instr       = if o_instr_valid ? fetch_if.instr : 0;
-        o_pc          = if o_instr_valid ? r_pc_fetched : 0;
+        o_instr_valid  = fetch_if.instr_valid && r_miss_state != MissState::REQ;
+        o_instr        = if o_instr_valid ? fetch_if.instr : 0;
+        o_pc           = if o_instr_valid ? r_pc_fetched : 0;
     }
 
     always_ff (i_clk, i_rst) {
         if_reset {
-            r_fd_flush   = 0;
-            r_pc_fetched = 0;
+            r_fd_flush    = 0;
+            r_pc_fetched  = 0;
             r_first_fetch = 1;
-            r_miss_state = 0 as MissState;
+            r_miss_state  = 0 as MissState;
         } else {
             case r_miss_state {
                 MissState::IDLE: {
@@ -81,7 +77,7 @@ module Fetch (
                         } else {
                             r_miss_state = MissState::REQ;
                         }
-                    } 
+                    }
                 }
                 MissState::REQ: {
                     if w_fetch_ack {
@@ -96,7 +92,7 @@ module Fetch (
             }
             if w_fetch_ack || i_branch_miss && !i_f_stall {
                 r_first_fetch = 0;
-                r_pc_fetched = w_pc_fetching;
+                r_pc_fetched  = w_pc_fetching;
             }
         }
     }

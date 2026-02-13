@@ -12,8 +12,8 @@ module AxiRam #(
     import axi_pkg::*;
     import Config::*;
 
-    type Index = logic<$clog2(DEPTH)>;
-    var r_mem: logic<32> [DEPTH];
+    type Index = logic<$clog2(DEPTH)>        ;
+    var r_mem: logic<32>            [DEPTH];
 
     var r_arready: logic                      ;
     var r_rvalid : logic                      ;
@@ -22,14 +22,14 @@ module AxiRam #(
     var r_len_cnt: Len                        ;
     var r_addr   : Addr                       ;
 
-    var r_awready : logic;
-    var r_awid    : Id   ;
-    var r_wready  : logic;
-    var r_wlen    : Len  ;
-    var r_wlen_cnt: Len  ;
-    var r_waddr   : Addr ;
-    var w_mask : Data;
-    var w_write_data : Data;
+    var r_awready   : logic;
+    var r_awid      : Id   ;
+    var r_wready    : logic;
+    var r_wlen      : Len  ;
+    var r_wlen_cnt  : Len  ;
+    var r_waddr     : Addr ;
+    var w_mask      : Data ;
+    var w_write_data: Data ;
 
     var r_bvalid: logic;
     var r_bid   : Id   ;
@@ -53,14 +53,14 @@ module AxiRam #(
         write_if.awready = r_awready;
         write_if.wready  = r_wready;
         write_if.bvalid  = r_bvalid;
-        w_mask = {
+        w_mask           = {
             write_if.wstrb[3] repeat 8,
             write_if.wstrb[2] repeat 8,
             write_if.wstrb[1] repeat 8,
             write_if.wstrb[0] repeat 8
         };
-        w_mask = w_mask << (r_waddr[1:0] * 8);
-        w_write_data = (r_mem[r_waddr[$bits(Addr)-1:2] as Index + r_wlen_cnt as Index] & ~w_mask) | ((write_if.wdata << (r_waddr[1:0] * 8)) & w_mask);
+        w_mask       = w_mask << (r_waddr[1:0] * 8);
+        w_write_data = (r_mem[r_waddr[$bits(Addr) - 1:2] as Index + r_wlen_cnt as Index] & ~w_mask) | ((write_if.wdata << (r_waddr[1:0] * 8)) & w_mask);
     }
 
     #[allow(missing_reset_statement)]
@@ -87,13 +87,13 @@ module AxiRam #(
                     r_len_cnt = 0;
                     r_addr    = read_if.araddr;
                 }
-                r_data = r_mem[read_if.araddr[$bits(Addr)-1:2] as Index];
+                r_data = r_mem[read_if.araddr[$bits(Addr) - 1:2] as Index];
             }
             if read_if.r_ack() && read_if.rlast {
                 r_rvalid = read_if.arvalid && r_arready;
             } else if read_if.r_ack() {
                 r_rvalid  =  1;
-                r_data    =  r_mem[r_addr[$bits(Addr)-1:2] as Index  + (r_len_cnt as Index + 1)];
+                r_data    =  r_mem[r_addr[$bits(Addr) - 1:2] as Index + (r_len_cnt as Index + 1)];
                 r_len_cnt += 1;
                 r_arready =  1;
             }
@@ -109,7 +109,7 @@ module AxiRam #(
                 }
             }
             if write_if.w_ack() {
-                r_mem[r_waddr[$bits(Addr)-1:2] as Index + r_wlen_cnt as Index] = w_write_data;
+                r_mem[r_waddr[$bits(Addr) - 1:2] as Index + r_wlen_cnt as Index] = w_write_data;
                 if (write_if.wlast) {
                     r_wready = 0;
                     r_bvalid = 1;

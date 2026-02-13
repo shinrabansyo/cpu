@@ -6,16 +6,16 @@ module Core (
     i_rst: input reset,
 
     // Instruction Memory
-    imem_read_if: modport axi_read_if::master,
+    imem_read_if : modport axi_read_if::master ,
     imem_write_if: modport axi_write_if::master,
 
     // Data Memory
     dmem_read_if : modport axi_read_if::master ,
     dmem_write_if: modport axi_write_if::master,
 
-    o_dev_id: output Addr,
-    if_io_bus_din : modport Decoupled::receiver  ,
-    if_io_bus_dout: modport Decoupled::sender,
+    o_dev_id      : output  Addr               ,
+    if_io_bus_din : modport Decoupled::receiver,
+    if_io_bus_dout: modport Decoupled::sender  ,
 ) {
     import Config::*;
     // ログ用信号
@@ -79,12 +79,12 @@ module Core (
 
     inst icache_if: core_icache_if;
     inst m_icache_mod: ICacheSplitAccess (
-        i_clk  : i_clk       ,
-        i_rst  : i_rst       ,
-        fetch_if: icache_if   ,
-        core_write_if: icache_if,
-        read_if : imem_read_if,
-        write_if: imem_write_if,
+        i_clk        : i_clk        ,
+        i_rst        : i_rst        ,
+        fetch_if     : icache_if    ,
+        core_write_if: icache_if    ,
+        read_if      : imem_read_if ,
+        write_if     : imem_write_if,
     );
 
     inst dcache_if: core_dcache_if;
@@ -100,8 +100,8 @@ module Core (
     var r_first_fetch : logic<1>;
     var r_load_ready  : logic<1>;
     var w_branch_taken: logic<1>;
-    var w_stall: logic<1>;
-    var r_prev_fetch: logic<1>;
+    var w_stall       : logic<1>;
+    var r_prev_fetch  : logic<1>;
 
     // ====================== ワイヤ・インタフェース宣言 ここまで
 
@@ -121,9 +121,9 @@ module Core (
             OUT                 : !if_io_bus_dout.ready,
             default             : 1'b0,
         };
-        w_stall |= !icache_if.instr_valid;
-        icache_if.valid = 1;
-        icache_if.addr = w_pc_fetching;
+        w_stall         |= !icache_if.instr_valid;
+        icache_if.valid =  1;
+        icache_if.addr  =  w_pc_fetching;
         if icache_if.instr_valid {
             w_instr_raw = icache_if.instr;
         } else {
@@ -133,11 +133,12 @@ module Core (
     }
     always_ff (i_clk, i_rst) {
         if_reset {
-            r_last_instr    = '0;
+            r_last_instr = '0;
+            r_prev_fetch = 0;
         } else {
             if icache_if.valid && icache_if.ready {
                 r_prev_fetch = 1;
-            } 
+            }
             if icache_if.instr_valid {
                 r_last_instr = w_instr_raw;
                 r_prev_fetch = icache_if.valid;
@@ -152,9 +153,9 @@ module Core (
         } else {
             if !w_stall {
                 w_pc_fetching = case {w_instr.opcode_sub, w_instr.opcode} {
-                    BEQ, BNE, BLT, BLE  : if w_branch_taken ? r_pc_fetched + w_instr.imm_b_sext : r_pc_fetched + 32'h6,
-                    JAL                 : w_out,
-                    default             : r_pc_fetched + 32'h6,
+                    BEQ, BNE, BLT, BLE: if w_branch_taken ? r_pc_fetched + w_instr.imm_b_sext : r_pc_fetched + 32'h6,
+                    JAL               : w_out,
+                    default           : r_pc_fetched + 32'h6,
                 };
             } else {
                 w_pc_fetching = r_pc_fetched;
@@ -403,9 +404,9 @@ module Core (
         w_dmem_read     = dcache_if.rdata;
         // コアと命令キャッシュ(書き込みポート)の接続
         icache_if.wvalid = |w_wen && w_is_imem && icache_if.ready;
-        icache_if.waddr = w_out;
-        icache_if.wstrb = w_wen;
-        icache_if.wdata = m_regfile[w_instr.rs2_s];
+        icache_if.waddr  = w_out;
+        icache_if.wstrb  = w_wen;
+        icache_if.wdata  = m_regfile[w_instr.rs2_s];
     }
 
     // 同期読み出しの完了を示すフラグ
@@ -507,4 +508,3 @@ module Core (
         }
     }
 }
-

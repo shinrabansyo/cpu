@@ -30,40 +30,40 @@ module ICacheSplitAccessWrapper (
     read_if_rresp : input  Resp     ,
     read_if_rlast : input  logic    ,
 
-    write_if_awvalid: output logic,
-    write_if_awready: input  logic,
-    write_if_awaddr : output Addr ,
-    write_if_awid   : output Id   ,
-    write_if_awlen  : output Len  ,
-    write_if_awsize : output Size ,
-    write_if_awburst: output Burst,
-    write_if_wvalid : output logic    ,
-    write_if_wready : input  logic    ,
-    write_if_wdata  : output logic<32>,
+    write_if_awvalid: output logic        ,
+    write_if_awready: input  logic        ,
+    write_if_awaddr : output Addr         ,
+    write_if_awid   : output Id           ,
+    write_if_awlen  : output Len          ,
+    write_if_awsize : output Size         ,
+    write_if_awburst: output Burst        ,
+    write_if_wvalid : output logic        ,
+    write_if_wready : input  logic        ,
+    write_if_wdata  : output logic<32>    ,
     write_if_wstrb  : output logic<32 / 8>,
-    write_if_wlast  : output logic    ,
-    write_if_bvalid : input  logic    ,
-    write_if_bready : output logic    ,
-    write_if_bid    : input  Id       ,
-    write_if_bresp  : input  Resp     ,
+    write_if_wlast  : output logic        ,
+    write_if_bvalid : input  logic        ,
+    write_if_bready : output logic        ,
+    write_if_bid    : input  Id           ,
+    write_if_bresp  : input  Resp         ,
 ) {
     import Config::*;
     import axi_pkg::*;
 
-    inst core_if: core_icache_if;
+    inst core_if : core_icache_if;
     inst read_if : axi_read_if;
     inst write_if: axi_write_if;
 
     always_comb {
-        core_if.valid = fetch_if_valid;
-        core_if.addr  = fetch_if_addr;
+        core_if.valid  = fetch_if_valid;
+        core_if.addr   = fetch_if_addr;
         fetch_if_instr = core_if.instr;
         fetch_if_ready = core_if.ready;
 
-        core_if.wvalid = core_write_if_wvalid;
-        core_if.waddr = core_write_if_waddr;
-        core_if.wdata = core_write_if_wdata;
-        core_if.wstrb = core_write_if_wstrb;
+        core_if.wvalid       = core_write_if_wvalid;
+        core_if.waddr        = core_write_if_waddr;
+        core_if.wdata        = core_write_if_wdata;
+        core_if.wstrb        = core_write_if_wstrb;
         core_write_if_wready = core_if.wready;
 
         read_if.arready = read_if_arready;
@@ -94,21 +94,21 @@ module ICacheSplitAccessWrapper (
         write_if_wstrb   = write_if.wstrb;
         write_if_wlast   = write_if.wlast;
 
-        write_if.bvalid  = write_if_bvalid;
-        write_if_bready  = write_if.bready;
-        write_if.bid     = write_if_bid;
-        write_if.bresp   = write_if_bresp;
+        write_if.bvalid = write_if_bvalid;
+        write_if_bready = write_if.bready;
+        write_if.bid    = write_if_bid;
+        write_if.bresp  = write_if_bresp;
     }
 
     inst icache_split_access: ICacheSplitAccess (
         i_clk: i_clk,
         i_rst: i_rst,
 
-        fetch_if: core_if,
+        fetch_if     : core_if,
         core_write_if: core_if,
 
-        read_if,
-        write_if,
+        read_if   ,
+        write_if  ,
     );
 
 }

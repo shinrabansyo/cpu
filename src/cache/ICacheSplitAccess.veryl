@@ -9,7 +9,7 @@ module ICacheSplitAccess (
     core_write_if: modport core_icache_if::icache_write,
 
     // memory interface
-    read_if: modport axi_read_if::master,
+    read_if : modport axi_read_if::master ,
     write_if: modport axi_write_if::master,
 ) {
     import Config::*;
@@ -46,19 +46,19 @@ module ICacheSplitAccess (
     always_comb {
         w_cross_boundary = isCrossBoundary(fetch_if.addr);
 
-        cache_side_if.valid = 0;
-        cache_side_if.addr  = '0;
+        cache_side_if.valid  = 0;
+        cache_side_if.addr   = '0;
         fetch_if.ready       = 0;
         fetch_if.instr       = '0;
         fetch_if.instr_valid = 0;
-        w_next_instr        = r_instr;
-        w_next_state        = r_state;
-        w_addr_update       = 0;
+        w_next_instr         = r_instr;
+        w_next_state         = r_state;
+        w_addr_update        = 0;
         case r_state {
             State::IDLE: {
-                w_addr_update       = 1;
-                cache_side_if.valid = fetch_if.valid;
-                cache_side_if.addr  = fetch_if.addr;
+                w_addr_update        = 1;
+                cache_side_if.valid  = fetch_if.valid;
+                cache_side_if.addr   = fetch_if.addr;
                 fetch_if.ready       = cache_side_if.ready;
                 fetch_if.instr       = cache_side_if.instr;
                 fetch_if.instr_valid = cache_side_if.instr_valid;
@@ -83,8 +83,8 @@ module ICacheSplitAccess (
                 // 2ライン目の取得完了したら
                 // 次ラインの取得要求を出す
                 if cache_side_if.ready {
-                    cache_side_if.valid = fetch_if.valid;
-                    cache_side_if.addr  = fetch_if.addr;
+                    cache_side_if.valid  = fetch_if.valid;
+                    cache_side_if.addr   = fetch_if.addr;
                     fetch_if.ready       = 1;
                     fetch_if.instr       = (cache_side_if.instr << (8 * r_remain_bytes)) | r_instr;
                     fetch_if.instr_valid = 1;
@@ -125,11 +125,11 @@ module ICacheSplitAccess (
         i_rst  ,
 
         // read request
-        fetch_if: cache_side_if,
-        core_write_if,
+        fetch_if     : cache_side_if,
+        core_write_if               ,
 
         // memory interface
-        read_if,
-        write_if,
+        read_if   ,
+        write_if  ,
     );
 }

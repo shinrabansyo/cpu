@@ -91,9 +91,9 @@ pub module DCacheNonSplitAccess (
     }
 
     always_comb {
-        core_if.ready = !w_stall || r_state == State::WAIT_WRITE;
+        core_if.ready       = !w_stall || r_state == State::WAIT_WRITE;
         core_if.rdata_valid = !w_stall && r_valid;
-        core_if.rdata = w_da_rdata[0+:32];
+        core_if.rdata       = w_da_rdata[0+:32];
 
         w_ta_set           = GetDCacheSet(core_if.addr);
         w_ta_tag           = GetDCacheTag(core_if.addr);
@@ -200,7 +200,7 @@ pub module DCacheNonSplitAccess (
             mem_write_if.wvalid  = 0;
             mem_write_if.wstrb   = 0;
             mem_write_if.wlast   = 0;
-            mem_write_if.bready = 0;
+            mem_write_if.bready  = 0;
         } else {
             if core_if.ready {
                 r_addr  = core_if.addr;

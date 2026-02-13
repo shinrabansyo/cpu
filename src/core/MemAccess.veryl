@@ -2,8 +2,6 @@ module MemAccess (
     i_clk: input clock,
     i_rst: input reset,
 
-    dmem_read_if: modport axi_read_if::master,
+    dmem_read_if : modport axi_read_if::master ,
     dmem_write_if: modport axi_write_if::master,
-) {
-
-}
+) {}

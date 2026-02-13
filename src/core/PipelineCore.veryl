@@ -11,7 +11,7 @@ module PipelineCore (
     dmem_read_if : modport axi_read_if::master ,
     dmem_write_if: modport axi_write_if::master,
 
-    o_dev_id: output Addr,
+    o_dev_id      : output  Addr               ,
     if_io_bus_din : modport Decoupled::sender  ,
     if_io_bus_dout: modport Decoupled::receiver,
 ) {
@@ -28,106 +28,106 @@ module PipelineCore (
     var w_fd_instr      : Inst ;
 
     // decode stage
-    var w_d_log: log_pkg::InstLog;
-    var w_d_branch_instr  : logic                  ;
-    var w_d_branch_type: BranchType                  ;
-    var w_d_rs1        : logic <5>              ;
-    var w_d_rs2        : logic <5>              ;
-    var w_d_imm        : Data                   ;
-    var w_d_src2_reg   : logic                  ;
-    var w_d_alu_cmd    : AluCmd                 ;
-    var w_d_load_instr : logic;
-    var w_d_dmem_access: logic                  ;
-    var w_d_dmem_wen   : logic                  ;
-    var w_d_imem_wen   : logic                  ;
-    var w_d_mem_wstrb  : logic <$bits(Data) / 8>;
-    var w_d_io_access  : logic                  ;
-    var w_d_io_wen     : logic                  ;
-    var w_d_rd         : logic <5>              ;
-    var w_d_reg_wen    : logic                  ;
-    var w_d_load_en    : logic                  ;
-    var w_d_load_width : logic <2>              ;
-    var w_d_load_sext  : logic                  ;
-    var w_d_wb_type : WbType;
+    var w_d_log         : log_pkg::InstLog                 ;
+    var w_d_branch_instr: logic                            ;
+    var w_d_branch_type : BranchType                       ;
+    var w_d_rs1         : logic           <5>              ;
+    var w_d_rs2         : logic           <5>              ;
+    var w_d_imm         : Data                             ;
+    var w_d_src2_reg    : logic                            ;
+    var w_d_alu_cmd     : AluCmd                           ;
+    var w_d_load_instr  : logic                            ;
+    var w_d_dmem_access : logic                            ;
+    var w_d_dmem_wen    : logic                            ;
+    var w_d_imem_wen    : logic                            ;
+    var w_d_mem_wstrb   : logic           <$bits(Data) / 8>;
+    var w_d_io_access   : logic                            ;
+    var w_d_io_wen      : logic                            ;
+    var w_d_rd          : logic           <5>              ;
+    var w_d_reg_wen     : logic                            ;
+    var w_d_load_en     : logic                            ;
+    var w_d_load_width  : logic           <2>              ;
+    var w_d_load_sext   : logic                            ;
+    var w_d_wb_type     : WbType                           ;
     // decode stage output
-    var r_de_log: log_pkg::InstLog;
-    var r_de_branch_instr  : logic                  ;
-    var r_de_branch_type: BranchType                  ;
-    var r_de_instr_valid: logic                  ;
-    var r_de_pc         : Addr                   ;
-    var r_de_instr      : Inst                   ;
-    var r_de_rs1    : logic<5>                   ;
-    var r_de_rs2    : logic<5>                   ;
-    var r_de_reg_rs1    : Data                   ;
-    var r_de_reg_rs2    : Data                   ;
-    var r_de_imm        : Data                   ;
-    var r_de_src2_reg   : logic                  ;
-    var r_de_alu_cmd    : AluCmd                 ;
-    var r_de_load_instr : logic;
-    var r_de_dmem_access: logic                  ;
-    var r_de_dmem_wen   : logic                  ;
-    var r_de_imem_wen   : logic                  ;
-    var r_de_mem_wstrb  : logic <$bits(Data) / 8>;
-    var r_de_io_access  : logic                  ;
-    var r_de_io_wen     : logic                  ;
-    var r_de_rd         : logic <5>              ;
-    var r_de_reg_wen    : logic                  ;
-    var r_de_load_en    : logic                  ;
-    var r_de_load_width : logic <2>              ;
-    var r_de_load_sext  : logic                  ;
-    var r_de_wb_type : WbType;
+    var r_de_log         : log_pkg::InstLog                 ;
+    var r_de_branch_instr: logic                            ;
+    var r_de_branch_type : BranchType                       ;
+    var r_de_instr_valid : logic                            ;
+    var r_de_pc          : Addr                             ;
+    var r_de_instr       : Inst                             ;
+    var r_de_rs1         : logic           <5>              ;
+    var r_de_rs2         : logic           <5>              ;
+    var r_de_reg_rs1     : Data                             ;
+    var r_de_reg_rs2     : Data                             ;
+    var r_de_imm         : Data                             ;
+    var r_de_src2_reg    : logic                            ;
+    var r_de_alu_cmd     : AluCmd                           ;
+    var r_de_load_instr  : logic                            ;
+    var r_de_dmem_access : logic                            ;
+    var r_de_dmem_wen    : logic                            ;
+    var r_de_imem_wen    : logic                            ;
+    var r_de_mem_wstrb   : logic           <$bits(Data) / 8>;
+    var r_de_io_access   : logic                            ;
+    var r_de_io_wen      : logic                            ;
+    var r_de_rd          : logic           <5>              ;
+    var r_de_reg_wen     : logic                            ;
+    var r_de_load_en     : logic                            ;
+    var r_de_load_width  : logic           <2>              ;
+    var r_de_load_sext   : logic                            ;
+    var r_de_wb_type     : WbType                           ;
 
     // execute stage
-    var w_ef_pc_target: Addr;
+    var w_ef_pc_target    : Addr ;
     var _w_ef_branch_taken: logic; // for branch prediction
-    var w_e_alu_out : Data ;
-    var w_e_alu_zero: logic;
+    var w_e_alu_out       : Data ;
+    var w_e_alu_zero      : logic;
     // execute stage output
-    var r_em_log: log_pkg::InstLog;
-    var r_em_instr_valid: logic                 ;
-    var r_em_pc         : Addr                  ;
-    var r_em_instr      : Inst                  ;
-    var r_em_alu_out    : Data                  ;
-    var r_em_alu_zero   : logic                 ;
-    var r_em_dmem_access: logic                 ;
-    var r_em_dmem_wen   : logic                 ;
-    var r_em_imem_wen   : logic                 ;
-    var r_em_mem_wstrb  : logic<$bits(Data) / 8>;
-    var r_em_io_access  : logic                 ;
-    var r_em_io_wen     : logic                 ;
-    var r_em_reg_rs2    : Data                  ;
-    var r_em_rs2:logic<5>;
-    var r_em_rd         : logic<5>              ;
-    var r_em_reg_wen    : logic                 ;
-    var r_em_load_en    : logic                 ;
-    var r_em_load_width : logic<2>              ;
-    var r_em_load_sext  : logic                 ;
-    var r_em_load_instr : logic;
-    var r_em_wb_type : WbType;
+    var r_em_log        : log_pkg::InstLog                 ;
+    var r_em_instr_valid: logic                            ;
+    var r_em_pc         : Addr                             ;
+    var r_em_instr      : Inst                             ;
+    var r_em_alu_out    : Data                             ;
+    var r_em_alu_zero   : logic                            ;
+    var r_em_dmem_access: logic                            ;
+    var r_em_dmem_wen   : logic                            ;
+    var r_em_imem_wen   : logic                            ;
+    var r_em_mem_wstrb  : logic           <$bits(Data) / 8>;
+    var r_em_io_access  : logic                            ;
+    var r_em_io_wen     : logic                            ;
+    var r_em_reg_rs2    : Data                             ;
+    var r_em_rs2        : logic           <5>              ;
+    var r_em_rd         : logic           <5>              ;
+    var r_em_reg_wen    : logic                            ;
+    var r_em_load_en    : logic                            ;
+    var r_em_load_width : logic           <2>              ;
+    var r_em_load_sext  : logic                            ;
+    var r_em_load_instr : logic                            ;
+    var r_em_wb_type    : WbType                           ;
 
     // memory access stage
     inst dcache_if: core_dcache_if;
     // memory access stage output
-    var r_mw_log: log_pkg::InstLog;
-    var r_mw_instr_valid: logic   ;
-    var r_mw_pc         : Addr    ;
-    var r_mw_instr      : Inst    ;
-    var w_mw_read_data  : Data    ;
-    var r_mw_alu_out    : Data    ;
-    var r_mw_rd         : logic<5>;
-    var r_mw_reg_wen    : logic   ;
-    var r_mw_load_en    : logic   ;
-    var r_mw_load_width : logic<2>;
-    var r_mw_load_sext  : logic   ;
-    var r_mw_load_instr : logic;
-    var r_mw_wb_type : WbType;
+    var r_mw_log        : log_pkg::InstLog   ;
+    var r_mw_instr_valid: logic              ;
+    var r_mw_pc         : Addr               ;
+    var r_mw_instr      : Inst               ;
+    var w_mw_read_data  : Data               ;
+    var r_mw_alu_out    : Data               ;
+    var r_mw_rd         : logic           <5>;
+    var r_mw_reg_wen    : logic              ;
+    var r_mw_load_en    : logic              ;
+    var r_mw_load_width : logic           <2>;
+    var r_mw_load_sext  : logic              ;
+    var r_mw_load_instr : logic              ;
+    var r_mw_wb_type    : WbType             ;
 
     // writeback stage
-    var w_w_log: log_pkg::InstLog;
-    var w_w_reg_wdata: Data;
+    var w_w_log      : log_pkg::InstLog;
+    var w_w_reg_wdata: Data            ;
 
     // controll
-    var w_f_branch_miss: logic;
+    var w_f_branch_miss : logic;
     var w_wd_rs1_forward: logic;
     var w_wd_rs2_forward: logic;
     var w_me_rs1_forward: logic;
@@ -135,14 +135,14 @@ module PipelineCore (
     var w_we_rs1_forward: logic;
     var w_we_rs2_forward: logic;
     var w_wm_rs2_forward: logic;
-    var w_f_stall: logic;
-    var w_d_stall: logic;
-    var w_e_stall: logic;
-    var w_m_stall: logic;
-    var w_fd_flush: logic;
-    var w_de_flush: logic;
-    var w_em_flush: logic;
-    var w_mw_flush: logic;
+    var w_f_stall       : logic;
+    var w_d_stall       : logic;
+    var w_e_stall       : logic;
+    var w_m_stall       : logic;
+    var w_fd_flush      : logic;
+    var w_de_flush      : logic;
+    var w_em_flush      : logic;
+    var w_mw_flush      : logic;
 
     // Controller
     inst controller: Controller (
@@ -150,65 +150,65 @@ module PipelineCore (
         o_branch_miss: w_f_branch_miss,
 
         // decode stage
-        i_d_pc: w_fd_pc,
-        i_d_rs1: w_d_rs1,
-        i_d_rs2: w_d_rs2,
+        i_d_pc          : w_fd_pc         ,
+        i_d_rs1         : w_d_rs1         ,
+        i_d_rs2         : w_d_rs2         ,
         o_wd_rs1_forward: w_wd_rs1_forward,
         o_wd_rs2_forward: w_wd_rs2_forward,
 
         // execute stage
-        i_branch_instr: r_de_branch_instr,
-        i_pc_target: w_ef_pc_target,
-        i_e_rs1: r_de_rs1,
-        i_e_rs2: r_de_rs2,
-        i_e_rd: r_de_rd,
-        i_e_load_instr: r_de_load_instr,
-        o_me_rs1_forward: w_me_rs1_forward,
-        o_me_rs2_forward: w_me_rs2_forward,
-        o_we_rs1_forward: w_we_rs1_forward,
-        o_we_rs2_forward: w_we_rs2_forward,
+        i_branch_instr  : r_de_branch_instr,
+        i_pc_target     : w_ef_pc_target   ,
+        i_e_rs1         : r_de_rs1         ,
+        i_e_rs2         : r_de_rs2         ,
+        i_e_rd          : r_de_rd          ,
+        i_e_load_instr  : r_de_load_instr  ,
+        o_me_rs1_forward: w_me_rs1_forward ,
+        o_me_rs2_forward: w_me_rs2_forward ,
+        o_we_rs1_forward: w_we_rs1_forward ,
+        o_we_rs2_forward: w_we_rs2_forward ,
 
         // mem access stage
-        i_m_rs2: r_em_rs2,
-        i_m_rd: r_em_rd,
-        i_m_instr_valid: r_em_instr_valid,
+        i_m_rs2         : r_em_rs2        ,
+        i_m_rd          : r_em_rd         ,
+        i_m_instr_valid : r_em_instr_valid,
         o_wm_rs2_forward: w_wm_rs2_forward,
 
         // memory
         i_m_dmem_access: r_em_dmem_access,
         i_m_dmem_wen   : r_em_dmem_wen   ,
-        i_dmem_ready : dcache_if.ready ,
+        i_dmem_ready   : dcache_if.ready ,
         i_m_imem_wen   : r_em_imem_wen   ,
-        i_imem_ready : icache_if.wready,
+        i_imem_ready   : icache_if.wready,
         // device
-        i_m_io_access    : r_em_io_access      ,
-        i_m_io_wen       : r_em_io_wen         ,
+        i_m_io_access  : r_em_io_access      ,
+        i_m_io_wen     : r_em_io_wen         ,
         i_io_din_valid : if_io_bus_din.valid ,
         i_io_dout_ready: if_io_bus_dout.ready,
 
         // writeback
-        i_dmem_rdata_valid : dcache_if.rdata_valid,
-        i_w_load_instr : r_mw_load_instr,
-        i_w_rd: r_mw_rd,
+        i_dmem_rdata_valid: dcache_if.rdata_valid,
+        i_w_load_instr    : r_mw_load_instr      ,
+        i_w_rd            : r_mw_rd              ,
 
         o_fd_flush: w_fd_flush,
         o_de_flush: w_de_flush,
         o_em_flush: w_em_flush,
         o_mw_flush: w_mw_flush,
-        o_f_stall: w_f_stall,
-        o_d_stall: w_d_stall,
-        o_e_stall: w_e_stall,
-        o_m_stall: w_m_stall,
+        o_f_stall : w_f_stall ,
+        o_d_stall : w_d_stall ,
+        o_e_stall : w_e_stall ,
+        o_m_stall : w_m_stall ,
     );
 
     // Fetch Stage -------------------
     inst icache: ICacheSplitAccess (
-        i_clk,
-        i_rst,
-        fetch_if: icache_if,
-        core_write_if: icache_if,
-        read_if: imem_read_if,
-        write_if: imem_write_if,
+        i_clk                       ,
+        i_rst                       ,
+        fetch_if     : icache_if    ,
+        core_write_if: icache_if    ,
+        read_if      : imem_read_if ,
+        write_if     : imem_write_if,
     );
     inst fetch_stage: Fetch (
         i_clk                          ,
@@ -217,9 +217,9 @@ module PipelineCore (
         o_instr_valid: w_fd_instr_valid,
         o_pc         : w_fd_pc         ,
         o_instr      : w_fd_instr      ,
-        i_pc_target : w_ef_pc_target,
-        i_branch_miss: w_f_branch_miss,
-        i_f_stall   : w_f_stall      ,
+        i_pc_target  : w_ef_pc_target  ,
+        i_branch_miss: w_f_branch_miss ,
+        i_f_stall    : w_f_stall       ,
         i_fd_flush   : w_fd_flush      ,
     );
 
@@ -228,22 +228,22 @@ module PipelineCore (
         i_clk  ,
         i_rst  ,
         // log
-        o_log : w_d_log,
+        o_log: w_d_log,
 
         // fetch stage
         i_instr_valid: w_fd_instr_valid,
         i_pc         : w_fd_pc         ,
         i_instr      : w_fd_instr      ,
 
-        o_branch_type: w_d_branch_type,
+        o_branch_type : w_d_branch_type ,
         o_branch_instr: w_d_branch_instr,
 
         // execute stage
-        o_rs1     : w_d_rs1     ,
-        o_rs2     : w_d_rs2     ,
-        o_imm     : w_d_imm     ,
-        o_src2_reg: w_d_src2_reg,
-        o_alu_cmd : w_d_alu_cmd ,
+        o_rs1       : w_d_rs1       ,
+        o_rs2       : w_d_rs2       ,
+        o_imm       : w_d_imm       ,
+        o_src2_reg  : w_d_src2_reg  ,
+        o_alu_cmd   : w_d_alu_cmd   ,
         o_load_instr: w_d_load_instr,
 
         // mem access
@@ -262,89 +262,89 @@ module PipelineCore (
         o_load_en   : w_d_load_en   ,
         o_load_width: w_d_load_width,
         o_load_sext : w_d_load_sext ,
-        o_wb_type: w_d_wb_type,
+        o_wb_type   : w_d_wb_type   ,
     );
     always_ff (i_clk, i_rst) {
         if_reset {
-            r_de_log = '0;
+            r_de_log          = '0;
             r_de_branch_instr = 0;
-            r_de_branch_type = 0 as BranchType;
-            r_de_instr_valid = 0;
-            r_de_pc          = 0;
-            r_de_instr       = 0;
-            r_de_rs1 = 0;
-            r_de_rs2 = 0;
-            r_de_reg_rs1     = 0;
-            r_de_reg_rs2     = 0;
-            r_de_imm         = 0;
-            r_de_src2_reg    = 0;
-            r_de_alu_cmd     = 0 as AluCmd;
-            r_de_load_instr = 0;
-            r_de_dmem_access = 0;
-            r_de_dmem_wen    = 0;
-            r_de_imem_wen    = 0;
-            r_de_mem_wstrb   = 0;
-            r_de_io_access   = 0;
-            r_de_io_wen      = 0;
-            r_de_rd          = 0;
-            r_de_reg_wen     = 0;
-            r_de_load_en     = 0;
-            r_de_load_width  = 0;
-            r_de_load_sext   = 0;
-            r_de_wb_type = 0 as WbType;
+            r_de_branch_type  = 0 as BranchType;
+            r_de_instr_valid  = 0;
+            r_de_pc           = 0;
+            r_de_instr        = 0;
+            r_de_rs1          = 0;
+            r_de_rs2          = 0;
+            r_de_reg_rs1      = 0;
+            r_de_reg_rs2      = 0;
+            r_de_imm          = 0;
+            r_de_src2_reg     = 0;
+            r_de_alu_cmd      = 0 as AluCmd;
+            r_de_load_instr   = 0;
+            r_de_dmem_access  = 0;
+            r_de_dmem_wen     = 0;
+            r_de_imem_wen     = 0;
+            r_de_mem_wstrb    = 0;
+            r_de_io_access    = 0;
+            r_de_io_wen       = 0;
+            r_de_rd           = 0;
+            r_de_reg_wen      = 0;
+            r_de_load_en      = 0;
+            r_de_load_width   = 0;
+            r_de_load_sext    = 0;
+            r_de_wb_type      = 0 as WbType;
         } else {
             if !w_d_stall && !w_de_flush {
-                r_de_log = w_d_log;
+                r_de_log          = w_d_log;
                 r_de_branch_instr = w_d_branch_instr;
-                r_de_branch_type = w_d_branch_type;
-                r_de_instr_valid = w_fd_instr_valid;
-                r_de_pc          = w_fd_pc;
-                r_de_instr       = w_fd_instr;
-                r_de_rs1     = w_d_rs1;
-                r_de_rs2     = w_d_rs2;
-                r_de_reg_rs1     = r_regfile[w_d_rs1];
-                r_de_reg_rs2     = r_regfile[w_d_rs2];
-                r_de_imm         = w_d_imm;
-                r_de_src2_reg    = w_d_src2_reg;
-                r_de_alu_cmd     = w_d_alu_cmd;
-                r_de_load_instr = w_d_load_instr;
-                r_de_dmem_access = w_d_dmem_access;
-                r_de_dmem_wen    = w_d_dmem_wen;
-                r_de_imem_wen    = w_d_imem_wen;
-                r_de_mem_wstrb   = w_d_mem_wstrb;
-                r_de_io_access   = w_d_io_access;
-                r_de_io_wen      = w_d_io_wen;
-                r_de_rd          = w_d_rd;
-                r_de_reg_wen     = w_d_reg_wen;
-                r_de_load_en     = w_d_load_en;
-                r_de_load_width  = w_d_load_width;
-                r_de_load_sext   = w_d_load_sext;
-                r_de_wb_type = w_d_wb_type;
+                r_de_branch_type  = w_d_branch_type;
+                r_de_instr_valid  = w_fd_instr_valid;
+                r_de_pc           = w_fd_pc;
+                r_de_instr        = w_fd_instr;
+                r_de_rs1          = w_d_rs1;
+                r_de_rs2          = w_d_rs2;
+                r_de_reg_rs1      = r_regfile[w_d_rs1];
+                r_de_reg_rs2      = r_regfile[w_d_rs2];
+                r_de_imm          = w_d_imm;
+                r_de_src2_reg     = w_d_src2_reg;
+                r_de_alu_cmd      = w_d_alu_cmd;
+                r_de_load_instr   = w_d_load_instr;
+                r_de_dmem_access  = w_d_dmem_access;
+                r_de_dmem_wen     = w_d_dmem_wen;
+                r_de_imem_wen     = w_d_imem_wen;
+                r_de_mem_wstrb    = w_d_mem_wstrb;
+                r_de_io_access    = w_d_io_access;
+                r_de_io_wen       = w_d_io_wen;
+                r_de_rd           = w_d_rd;
+                r_de_reg_wen      = w_d_reg_wen;
+                r_de_load_en      = w_d_load_en;
+                r_de_load_width   = w_d_load_width;
+                r_de_load_sext    = w_d_load_sext;
+                r_de_wb_type      = w_d_wb_type;
             } else if w_de_flush {
-                r_de_log = '0;
+                r_de_log          = '0;
                 r_de_branch_instr = 0;
-                r_de_branch_type = 0 as BranchType;
-                r_de_instr_valid = 0;
-                r_de_pc          = 0;
-                r_de_instr       = 0;
-                r_de_reg_rs1     = 0;
-                r_de_reg_rs2     = 0;
-                r_de_imm         = 0;
-                r_de_src2_reg    = 0;
-                r_de_alu_cmd     = 0 as AluCmd;
-                r_de_load_instr = 0;
-                r_de_dmem_access = 0;
-                r_de_dmem_wen    = 0;
-                r_de_imem_wen    = 0;
-                r_de_mem_wstrb   = 0;
-                r_de_io_access   = 0;
-                r_de_io_wen      = 0;
-                r_de_rd          = 0;
-                r_de_reg_wen     = 0;
-                r_de_load_en     = 0;
-                r_de_load_width  = 0;
-                r_de_load_sext   = 0;
-                r_de_wb_type = 0 as WbType;
+                r_de_branch_type  = 0 as BranchType;
+                r_de_instr_valid  = 0;
+                r_de_pc           = 0;
+                r_de_instr        = 0;
+                r_de_reg_rs1      = 0;
+                r_de_reg_rs2      = 0;
+                r_de_imm          = 0;
+                r_de_src2_reg     = 0;
+                r_de_alu_cmd      = 0 as AluCmd;
+                r_de_load_instr   = 0;
+                r_de_dmem_access  = 0;
+                r_de_dmem_wen     = 0;
+                r_de_imem_wen     = 0;
+                r_de_mem_wstrb    = 0;
+                r_de_io_access    = 0;
+                r_de_io_wen       = 0;
+                r_de_rd           = 0;
+                r_de_reg_wen      = 0;
+                r_de_load_en      = 0;
+                r_de_load_width   = 0;
+                r_de_load_sext    = 0;
+                r_de_wb_type      = 0 as WbType;
             }
         }
     }
@@ -360,17 +360,17 @@ module PipelineCore (
         i_we_rs2_forward: w_we_rs2_forward,
 
         // fetch stage
-        o_pc_target: w_ef_pc_target,
+        o_pc_target   : w_ef_pc_target    ,
         o_branch_taken: _w_ef_branch_taken,
 
         // decode stage
-        i_reg_rs1 : r_de_reg_rs1 ,
-        i_reg_rs2 : r_de_reg_rs2 ,
-        i_imm     : r_de_imm     ,
-        i_src2_reg: r_de_src2_reg,
-        i_alu_cmd : r_de_alu_cmd ,
+        i_reg_rs1    : r_de_reg_rs1    ,
+        i_reg_rs2    : r_de_reg_rs2    ,
+        i_imm        : r_de_imm        ,
+        i_src2_reg   : r_de_src2_reg   ,
+        i_alu_cmd    : r_de_alu_cmd    ,
         i_branch_type: r_de_branch_type,
-        i_pc : r_de_pc,
+        i_pc         : r_de_pc         ,
 
         // mem access stage
         i_m_result: r_em_alu_out,
@@ -382,7 +382,7 @@ module PipelineCore (
     );
     always_ff (i_clk, i_rst) {
         if_reset {
-            r_em_log = '0;
+            r_em_log         = '0;
             r_em_instr_valid = 0;
             r_em_pc          = 0;
             r_em_instr       = 0;
@@ -395,17 +395,17 @@ module PipelineCore (
             r_em_io_access   = 0;
             r_em_io_wen      = 0;
             r_em_reg_rs2     = 0;
-            r_em_rs2 = 0;
+            r_em_rs2         = 0;
             r_em_rd          = 0;
             r_em_reg_wen     = 0;
             r_em_load_en     = 0;
             r_em_load_width  = 0;
             r_em_load_sext   = 0;
-            r_em_load_instr = 0;
-            r_em_wb_type = 0 as WbType;
+            r_em_load_instr  = 0;
+            r_em_wb_type     = 0 as WbType;
         } else {
             if !w_e_stall {
-                r_em_log = r_de_log;
+                r_em_log         = r_de_log;
                 r_em_instr_valid = r_de_instr_valid;
                 r_em_pc          = r_de_pc;
                 r_em_instr       = r_de_instr;
@@ -418,14 +418,14 @@ module PipelineCore (
                 r_em_io_access   = r_de_io_access;
                 r_em_io_wen      = r_de_io_wen;
                 r_em_reg_rs2     = r_de_reg_rs2;
-                r_em_rs2 = r_de_rs2;
+                r_em_rs2         = r_de_rs2;
                 r_em_rd          = r_de_rd;
                 r_em_reg_wen     = r_de_reg_wen;
                 r_em_load_en     = r_de_load_en;
                 r_em_load_width  = r_de_load_width;
                 r_em_load_sext   = r_de_load_sext;
-                r_em_load_instr = r_de_load_instr;
-                r_em_wb_type = r_de_wb_type;
+                r_em_load_instr  = r_de_load_instr;
+                r_em_wb_type     = r_de_wb_type;
             }
         }
     }
@@ -441,7 +441,7 @@ module PipelineCore (
         mem_write_if: dmem_write_if,
     );
     always_comb {
-        o_dev_id = r_em_alu_out as Addr;
+        o_dev_id        = r_em_alu_out as Addr;
         dcache_if.valid = r_em_dmem_access && r_em_instr_valid;
         dcache_if.addr  = r_em_alu_out;
         dcache_if.wen   = r_em_dmem_wen;
@@ -451,11 +451,11 @@ module PipelineCore (
         } else {
             dcache_if.wdata = r_em_reg_rs2;
         }
-        w_mw_read_data  = dcache_if.rdata;
+        w_mw_read_data = dcache_if.rdata;
     }
     always_ff (i_clk, i_rst) {
         if_reset {
-            r_mw_log = '0;
+            r_mw_log         = '0;
             r_mw_instr_valid = 0;
             r_mw_pc          = 0;
             r_mw_instr       = 0;
@@ -465,27 +465,27 @@ module PipelineCore (
             r_mw_load_en     = 0;
             r_mw_load_width  = 0;
             r_mw_load_sext   = 0;
-            r_mw_load_instr = 0;
-            r_mw_wb_type = 0 as WbType;
+            r_mw_load_instr  = 0;
+            r_mw_wb_type     = 0 as WbType;
         } else {
             if !w_m_stall && !w_mw_flush {
-                r_mw_log.pc = r_em_log.pc;
-                r_mw_log.instr = r_em_log.instr;
+                r_mw_log.pc        = r_em_log.pc;
+                r_mw_log.instr     = r_em_log.instr;
                 r_mw_log.inst_type = r_em_log.inst_type;
-                r_mw_log.dest_reg = r_em_log.dest_reg;
-                r_mw_log.addr = case r_em_log.inst_type {
-                    log_pkg::InstType::MEM_WRITE, 
-                    log_pkg::InstType::MEM_READ,
-                    log_pkg::InstType::DEV_READ,
+                r_mw_log.dest_reg  = r_em_log.dest_reg;
+                r_mw_log.addr      = case r_em_log.inst_type {
+                    log_pkg::InstType::MEM_WRITE,
+                    log_pkg::InstType::MEM_READ, 
+                    log_pkg::InstType::DEV_READ, 
                     log_pkg::InstType::DEV_WRITE,
                     log_pkg::InstType::IMEM_WRITE: dcache_if.addr,
-                    default: 0,
+                    default                      : 0,
                 };
                 r_mw_log.data = case r_em_log.inst_type {
-                    log_pkg::InstType::MEM_WRITE, 
+                    log_pkg::InstType::MEM_WRITE,
                     log_pkg::InstType::DEV_WRITE,
                     log_pkg::InstType::IMEM_WRITE: dcache_if.wdata,
-                    default: 0,
+                    default                      : 0,
                 };
                 r_mw_instr_valid = r_em_instr_valid;
                 r_mw_pc          = r_em_pc;
@@ -496,10 +496,10 @@ module PipelineCore (
                 r_mw_load_en     = r_em_load_en;
                 r_mw_load_width  = r_em_load_width;
                 r_mw_load_sext   = r_em_load_sext;
-                r_mw_load_instr = r_em_load_instr;
-                r_mw_wb_type = r_em_wb_type;
+                r_mw_load_instr  = r_em_load_instr;
+                r_mw_wb_type     = r_em_wb_type;
             } else if w_mw_flush {
-                r_mw_log = '0;
+                r_mw_log         = '0;
                 r_mw_instr_valid = 0;
                 r_mw_pc          = 0;
                 r_mw_instr       = 0;
@@ -509,8 +509,8 @@ module PipelineCore (
                 r_mw_load_en     = 0;
                 r_mw_load_width  = 0;
                 r_mw_load_sext   = 0;
-                r_mw_load_instr = 0;
-                r_mw_wb_type = 0 as WbType;
+                r_mw_load_instr  = 0;
+                r_mw_wb_type     = 0 as WbType;
             }
         }
     }
@@ -518,25 +518,25 @@ module PipelineCore (
     // Writeback Stage ---------------
     inst writeback_stage: Writeback (
         i_dev_din_data: if_io_bus_din.bits,
-        i_load_data : w_mw_read_data ,
-        i_load_width: r_mw_load_width,
-        i_load_sext : r_mw_load_sext ,
-        i_alu_out   : r_mw_alu_out   ,
-        i_pc : r_mw_pc,
-        i_wb_type: r_mw_wb_type,
-        o_reg_wdata : w_w_reg_wdata  ,
+        i_load_data   : w_mw_read_data    ,
+        i_load_width  : r_mw_load_width   ,
+        i_load_sext   : r_mw_load_sext    ,
+        i_alu_out     : r_mw_alu_out      ,
+        i_pc          : r_mw_pc           ,
+        i_wb_type     : r_mw_wb_type      ,
+        o_reg_wdata   : w_w_reg_wdata     ,
     );
     always_comb {
-        w_w_log.pc = r_mw_log.pc;
-        w_w_log.instr = r_mw_log.instr;
+        w_w_log.pc        = r_mw_log.pc;
+        w_w_log.instr     = r_mw_log.instr;
         w_w_log.inst_type = r_mw_log.inst_type;
-        w_w_log.dest_reg = r_mw_log.dest_reg;
-        w_w_log.addr = r_mw_log.addr;
-        w_w_log.data = case r_mw_log.inst_type {
+        w_w_log.dest_reg  = r_mw_log.dest_reg;
+        w_w_log.addr      = r_mw_log.addr;
+        w_w_log.data      = case r_mw_log.inst_type {
             log_pkg::InstType::MEM_READ,
             log_pkg::InstType::DEV_READ,
             log_pkg::InstType::REG_WRITE: w_w_reg_wdata,
-            default: r_mw_log.data,
+            default                     : r_mw_log.data,
         };
     }
     #[allow(missing_reset_statement)]

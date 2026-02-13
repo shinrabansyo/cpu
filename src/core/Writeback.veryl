@@ -1,12 +1,12 @@
 module Writeback (
-    i_dev_din_data: input Data,
-    i_load_data : input  Data    ,
-    i_load_width: input  logic<2>,
-    i_load_sext : input  logic   ,
-    i_alu_out   : input  Data    ,
-    i_pc: input Addr,
-    i_wb_type: input WbType,
-    o_reg_wdata : output Data    ,
+    i_dev_din_data: input  Data     ,
+    i_load_data   : input  Data     ,
+    i_load_width  : input  logic <2>,
+    i_load_sext   : input  logic    ,
+    i_alu_out     : input  Data     ,
+    i_pc          : input  Addr     ,
+    i_wb_type     : input  WbType   ,
+    o_reg_wdata   : output Data     ,
 ) {
     import Config::*;
     import PipelinePkg::*;
@@ -27,7 +27,7 @@ module Writeback (
             WbType::LD: w_load_data,
             WbType::IN: i_dev_din_data,
             WbType::BR: i_pc + 6 as Addr,
-            default: i_alu_out,
+            default   : i_alu_out,
         };
     }
 }

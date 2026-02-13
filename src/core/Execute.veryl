@@ -8,20 +8,20 @@ module Execute (
     i_we_rs2_forward: input logic,
 
     // fetch stage
-    o_pc_target: output Addr,
+    o_pc_target   : output Addr ,
     o_branch_taken: output logic,
 
     // decode stage
-    i_reg_rs1 : input Data  ,
-    i_reg_rs2 : input Data  ,
-    i_imm     : input Data  ,
-    i_src2_reg: input logic ,
-    i_alu_cmd : input AluCmd,
+    i_reg_rs1    : input Data      ,
+    i_reg_rs2    : input Data      ,
+    i_imm        : input Data      ,
+    i_src2_reg   : input logic     ,
+    i_alu_cmd    : input AluCmd    ,
     i_branch_type: input BranchType,
-    i_pc: input Addr,
+    i_pc         : input Addr      ,
 
     // mem access stage
-    i_m_result: input Data,
+    i_m_result: input  Data ,
     o_alu_out : output Data ,
     o_alu_zero: output logic,
 
@@ -31,21 +31,17 @@ module Execute (
     import Config::*;
     import PipelinePkg::*;
 
-    var w_rs1: Data;
-    var w_rs2: Data;
-    var w_a       : Data       ;
-    var w_b       : Data       ;
+    var w_rs1     : Data                     ;
+    var w_rs2     : Data                     ;
+    var w_a       : Data                     ;
+    var w_b       : Data                     ;
     var w_a_signed: signed logic<$bits(Data)>;
     var w_b_signed: signed logic<$bits(Data)>;
 
     always_comb {
         // forwarding
-        w_rs1 = if i_me_rs1_forward ? i_m_result
-              : if i_we_rs1_forward ? i_w_result
-                                    : i_reg_rs1;
-        w_rs2 = if i_me_rs2_forward ? i_m_result
-              : if i_we_rs2_forward ? i_w_result
-                                    : i_reg_rs2;
+        w_rs1 = if i_me_rs1_forward ? i_m_result : if i_we_rs1_forward ? i_w_result : i_reg_rs1;
+        w_rs2 = if i_me_rs2_forward ? i_m_result : if i_we_rs2_forward ? i_w_result : i_reg_rs2;
 
         w_a        = w_rs1;
         w_b        = if i_src2_reg ? w_rs2 : i_imm;
@@ -65,19 +61,19 @@ module Execute (
         o_alu_zero = o_alu_out == 0 as Data;
 
         o_branch_taken = case i_branch_type {
-            BranchType::BEQ : o_alu_zero,
-            BranchType::BNE : !o_alu_zero,
-            BranchType::BLT : o_alu_out[31],
-            BranchType::BLE : o_alu_out[31] || o_alu_zero,
-            BranchType::JAL : 1,
-            default : 0,
+            BranchType::BEQ: o_alu_zero,
+            BranchType::BNE: !o_alu_zero,
+            BranchType::BLT: o_alu_out[31],
+            BranchType::BLE: o_alu_out[31] || o_alu_zero,
+            BranchType::JAL: 1,
+            default        : 0,
         };
         if o_branch_taken {
             o_pc_target = case i_branch_type {
-                BranchType::BEQ,BranchType::BNE,
-                BranchType::BLT,BranchType::BLE: i_pc + i_imm,
-                BranchType::JAL: w_rs1 + i_imm,
-                default: 0,
+                BranchType::BEQ, BranchType::BNE,
+                BranchType::BLT, BranchType::BLE : i_pc + i_imm,
+                BranchType::JAL                  : w_rs1 + i_imm,
+                default                          : 0,
             };
         } else {
             o_pc_target = i_pc + 6 as Addr;

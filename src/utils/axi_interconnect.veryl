@@ -21,8 +21,8 @@ module axi_interconnect #(
 
     // アドレスデコード用の関数
     function decode_slave_index (
-        addr: input logic<32>,
-        valid: output logic,
+        addr : input  logic<32>,
+        valid: output logic    ,
     ) -> SlaveIdx {
         for i: u32 in 0..NUM_SLAVE {
             if addr >= MEM_MAP_BASE[i] && addr <: (MEM_MAP_BASE[i] + MEM_MAP_SIZE[i]) {
@@ -53,11 +53,11 @@ module axi_interconnect #(
     var r_read_slv_idx : SlaveIdx;
     var r_write_slv_idx: SlaveIdx;
 
-    var w_read_slv_idx : SlaveIdx            ;
-    var w_read_slv_valid: logic              ;
-    var w_read_slv_acks: logic    [NUM_SLAVE];
-    var w_write_slv_idx: SlaveIdx            ;
-    var w_write_slv_valid: logic             ;
+    var w_read_slv_idx   : SlaveIdx            ;
+    var w_read_slv_valid : logic               ;
+    var w_read_slv_acks  : logic    [NUM_SLAVE];
+    var w_write_slv_idx  : SlaveIdx            ;
+    var w_write_slv_valid: logic               ;
 
     // Slave -> Master の信号
     // interface配列はconst添え字しか使えないので、ワイヤ配列で一旦受け取る
@@ -80,26 +80,34 @@ module axi_interconnect #(
 
         case r_read_state {
             ReadState::IDLE: {
-                read_if_master.rvalid = 0;
-                read_if_master.arready  = w_slv_arready[w_read_slv_idx];
-                read_if_master.rdata    = w_slv_rdata[w_read_slv_idx];
-                read_if_master.rid      = w_slv_rid[w_read_slv_idx];
-                read_if_master.rresp    = w_slv_rresp[w_read_slv_idx];
-                read_if_master.rlast    = w_slv_rlast[w_read_slv_idx];
+                read_if_master.rvalid  = 0;
+                read_if_master.arready = w_slv_arready[w_read_slv_idx];
+                read_if_master.rdata   = w_slv_rdata[w_read_slv_idx];
+                read_if_master.rid     = w_slv_rid[w_read_slv_idx];
+                read_if_master.rresp   = w_slv_rresp[w_read_slv_idx];
+                read_if_master.rlast   = w_slv_rlast[w_read_slv_idx];
             }
             ReadState::WAIT_RESP: {
                 read_if_master.arready = 0;
-                read_if_master.rvalid   = w_slv_rvalid[r_read_slv_idx];
-                read_if_master.rdata    = w_slv_rdata[r_read_slv_idx];
-                read_if_master.rid      = w_slv_rid[r_read_slv_idx];
-                read_if_master.rresp    = w_slv_rresp[r_read_slv_idx];
-                read_if_master.rlast    = w_slv_rlast[r_read_slv_idx];
+                read_if_master.rvalid  = w_slv_rvalid[r_read_slv_idx];
+                read_if_master.rdata   = w_slv_rdata[r_read_slv_idx];
+                read_if_master.rid     = w_slv_rid[r_read_slv_idx];
+                read_if_master.rresp   = w_slv_rresp[r_read_slv_idx];
+                read_if_master.rlast   = w_slv_rlast[r_read_slv_idx];
+            }
+            default: {
+                read_if_master.rvalid  = 0;
+                read_if_master.arready = 0;
+                read_if_master.rdata   = 0;
+                read_if_master.rid     = 0;
+                read_if_master.rresp   = 0;
+                read_if_master.rlast   = 0;
             }
         }
         case r_write_state {
             WriteState::IDLE: {
-                write_if_master.wready = 0;
-                write_if_master.bvalid = 0;
+                write_if_master.wready  = 0;
+                write_if_master.bvalid  = 0;
                 write_if_master.awready = w_slv_awready[w_write_slv_idx];
                 write_if_master.bid     = w_slv_bid[w_write_slv_idx];
                 write_if_master.bresp   = w_slv_bresp[w_write_slv_idx];
@@ -117,6 +125,13 @@ module axi_interconnect #(
                 write_if_master.bvalid  = w_slv_bvalid[r_write_slv_idx];
                 write_if_master.bid     = w_slv_bid[r_write_slv_idx];
                 write_if_master.bresp   = w_slv_bresp[r_write_slv_idx];
+            }
+            default: {
+                write_if_master.awready = 0;
+                write_if_master.wready  = 0;
+                write_if_master.bvalid  = 0;
+                write_if_master.bid     = 0;
+                write_if_master.bresp   = 0;
             }
         }
 

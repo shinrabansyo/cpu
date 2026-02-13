@@ -10,14 +10,14 @@ module Decode (
     i_instr      : input Inst ,
 
     // execute stage
-    o_rs1     : output logic <5>,
-    o_rs2     : output logic <5>,
-    o_imm     : output Data     ,
-    o_src2_reg: output logic    ,
-    o_alu_cmd : output AluCmd   ,
-    o_load_instr: output logic, // for controll
-    o_branch_type: output BranchType,
-    o_branch_instr: output logic,
+    o_rs1         : output logic     <5>,
+    o_rs2         : output logic     <5>,
+    o_imm         : output Data         ,
+    o_src2_reg    : output logic        ,
+    o_alu_cmd     : output AluCmd       ,
+    o_load_instr  : output logic        , // for controll
+    o_branch_type : output BranchType   ,
+    o_branch_instr: output logic        ,
 
     // mem access
     o_dmem_access: output logic                 ,
@@ -30,12 +30,12 @@ module Decode (
     o_io_wen   : output logic,
 
     // writeback
-    o_rd        : output logic<5>,
-    o_reg_wen   : output logic   ,
-    o_load_en   : output logic   ,
-    o_load_width: output logic<2>,
-    o_load_sext : output logic   ,
-    o_wb_type: output WbType,
+    o_rd        : output logic <5>,
+    o_reg_wen   : output logic    ,
+    o_load_en   : output logic    ,
+    o_load_width: output logic <2>,
+    o_load_sext : output logic    ,
+    o_wb_type   : output WbType   ,
 ) {
     import Config::*;
     import PipelinePkg::*;
@@ -140,9 +140,9 @@ module Decode (
     // log
     always_comb {
         o_log.instr = i_instr;
-        o_log.pc = i_pc;
-        o_log.addr      = 0;
-        o_log.data      = 0;
+        o_log.pc    = i_pc;
+        o_log.addr  = 0;
+        o_log.data  = 0;
         case w_opcode {
             LW, LH, LB, LHU, LBU: {
                 o_log.inst_type = log_pkg::InstType::MEM_READ;
@@ -150,11 +150,11 @@ module Decode (
             }
             SW, SH, SB: {
                 o_log.inst_type = log_pkg::InstType::MEM_WRITE;
-                o_log.dest_reg = '0;
+                o_log.dest_reg  = '0;
             }
             ISB: { // 仮置き
                 o_log.inst_type = log_pkg::InstType::IMEM_WRITE;
-                o_log.dest_reg = '0;
+                o_log.dest_reg  = '0;
             }
             IN: {
                 o_log.inst_type = log_pkg::InstType::DEV_READ;
@@ -194,24 +194,24 @@ module Decode (
         };
         o_imm = case w_inst_kind {
             InstKind::I, InstKind::S: w_instr.imm,
-            InstKind::B: w_instr.imm_b_sext,
-            default    : 0,
+            InstKind::B             : w_instr.imm_b_sext,
+            default                 : 0,
         };
         o_src2_reg = case w_inst_kind {
             InstKind::I, InstKind::S: 0,
-            default: 1,
+            default                 : 1,
         };
         o_load_instr = case w_opcode {
             LW, LH, LB, LHU, LBU, IN: 1,
-            default: 0,
+            default                 : 0,
         };
         o_branch_type = case w_opcode {
-            BEQ: BranchType::BEQ,
-            BNE: BranchType::BNE,
-            BLT: BranchType::BLT,
-            BLE: BranchType::BLE,
-            JAL: BranchType::JAL,
-            default: BranchType::NONE
+            BEQ    : BranchType::BEQ,
+            BNE    : BranchType::BNE,
+            BLT    : BranchType::BLT,
+            BLE    : BranchType::BLE,
+            JAL    : BranchType::JAL,
+            default: BranchType::NONE,
         };
         o_branch_instr = o_branch_type != BranchType::NONE;
     }
@@ -278,10 +278,10 @@ module Decode (
             default: 0,
         };
         o_wb_type = case w_opcode {
-            LW, LH, LB, LHU, LBU: WbType::LD,
-            IN: WbType::IN,
+            LW, LH, LB, LHU, LBU   : WbType::LD,
+            IN                     : WbType::IN,
             BEQ, BNE, BLT, BLE, JAL: WbType::BR,
-            default: WbType::REG,
+            default                : WbType::REG,
         };
     }
 }

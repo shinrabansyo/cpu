@@ -1,6 +1,6 @@
 module SoC #(
     param PIPELINE: u32 = 0,
-)(
+) (
     // クロック・リセット
     i_clk: input clock,
     i_rst: input reset,
@@ -28,42 +28,42 @@ module SoC #(
     import Config::*;
     inst if_io_bus_din : Decoupled #( Width: 32 );
     inst if_io_bus_dout: Decoupled #( Width: 32 );
-    var w_dev_id: Addr;
+    var w_dev_id      : Addr;
 
-    if PIPELINE == 0 : l_no_pipeline {
+    if PIPELINE == 0 :l_no_pipeline {
         inst core: Core (
-            i_clk          ,
-            i_rst          ,
-            imem_read_if   ,
-            imem_write_if  ,
-            dmem_read_if   ,
-            dmem_write_if  ,
-            o_dev_id: w_dev_id,
-            if_io_bus_din,
-            if_io_bus_dout,
+            i_clk                   ,
+            i_rst                   ,
+            imem_read_if            ,
+            imem_write_if           ,
+            dmem_read_if            ,
+            dmem_write_if           ,
+            o_dev_id      : w_dev_id,
+            if_io_bus_din           ,
+            if_io_bus_dout          ,
         );
     } else {
         inst core: PipelineCore (
-            i_clk          ,
-            i_rst          ,
-            imem_read_if   ,
-            imem_write_if  ,
-            dmem_read_if   ,
-            dmem_write_if  ,
-            o_dev_id: w_dev_id,
-            if_io_bus_din,
-            if_io_bus_dout,
+            i_clk                   ,
+            i_rst                   ,
+            imem_read_if            ,
+            imem_write_if           ,
+            dmem_read_if            ,
+            dmem_write_if           ,
+            o_dev_id      : w_dev_id,
+            if_io_bus_din           ,
+            if_io_bus_dout          ,
         );
     }
 
     // TODO: 命令メモリ用の AXI インターコネクトを作る
-    inst imem_read_if : axi_read_if #(Addr, Data);
-    inst imem_write_if: axi_write_if#(Addr, Data);
-    inst dmem_read_if : axi_read_if#(Addr, Data);
-    inst dmem_write_if: axi_write_if#(Addr, Data);
+    inst imem_read_if : axi_read_if #( Addr, Data );
+    inst imem_write_if: axi_write_if #( Addr, Data );
+    inst dmem_read_if : axi_read_if #( Addr, Data );
+    inst dmem_write_if: axi_write_if #( Addr, Data );
 
-    inst imem_read_if_slaves : axi_read_if [2] #(Addr, Data);
-    inst imem_write_if_slaves: axi_write_if [2] #(Addr, Data);
+    inst imem_read_if_slaves : axi_read_if [2] #( Addr, Data );
+    inst imem_write_if_slaves: axi_write_if [2] #( Addr, Data );
 
     // [ROM, RAM]
     const imem_map_base: logic<32> [2] = '{32'h0000_0000, 32'h0000_1000};
@@ -114,7 +114,7 @@ module SoC #(
     ) (
         i_clk                    ,
         i_rst                    ,
-        i_dev_id: w_dev_id       ,
+        i_dev_id : w_dev_id      ,
         if_din   : if_io_bus_dout,
         if_dout  : if_io_bus_din ,
         o_tx                     ,
