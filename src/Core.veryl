@@ -114,7 +114,7 @@ module Core (
     // fetch 完了は、fetch req 完了した次のサイクル以降で icache_if.ready が立ったとき
     always_comb {
         w_stall = case {w_instr.opcode_sub, w_instr.opcode} {
-            LW, LH, LB, LHU, LBU: !dcache_if.ready,
+            LW, LH, LB, LHU, LBU: !dcache_if.rdata_valid,
             SW, SH, SB          : !dcache_if.ready,
             ISB                 : !icache_if.wready,
             IN                  : !if_io_bus_din.valid,
@@ -165,7 +165,7 @@ module Core (
         w_log.pc = r_pc_fetched;
         case {w_instr.opcode_sub, w_instr.opcode} {
             LW, LH, LB, LHU, LBU: {
-                w_log_valid     = icache_if.instr_valid && dcache_if.ready;
+                w_log_valid     = icache_if.instr_valid && dcache_if.rdata_valid;
                 w_log.inst_type = log_pkg::InstType::MEM_READ;
                 w_log.addr      = w_out;
                 w_log.data      = w_reg_write_data;
@@ -473,7 +473,7 @@ module Core (
             for i: u32 in 0..32 {
                 m_regfile[i] = 32'h0;
             }
-        } else if w_instr.rd != 0 && icache_if.ready {
+        } else if w_instr.rd != 0 && icache_if.instr_valid && !w_stall {
             m_regfile[w_instr.rd] = w_reg_write_data;
         }
     }

@@ -12,8 +12,8 @@ module PipelineCore (
     dmem_write_if: modport axi_write_if::master,
 
     o_dev_id      : output  Addr               ,
-    if_io_bus_din : modport Decoupled::sender  ,
-    if_io_bus_dout: modport Decoupled::receiver,
+    if_io_bus_din : modport Decoupled::receiver  ,
+    if_io_bus_dout: modport Decoupled::sender,
 ) {
     import Config::*;
     import PipelinePkg::*;
@@ -121,7 +121,10 @@ module PipelineCore (
     var r_mw_load_width : logic           <2>;
     var r_mw_load_sext  : logic              ;
     var r_mw_load_instr : logic              ;
+    var r_mw_dmem_access : logic                            ;
+    var r_mw_dmem_wen : logic                            ;
     var r_mw_wb_type    : WbType             ;
+    var r_mw_io_rdata : Data;
 
     // writeback stage
     var w_w_log      : log_pkg::InstLog;
@@ -164,6 +167,8 @@ module PipelineCore (
         i_e_rs2         : r_de_rs2         ,
         i_e_rd          : r_de_rd          ,
         i_e_load_instr  : r_de_load_instr  ,
+        i_e_dmem_access : r_de_dmem_access,
+        i_e_dmem_wen : r_de_dmem_wen,
         o_me_rs1_forward: w_me_rs1_forward ,
         o_me_rs2_forward: w_me_rs2_forward ,
         o_we_rs1_forward: w_we_rs1_forward ,
@@ -176,6 +181,7 @@ module PipelineCore (
         o_wm_rs2_forward: w_wm_rs2_forward,
 
         // memory
+        i_m_reg_wen : r_em_reg_wen,
         i_m_dmem_access: r_em_dmem_access,
         i_m_dmem_wen   : r_em_dmem_wen   ,
         i_dmem_ready   : dcache_if.ready ,
@@ -191,7 +197,10 @@ module PipelineCore (
         i_dmem_rdata_valid: dcache_if.rdata_valid,
         i_w_imem_wen      : r_mw_imem_wen        ,
         i_w_load_instr    : r_mw_load_instr      ,
+        i_w_dmem_access : r_mw_dmem_access,
+        i_w_dmem_wen : r_mw_dmem_wen,
         i_w_rd            : r_mw_rd              ,
+        i_w_reg_wen : r_mw_reg_wen,
 
         o_fd_flush: w_fd_flush,
         o_de_flush: w_de_flush,
@@ -421,7 +430,7 @@ module PipelineCore (
                 r_em_mem_wstrb   = r_de_mem_wstrb;
                 r_em_io_access   = r_de_io_access;
                 r_em_io_wen      = r_de_io_wen;
-                r_em_reg_rs2     = if !w_we_rs2_forward ? r_de_reg_rs2 : w_w_reg_wdata;
+                r_em_reg_rs2     = if w_me_rs2_forward ? r_em_alu_out : if w_we_rs2_forward ? w_w_reg_wdata : r_de_reg_rs2;
                 r_em_rs2         = r_de_rs2;
                 r_em_rd          = r_de_rd;
                 r_em_reg_wen     = r_de_reg_wen;
@@ -478,10 +487,14 @@ module PipelineCore (
         if w_wm_rs2_forward {
             dcache_if.wdata = w_w_reg_wdata;
             icache_if.wdata = w_w_reg_wdata;
+            if_io_bus_dout.bits = w_w_reg_wdata;
         } else {
             dcache_if.wdata = r_em_reg_rs2;
             icache_if.wdata = r_em_reg_rs2;
+            if_io_bus_dout.bits = r_em_reg_rs2;
         }
+        if_io_bus_din.ready = r_em_io_access && !r_em_io_wen && r_em_instr_valid;
+        if_io_bus_dout.valid = r_em_io_access && r_em_io_wen && r_em_instr_valid;
         w_mw_read_data = dcache_if.rdata;
     }
     always_ff (i_clk, i_rst) {
@@ -498,7 +511,10 @@ module PipelineCore (
             r_mw_load_width  = 0;
             r_mw_load_sext   = 0;
             r_mw_load_instr  = 0;
+            r_mw_dmem_access = 0;
+            r_mw_dmem_wen = 0;
             r_mw_wb_type     = 0 as WbType;
+            r_mw_io_rdata = 0;
         } else {
             if !w_m_stall && !w_mw_flush {
                 r_mw_log.pc        = r_em_log.pc;
@@ -530,7 +546,10 @@ module PipelineCore (
                 r_mw_load_width  = r_em_load_width;
                 r_mw_load_sext   = r_em_load_sext;
                 r_mw_load_instr  = r_em_load_instr;
+                r_mw_dmem_access = r_em_dmem_access;
+                r_mw_dmem_wen = r_em_dmem_wen;
                 r_mw_wb_type     = r_em_wb_type;
+                r_mw_io_rdata = if_io_bus_din.bits;
             } else if w_mw_flush {
                 r_mw_log         = '0;
                 r_mw_instr_valid = 0;
@@ -545,13 +564,14 @@ module PipelineCore (
                 r_mw_load_sext   = 0;
                 r_mw_load_instr  = 0;
                 r_mw_wb_type     = 0 as WbType;
+                r_mw_io_rdata = 0;
             }
         }
     }
 
     // Writeback Stage ---------------
     inst writeback_stage: Writeback (
-        i_dev_din_data: if_io_bus_din.bits,
+        i_dev_din_data: r_mw_io_rdata,
         i_load_data   : w_mw_read_data    ,
         i_load_width  : r_mw_load_width   ,
         i_load_sext   : r_mw_load_sext    ,

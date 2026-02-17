@@ -16,6 +16,8 @@ module Controller (
     i_e_rs2         : input  logic<5>,
     i_e_rd          : input  logic<5>,
     i_e_load_instr  : input  logic   ,
+    i_e_dmem_access : input logic,
+    i_e_dmem_wen : input logic,
     o_me_rs1_forward: output logic   ,
     o_me_rs2_forward: output logic   ,
     o_we_rs1_forward: output logic   ,
@@ -24,6 +26,7 @@ module Controller (
     // mem access stage
     i_m_rd          : input  logic<5>,
     i_m_rs2         : input  logic<5>,
+    i_m_reg_wen : input logic,
     o_wm_rs2_forward: output logic   ,
     i_m_instr_valid : input  logic   ,
     // memory
@@ -41,7 +44,10 @@ module Controller (
     // writeback stage
     i_w_rd            : input logic<5>,
     i_w_load_instr    : input logic   ,
+    i_w_dmem_access : input logic,
+    i_w_dmem_wen : input logic,
     i_w_imem_wen      : input logic   ,
+    i_w_reg_wen : input logic,
     i_dmem_rdata_valid: input logic   ,
 
     o_fd_flush: output logic,
@@ -63,7 +69,7 @@ module Controller (
     var w_load_hazard    : logic;
     always_comb {
         w_dmem_req_stall  = i_m_dmem_access && !i_dmem_ready;
-        w_dmem_resp_stall = i_w_load_instr && !i_dmem_rdata_valid;
+        w_dmem_resp_stall = i_w_dmem_access && !i_w_dmem_wen && !i_dmem_rdata_valid;
         w_imem_req_stall  = i_m_imem_wen && !i_imem_ready;
         // imem は 書き込みが終わるまでストール
         // pipeline flush --> 再fetch も必要
@@ -80,10 +86,13 @@ module Controller (
             }
         }
 
-        o_wm_rs2_forward = i_w_rd == i_m_rs2 && i_w_rd != 0; // store 命令
+        o_wm_rs2_forward = i_w_rd == i_m_rs2 && i_w_rd != 0 && 
+            (i_m_dmem_access && i_m_dmem_wen ||
+            i_m_io_access && i_m_io_wen ||
+            i_m_imem_wen); // store 系命令のみ
         // b->c
-        o_me_rs1_forward = i_m_rd == i_e_rs1 && i_m_rd != 0;
-        o_me_rs2_forward = i_m_rd == i_e_rs2 && i_m_rd != 0;
+        o_me_rs1_forward = i_m_rd == i_e_rs1 && i_m_rd != 0 && i_m_reg_wen;
+        o_me_rs2_forward = i_m_rd == i_e_rs2 && i_m_rd != 0 && i_m_reg_wen;
         // r1 = r0 + r0 : a
         // r1 = r0 - r0 : b
         // r2 = r0 + r1 : c
@@ -92,22 +101,35 @@ module Controller (
         // a->c / b->c の2通りの forward が考えられる
         // 最新の命令のデータが優先なので、この場合は b->c を forward する
         // a->c
-        o_we_rs1_forward = i_w_rd == i_e_rs1 && !o_me_rs1_forward && i_w_rd != 0; // not b->c
-        o_we_rs2_forward = i_w_rd == i_e_rs2 && !o_me_rs2_forward && i_w_rd != 0; // not b->c
+        o_we_rs1_forward = i_w_rd == i_e_rs1 && !o_me_rs1_forward && i_w_rd != 0 && i_w_reg_wen; // not b->c
+        o_we_rs2_forward = i_w_rd == i_e_rs2 && !o_me_rs2_forward && i_w_rd != 0 && i_w_reg_wen; // not b->c
         // a->d
-        o_wd_rs1_forward = i_w_rd == i_d_rs1 && i_w_rd != 0;
-        o_wd_rs2_forward = i_w_rd == i_d_rs2 && i_w_rd != 0;
+        o_wd_rs1_forward = i_w_rd == i_d_rs1 && i_w_rd != 0 && i_w_reg_wen;
+        o_wd_rs2_forward = i_w_rd == i_d_rs2 && i_w_rd != 0 && i_w_reg_wen;
+
+        w_load_hazard = i_e_dmem_access && !i_e_dmem_wen && (i_e_rd == i_d_rs1 || i_e_rd == i_d_rs2);
+        // mw を更新しないタイミング
+        //   - dmem/imem の応答が帰ってこないとき
+        //   - dmem/imem/io 書き込みのオペランド が w->m にフォワーディングされてるとき
+        o_m_stall     = w_dmem_resp_stall || w_imem_resp_stall || (o_wm_rs2_forward && (w_dmem_req_stall || w_imem_req_stall || w_io_stall));
+        // em を更新しないタイミング
+        //   - mw をストールするとき（m ステージの命令が上書きされちゃう）
+        //   - dmem/imem/io 要求が出せないとき
+        o_e_stall     = o_m_stall || w_dmem_req_stall || w_imem_req_stall || w_io_stall;
+        // de を更新しないタイミング
+        //   - em をストールするとき (e ステージの命令が上書きされちゃう)
+        //   - ロード系命令の結果を次の命令が使うとき
+        o_d_stall     = o_e_stall || w_load_hazard;
+        // fd を更新しないタイミング
+        //   - de をストールするとき（d ステージの命令が上書きされちゃう)
+        // fd を更新するタイミング
+        //   - imem 書き込みの応答があったとき(すぐにフェッチを開始する)
+        o_f_stall     = o_d_stall && !w_imem_resp_stall;
 
         // branch
-        o_branch_miss = i_branch_instr && (i_d_pc != i_pc_target);
+        o_branch_miss = i_branch_instr && (i_d_pc != i_pc_target) && !o_e_stall;
 
-        w_load_hazard = i_e_load_instr && (i_e_rd == i_d_rs1 || i_e_rd == i_d_rs2);
-        o_m_stall     = w_dmem_resp_stall || w_imem_resp_stall || w_io_stall;
-        o_e_stall     = o_m_stall || w_dmem_req_stall || w_imem_req_stall;
-        o_d_stall     = o_e_stall || w_load_hazard;
-        o_f_stall     = (o_d_stall || w_load_hazard) && !w_imem_resp_stall;
-
-        o_mw_flush = w_dmem_req_stall || w_imem_req_stall;
+        o_mw_flush = (w_dmem_req_stall || w_imem_req_stall || w_io_stall) && !o_wm_rs2_forward;
         o_em_flush = i_w_imem_wen;
         o_de_flush = w_load_hazard || o_branch_miss || i_w_imem_wen;
         o_fd_flush = o_branch_miss || i_w_imem_wen;
