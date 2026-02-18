@@ -37,6 +37,8 @@ module Fetch (
 
     always_comb {
         w_fetch_ack = fetch_if.valid && fetch_if.ready;
+    }
+    always_comb {
         // 分岐ミス時やること
         // - icache に i_pc_target を要求する
         //   - i_branch_miss && w_fetch_ack なら要求完了

@@ -8,7 +8,7 @@ reset_type = "sync_high"
 expand_inside_operation = true
 
 [test]
-waveform_format = "fst"
+# waveform_format = "fst"
 include_files = [
     "verilator.vlt",
     "test/tmp_inst.hex" ,
@@ -17,5 +17,3 @@ include_files = [
 
 [test.verilator]
 compile_args = ["-j", "8", "verilator.vlt"]
-# 実行トレースを生成するときは引数に以下を指定
-# compile_args = ["-j", "8", "verilator.vlt", "--top-module", "top"]
