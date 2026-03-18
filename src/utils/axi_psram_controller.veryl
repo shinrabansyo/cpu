@@ -1,0 +1,287 @@
+module axi_psram_controller #(
+    param ADDR_WIDTH: u32 = 16,
+    param DQ_WIDTH  : u32 = 8 ,
+    param MASK_WIDTH: u32 = 4 ,
+    param BURST_MODE: u32 = 32,
+) (
+    // axi interface
+    i_axi_clk: input   clock              ,
+    i_axi_rst: input   reset              ,
+    write_if : modport axi_write_if::slave,
+    read_if  : modport axi_read_if::slave ,
+
+    // psram interface
+    o_psram_addr         : output 'mem PAddr,
+    o_psram_cmd          : output 'mem logic,
+    o_psram_cmd_en       : output 'mem logic,
+    i_psram_rd_data      : input  'mem PData,
+    i_psram_rd_data_valid: input  'mem logic,
+    o_psram_wr_data      : output 'mem PData,
+    o_psram_data_mask    : output 'mem PMask,
+    i_psram_init_calib   : input  'mem logic,
+    i_psram_clk_out      : input  'mem clock,
+    i_psram_rst_n        : input  'mem reset,
+) {
+    import axi_pkg::*;
+    type PAddr = logic<ADDR_WIDTH>  ;
+    type PData = logic<4 * DQ_WIDTH>;
+    type PMask = logic<MASK_WIDTH>  ;
+
+    type AAddr = logic<32>;
+    type AData = logic<32>;
+
+    enum State {
+        CALIB,
+        IDLE,
+        P_RADDR_SEND,
+        A_RECV,
+        P_SEND,
+        P_RECV,
+        A_SEND,
+    }
+
+    var r_state     : State;
+    var w_state_next: State;
+
+    // キャッシュライン：32 byte
+    // axi バス幅 32bit = 4 byte
+    // -> axi バースト長 = 32 / 4 = 8 beat
+    var r_waddr: AAddr   ;
+    var r_wbeat: logic<8>;
+
+    // psram バーストサイクル = バースト長 / 4
+    // async fifo
+    inst wdata_buf: $std::async_fifo #(
+        WIDTH: 32,
+        DEPTH: 8 ,
+    ) (
+        is_clk        : i_axi_clk       ,
+        is_rst        : i_axi_rst       ,
+        os_almost_full: _               ,
+        os_full       : _               ,
+        is_push       : write_if.w_ack(),
+        is_data       : write_if.wdata  ,
+        id_clk                          ,
+        id_rst                          ,
+        od_empty                        ,
+        id_pop                          ,
+        od_data                         ,
+    );
+    inst rdata_buf: $std::async_fifo #(
+        WIDTH: $bits(PData)  ,
+        TYPE : PData         ,
+        DEPTH: BURST_MODE / 4,
+    ) (
+        is_clk        : i_psram_clk_out      ,
+        is_rst        : i_psram_rst_n        ,
+        os_almost_full: _                    ,
+        os_full       : _                    ,
+        is_push       : i_psram_rd_data_valid,
+        is_data       : i_psram_rd_data      ,
+        id_clk        : i_axi_clk            ,
+        id_rst        : i_axi_rst            ,
+        od_empty      : _                    ,
+        id_pop        : read_if.r_ack()      ,
+        od_data       : read_if.rdata        ,
+    );
+    inst awaddr_buf: $std::async_fifo #(
+        WIDTH: 32,
+        DEPTH: 1 ,
+    ) (
+        is_clk        : i_axi_clk        ,
+        is_rst        : i_axi_rst        ,
+        os_almost_full: _                ,
+        os_full       : _                ,
+        is_push       : write_if.aw_ack(),
+        is_data       : write_if.awaddr  ,
+        id_clk        : i_psram_clk_out  ,
+        id_rst        : i_psram_rst_n    ,
+        od_empty                         ,
+        id_pop                           ,
+        od_data                          ,
+    );
+    inst araddr_buf: $std::async_fifo #(
+        is_clk        : i_axi_clk        ,
+        is_rst        : i_axi_rst        ,
+        os_almost_full: _                ,
+        os_full       : _                ,
+        is_push       : read_if.ar_ack(),
+        is_data       : read_if.araddr  ,
+        id_clk        : i_psram_clk_out  ,
+        id_rst        : i_psram_rst_n    ,
+        od_empty                         ,
+        id_pop                           ,
+        od_data                          ,
+    )
+
+    var w_psram_addr_empty: 'mem logic;
+    var w_psram_addr_pop  : 'mem logic;
+    var w_psram_addr      : 'mem PAddr;
+    inst addr_buf: $std::async_fifo #(
+        WIDTH: 32,
+        DEPTH: 1 ,
+    ) (
+        is_clk        : i_axi_clk                                             ,
+        is_rst        : i_axi_rst                                             ,
+        os_almost_full: _                                                     ,
+        os_full       : _                                                     ,
+        is_push       : read_if.ar_ack() || write_if.aw_ack()                 ,
+        is_data       : if read_if.ar_ack() ? read_if.araddr : write_if.awaddr,
+        id_clk        : i_psram_clk_out                                       ,
+        id_rst        : i_psram_rst_n                                         ,
+        od_empty      : w_psram_addr_empty                                    ,
+        id_pop        : w_psram_addr_pop                                      ,
+        od_data       : w_psram_addr                                          ,
+    );
+
+    // axi_raddr -> psram
+    var r_axi_addr         :      AAddr;
+    var r_axi_len          :      Len  ;
+    var r_axi_read_valid   :      logic;
+    var r_axi_write_valid  :      logic;
+    var r_psram_read_ready : 'mem logic;
+    var r_psram_write_ready: 'mem logic;
+    always_comb {
+        w_state_next     = r_state;
+        read_if.arready  = 0;
+        read_if.rlast    = 0;
+        read_if.rvalid   = r_state == State::A_SEND;
+        write_if.awready = 0;
+        write_if.wready  = 0;
+        case r_state {
+            State::CALIB: {
+                if i_psram_init_calib {
+                    w_state_next = State::IDLE;
+                }
+            }
+            State::IDLE: {
+                read_if.arready  = 1;
+                write_if.awready = 1;
+                if read_if.ar_ack() {
+                    w_state_next = State::P_RECV;
+                } else if write_if.aw_ack() {
+                    w_state_next = State::A_RECV;
+                }
+            }
+            // psram -> rdata_buf
+            State::P_RECV: {
+                if r_psram_read_ready {
+                    w_state_next = State::A_SEND;
+                }
+            }
+            // rdata_buf -> axi r-channel
+            State::A_SEND: {
+                read_if.rlast = r_axi_len == 0;
+                if read_if.rlast {
+                    w_state_next = State::IDLE;
+                }
+            }
+            // axi w-channel -> wdata_buf
+            State::A_RECV: {
+                if write_if.w_ack() && write_if.wlast {
+                    w_state_next = State::P_SEND;
+                }
+            }
+            // wdata_buf -> psram
+            State::P_SEND: {
+                if r_psram_write_ready {
+                    w_state_next = State::IDLE;
+                }
+            }
+        }
+    }
+    always_ff (i_axi_clk, i_axi_rst) {
+        if_reset {
+            r_state           = State::CALIB;
+            r_axi_read_valid  = 0;
+            r_axi_write_valid = 0;
+            r_axi_addr        = 0;
+            r_axi_len         = 0;
+        } else {
+            r_state = w_state_next;
+            case r_state {
+                State::IDLE: {
+                    if read_if.ar_ack() {
+                        r_axi_addr       = read_if.araddr;
+                        r_axi_len        = read_if.arlen;
+                    } else if write_if.aw_ack() {
+                        r_axi_addr = write_if.awaddr;
+                        r_axi_len  = write_if.awlen;
+                    }
+                }
+                // psram -> rdata_buf
+                State::P_RECV: {
+                    if r_psram_read_ready {
+                        r_axi_read_valid = 0;
+                    }
+                }
+                // rdata_buf -> axi r-channel
+                State::A_SEND: {
+                    if read_if.r_ack() {
+                        r_axi_len -= 1;
+                    }
+                }
+                // axi w-channel -> wdata_buf
+                State::A_RECV: {
+                    if write_if.w_ack() && write_if.wlast {
+                        r_axi_write_valid = 1;
+                    }
+                }
+                // wdata_buf -> psram
+                State::P_SEND: {
+                    if r_psram_write_ready {
+                        r_axi_write_valid = 0;
+                    }
+                }
+            }
+        }
+    }
+
+    // psram -> rdata_buf
+    var r_psram_rvalid   : 'mem logic   ;
+    var r_psram_addr_sent: 'mem logic   ;
+    var r_psram_ctr      : 'mem logic<3>;
+    always_comb {
+        o_psram_addr      = 0;
+        o_psram_cmd       = 0;
+        o_psram_cmd_en    = 0;
+        o_psram_data_mask = 0;
+        o_psram_wr_data   = 0;
+
+        if r_axi_read_valid {
+            if !r_psram_addr_sent {
+                o_psram_addr   = r_axi_addr;
+                o_psram_cmd    = 0; // read
+                o_psram_cmd_en = 1;
+            }
+        } else {}
+    }
+    always_ff (i_psram_clk_out, i_psram_rst_n) {
+        if_reset {
+            r_psram_rvalid    = 0;
+            r_psram_addr_sent = 0;
+            r_psram_ctr       = 0;
+        } else {
+            if r_axi_read_valid {
+                r_psram_addr_sent = 1;
+            } else {
+                r_psram_rvalid = 0;
+            }
+        }
+    }
+
+    // wdata_buf -> psram
+    var r_psram_wvalid: 'mem logic   ;
+    var r_psram_wdata : 'mem PData   ;
+    var r_psram_waddr : 'mem PAddr   ;
+    var r_psram_wctr  : 'mem logic<3>;
+    always_ff (i_psram_clk_out, i_psram_rst_n) {
+        if_reset {
+            r_psram_wvalid = 0;
+            r_psram_waddr  = 0;
+            r_psram_wdata  = 0;
+            r_psram_wctr   = 0;
+        } else {}
+    }
+
+}
